@@ -1,6 +1,8 @@
 import { sendResponse } from '../../../../utils/response.js';
+import { ValidationError } from '../../../../core/auth/errors.js';
 import * as orderService from '../services/order.service.js';
 import { validateNewRestaurantAgainstLast } from '../services/restaurant-chain-radius.service.js';
+import { checkRestaurantEligibility } from '../services/active-restaurant-limit.service.js';
 import * as foodOrderPaymentService from '../services/foodOrderPayment.service.js';
 import {
     validateCalculateOrderDto,
@@ -22,6 +24,20 @@ export async function validateRestaurantChainController(req, res, next) {
             dto.newRestaurantId,
         );
         return sendResponse(res, 200, 'Restaurant chain validated', result);
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function restaurantEligibilityController(req, res, next) {
+    try {
+        const userId = req.user?.userId;
+        const restaurantId = String(req.query?.restaurantId || '').trim();
+        if (!restaurantId) {
+            throw new ValidationError('restaurantId is required');
+        }
+        const result = await checkRestaurantEligibility(userId, restaurantId);
+        return sendResponse(res, 200, 'Restaurant eligibility checked', result);
     } catch (err) {
         next(err);
     }
