@@ -4,6 +4,7 @@ import {
     registerRestaurantController,
     listApprovedRestaurantsController,
     getApprovedRestaurantController,
+    getPublicFoodsController,
     listPublicOffersController,
     listOffersForRestaurantPageController,
     listDeliverySpeedOptionsController,
@@ -130,6 +131,7 @@ router.post(
 );
 
 router.get('/restaurants', cacheResponse(300, 'restaurants'), listApprovedRestaurantsController);
+router.get('/public/foods', cacheResponse(120, 'public_foods'), getPublicFoodsController);
 router.get('/restaurants/:id', cacheResponse(600, 'restaurant_detail'), getApprovedRestaurantController);
 router.get('/restaurants/:id/menu', cacheResponse(600, 'restaurant_menu'), getPublicRestaurantMenuController);
 router.get('/restaurants/:id/outlet-timings', cacheResponse(600, 'restaurant_timings'), getOutletTimingsByRestaurantIdController);

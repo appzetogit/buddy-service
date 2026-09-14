@@ -1802,6 +1802,65 @@ export const listApprovedRestaurants = async (query = {}) => {
     return formatRestaurantListResponse(enriched, { page, limit, total });
 };
 
+/**
+ * Cross-restaurant dish feed used by the home "99 Store" rail and the
+ * Store99 catalogue. `promo` maps to a price ceiling since there is no
+ * separate promo-tagging system for dishes; zoneId scopes to restaurants
+ * whose fast-path zoneId matches (or that fall inside the zone polygon),
+ * same as listApprovedRestaurants.
+ */
+export const listPublicFoods = async (query = {}) => {
+    const limit = Math.min(Math.max(parseInt(query.limit, 10) || 200, 1), 1000);
+
+    const restaurantFilter = { status: 'approved' };
+    const zoneIdRaw = String(query.zoneId || '').trim();
+    if (zoneIdRaw && mongoose.Types.ObjectId.isValid(zoneIdRaw)) {
+        restaurantFilter.$or = [{ zoneId: new mongoose.Types.ObjectId(zoneIdRaw) }];
+        const zoneDoc = await FoodZone.findOne({ _id: zoneIdRaw, isActive: true }).lean();
+        const polygon = zoneToPolygon(zoneDoc);
+        if (polygon) {
+            restaurantFilter.$or.push({ location: { $geoWithin: { $geometry: polygon } } });
+        }
+    }
+
+    const restaurantIds = await FoodRestaurant.find(restaurantFilter).distinct('_id');
+    if (!restaurantIds.length) return { foods: [] };
+
+    const { FoodItem } = await import('../../admin/models/food.model.js');
+    const { buildFoodVisibleCategoryFilter } = await import('../../shared/categoryWorkflow.js');
+
+    const foodFilter = {
+        restaurantId: { $in: restaurantIds },
+        approvalStatus: 'approved',
+        isAvailable: true,
+    };
+
+    const categorySlug = String(query.categorySlug || '').trim();
+    if (categorySlug && mongoose.Types.ObjectId.isValid(categorySlug)) {
+        foodFilter.categoryId = new mongoose.Types.ObjectId(categorySlug);
+    }
+
+    // No dedicated promo-tagging exists on FoodItem yet, so promo slugs map to
+    // the price ceiling they advertise on the client.
+    if (query.promo === 'switch99') {
+        foodFilter.price = { $lte: 99 };
+    } else if (query.promo === 'under-250') {
+        foodFilter.price = { $lte: 250 };
+    }
+
+    const visibleCategoryFilter = await buildFoodVisibleCategoryFilter();
+    if (visibleCategoryFilter) {
+        foodFilter.$and = [...(foodFilter.$and || []), visibleCategoryFilter];
+    }
+
+    const foods = await FoodItem.find(foodFilter)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+
+    return { foods };
+};
+
 export const getApprovedRestaurantByIdOrSlug = async (idOrSlug, origin = {}) => {
     const value = String(idOrSlug || '').trim();
     if (!value) return null;
