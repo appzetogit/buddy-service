@@ -40,6 +40,10 @@ import {
   validateRestaurantChainForItems,
   validateNewRestaurantAgainstLast,
 } from './restaurant-chain-radius.service.js';
+import {
+  assertRestaurantOrderLimit,
+  reconcileRestaurantLimitAfterInsert,
+} from './active-restaurant-limit.service.js';
 import * as dispatchService from './order-dispatch.service.js';
 import * as checkoutService from './order-checkout.service.js';
 import * as deliveryService from './order-delivery.service.js';
@@ -213,6 +217,8 @@ export async function createOrder(userId, dto, options = {}) {
       );
     }
   }
+
+  await assertRestaurantOrderLimit(userId, restaurantIds);
 
   const mainRestaurant = restaurantsWithTimings[0];
   const settings = await getDispatchSettings();
@@ -687,6 +693,8 @@ export async function createOrder(userId, dto, options = {}) {
 
   pushSettlementSnapshot(order, 'create', 'Initial pricing and rider earning frozen at create');
   await order.save();
+
+  await reconcileRestaurantLimitAfterInsert(userId, order._id);
 
   if (isWallet) {
     try {

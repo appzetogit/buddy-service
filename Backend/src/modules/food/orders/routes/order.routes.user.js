@@ -12,6 +12,7 @@ import {
     getOrderDropOtpUserController,
     updateOrderInstructionsController,
     validateRestaurantChainController,
+    restaurantEligibilityController,
 } from '../controllers/order.controller.js';
 
 const router = express.Router();
@@ -22,6 +23,7 @@ router.post('/', createOrderController);
 router.post('/verify-payment', verifyPaymentController);
 router.post('/checkout/:checkoutId/cancel', cancelCheckoutController);
 router.get('/', listOrdersUserController);
+router.get('/restaurant-eligibility', restaurantEligibilityController);
 router.get('/:orderId/payments', getOrderPaymentsUserController);
 router.get('/:orderId/drop-otp', getOrderDropOtpUserController);
 router.get('/:orderId', getOrderByIdUserController);
