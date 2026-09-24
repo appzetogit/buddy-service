@@ -4132,7 +4132,10 @@ export async function shareOrderDelivery(orderId, deliveryPartnerId) {
   if (!order) throw new NotFoundError("Order not found or not assigned to you");
 
   const currentStatus = order.orderStatus;
-  const sharedStatuses = ['accepted', 'preparing', 'ready_for_pickup', 'picked_up'];
+  // Must match FoodOrder.orderStatus enum (order.model.js) — 'accepted' is not a valid
+  // orderStatus for this model, and 'confirmed'/'reached_pickup' were missing, which
+  // blocked "Find new driver" for orders still at the restaurant/pickup stage.
+  const sharedStatuses = ['confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up'];
 
   if (!sharedStatuses.includes(currentStatus)) {
     throw new ValidationError(`Order in status '${currentStatus}' cannot be shared.`);
