@@ -1,11 +1,12 @@
-✅ [INFO] 6:40:33 pm: Razorpay configured in TEST mode (key rzp_test_Spz…)
+✅ [INFO] 7:11:14 pm: Razorpay configured in TEST mode (key rzp_test_Spz…)
 [ENV DEBUG] ENABLE_UNIFIED_QC_DISPATCH: true
-✅ [INFO] 6:40:33 pm: ✅ Firebase Messaging initialized
-✅ [INFO] 6:40:33 pm: ✅ Firebase Realtime Database initialized
-✅ [INFO] 6:40:34 pm: MongoDB connected: ac-4qyzdpm-shard-00-02.vadstlf.mongodb.net
+✅ [INFO] 7:11:14 pm: ✅ Firebase Messaging initialized
+✅ [INFO] 7:11:14 pm: ✅ Firebase Realtime Database initialized
+✅ [INFO] 7:11:14 pm: MongoDB connected: ac-4qyzdpm-shard-00-01.vadstlf.mongodb.net
 [seedDefaultAdmin] Default admin ready: admin@gmail.com
-✅ [INFO] 6:40:36 pm: Socket.IO infrastructure initialized
+✅ [INFO] 7:11:17 pm: Socket.IO infrastructure initialized
 [SocketBridge] Socket Event Bridge Service initialized successfully.
-✅ [INFO] 6:40:36 pm: [SocketBridge] Successfully initialized once at server boot via order-dispatch service hook.
-⚠️ [WARN] 6:40:42 pm: Dispatch retries are running in WATCHDOG-ONLY mode (BULLMQ_ENABLED=false, REDIS_ENABLED=false). Re-offers happen on the 30s watchdog instead of the 60s job. Enable Redis + BullMQ for precise timing — and confirm the Socket.IO Redis adapter attaches first, or worker-process emits will be silently dropped.
-❌ [ERROR] 6:40:42 pm: Port 9000 is already in use. Please kill the process or use a different port.
+✅ [INFO] 7:11:17 pm: [SocketBridge] Successfully initialized once at server boot via order-dispatch service hook.
+⚠️ [WARN] 7:11:22 pm: Dispatch retries are running in WATCHDOG-ONLY mode (BULLMQ_ENABLED=false, REDIS_ENABLED=false). Re-offers happen on the 30s watchdog instead of the 60s job. Enable Redis + BullMQ for precise timing — and confirm the Socket.IO Redis adapter attaches first, or worker-process emits will be silently dropped.
+✅ [INFO] 7:11:22 pm: Server running in development mode on 0.0.0.0:9000
+🌐 [URL] http://localhost:9000
