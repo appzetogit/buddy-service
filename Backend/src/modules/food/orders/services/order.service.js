@@ -4206,6 +4206,11 @@ export async function shareOrderDelivery(orderId, deliveryPartnerId) {
     logger.error(`Socket notification failed for shared order: ${err.message}`);
   }
 
+  // Ring free riders too — the socket broadcast only reaches apps that are open.
+  void import('./share-offer-push.service.js')
+    .then(({ pushShareableOrder }) => pushShareableOrder(order, deliveryPartnerId))
+    .catch((err) => logger.warn(`Second-driver push failed for ${order._id}: ${err.message}`));
+
   return normalizeOrderForClient(order);
 }
 
