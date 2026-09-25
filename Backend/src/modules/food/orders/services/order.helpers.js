@@ -1041,10 +1041,16 @@ function slimPublicPartner(partner) {
     fullName: partner.fullName || partner.name || '',
     phone: partner.phone || partner.phoneNumber || '',
     phoneNumber: partner.phoneNumber || partner.phone || '',
-    avatar: partner.avatar || partner.profileImage || null,
-    profileImage: partner.profileImage || partner.avatar || null,
+    // The partner model stores the photo as `profilePhoto`; keep the older
+    // names as aliases so existing clients read it too.
+    avatar: partner.avatar || partner.profileImage || partner.profilePhoto || null,
+    profileImage: partner.profileImage || partner.avatar || partner.profilePhoto || null,
     rating: partner.rating,
     totalRatings: partner.totalRatings,
+    // Shown to the customer on the tracking screen, like other delivery apps.
+    vehicleType: partner.vehicleType || '',
+    vehicleName: partner.vehicleName || '',
+    vehicleNumber: partner.vehicleNumber || '',
   };
 }
 
