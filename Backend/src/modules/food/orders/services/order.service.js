@@ -2062,6 +2062,8 @@ export async function listOrdersRestaurant(restaurantId, query) {
   const [docs, total] = await Promise.all([
     FoodOrder.find(filter)
       .populate("userId", "name phone email profileImage")
+      // toRestaurantOrderResponse only exposes the rider's name/phone when populated.
+      .populate("dispatch.deliveryPartnerId", "name fullName phone phoneNumber rating")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)

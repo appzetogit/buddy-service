@@ -1513,7 +1513,17 @@ export function buildRestaurantScopedOrder(orderDoc, restaurantId) {
 
   let scopedStatus;
   let myPickupStatus;
-  if (isMultiRestaurant) {
+  // A pickup never moves past `picked_up`, so once the whole order is delivered
+  // or cancelled that outranks it — unless this restaurant was dropped earlier.
+  const aggregateStatus = String(order?.orderStatus || order?.status || '');
+  const orderFinished =
+    aggregateStatus === 'delivered' || aggregateStatus.startsWith('cancelled');
+  const ownPickupDropped =
+    Boolean(ownPickup?.permanentlyDropped) || ownPickup?.status === 'cancelled';
+  if (isMultiRestaurant && orderFinished && !ownPickupDropped) {
+    scopedStatus = aggregateStatus;
+    myPickupStatus = derivePickupStatusFromOrderStatus(aggregateStatus);
+  } else if (isMultiRestaurant) {
     scopedStatus = mapPickupStatusToRestaurantOrderStatus(
       ownPickup?.status,
       // Before rider accept, restaurants shouldn't act; still show created/pending for this pickup
