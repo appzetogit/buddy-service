@@ -14,6 +14,7 @@ import { haversineKm } from '../../../../core/location/haversine.util.js';
 import { getRoadDistanceBatch } from '../../../../core/location/distance.service.js';
 import {
   buildDeliverySocketPayload,
+  buildOfferPushData,
   buildOrderIdentityFilter,
   notifyOwnersSafely,
   publish,
@@ -670,7 +671,7 @@ export async function tryAutoAssign(orderId, options = {}) {
         // single most-recent token. An offer is worth the duplicate; the client dedupes by
         // order id within ALERT_DEDUPE_MS.
         sendToAllDevices: true,
-        data: { type: 'new_order', orderId: order._id.toString() },
+        data: { ...buildOfferPushData(payload), orderId: order._id.toString() },
       }).catch((err) => {
         logger.warn(`Dispatch push fan-out failed for order ${order._id}: ${err.message}`);
       });

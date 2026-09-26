@@ -1306,8 +1306,8 @@ export async function getOrderById(
       "restaurantId",
       "restaurantName ownerPhone profileImage area city location rating totalRatings primaryContactNumber",
     )
-    .populate("dispatch.deliveryPartnerId", "name fullName phone phoneNumber rating totalRatings profileImage avatar")
-    .populate("dispatch.sharedPartnerId", "name fullName phone phoneNumber rating totalRatings profileImage avatar")
+    .populate("dispatch.deliveryPartnerId", "name fullName phone phoneNumber rating totalRatings profileImage avatar profilePhoto vehicleType vehicleName vehicleNumber")
+    .populate("dispatch.sharedPartnerId", "name fullName phone phoneNumber rating totalRatings profileImage avatar profilePhoto vehicleType vehicleName vehicleNumber")
     .populate("userId", "name fullName phone email")
     .select("+deliveryOtp")
     .lean();
@@ -4140,7 +4140,10 @@ export async function shareOrderDelivery(orderId, deliveryPartnerId) {
   if (!order) throw new NotFoundError("Order not found or not assigned to you");
 
   const currentStatus = order.orderStatus;
-  const sharedStatuses = ['accepted', 'preparing', 'ready_for_pickup', 'picked_up'];
+  // 'confirmed' is the restaurant-accepted state ('accepted' is its legacy
+  // name) and is where an order sits while the rider waits at the store —
+  // exactly when "Find new driver" is offered, so it must be shareable.
+  const sharedStatuses = ['accepted', 'confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up'];
 
   if (!sharedStatuses.includes(currentStatus)) {
     throw new ValidationError(`Order in status '${currentStatus}' cannot be shared.`);
@@ -4192,7 +4195,11 @@ export async function shareOrderDelivery(orderId, deliveryPartnerId) {
   try {
     const io = getIO();
     if (io) {
-      const payload = buildDeliverySocketPayload(order, order.restaurantId);
+      // `order` is unpopulated here; without the restaurant the offer card is blank.
+      const restaurant = await FoodRestaurant.findById(order.restaurantId)
+        .select('restaurantName name address phone location addressLine1')
+        .lean();
+      const payload = buildDeliverySocketPayload(order, restaurant);
       io.to('all_delivery').emit('shareable_order_available', {
         ...payload,
         sharedFrom: deliveryPartnerId,
@@ -4202,6 +4209,11 @@ export async function shareOrderDelivery(orderId, deliveryPartnerId) {
   } catch (err) {
     logger.error(`Socket notification failed for shared order: ${err.message}`);
   }
+
+  // Ring free riders too — the socket broadcast only reaches apps that are open.
+  void import('./share-offer-push.service.js')
+    .then(({ pushShareableOrder }) => pushShareableOrder(order, deliveryPartnerId))
+    .catch((err) => logger.warn(`Second-driver push failed for ${order._id}: ${err.message}`));
 
   return normalizeOrderForClient(order);
 }

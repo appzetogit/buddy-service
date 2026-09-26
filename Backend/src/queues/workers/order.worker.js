@@ -5,6 +5,10 @@ import { logger } from '../../utils/logger.js';
 import { getBullMQConnection } from '../connection.js';
 import { ORDER_QUEUE } from '../queue.constants.js';
 import { processOrderJob } from '../processors/order.processor.js';
+import { connectDB } from '../../config/db.js';
+// Dispatch looks up the quick-commerce model by name (`mongoose.model('Order')`),
+// which only exists once this file is loaded — the API server gets it via its routes.
+import '../../modules/quickCommerce/models/order.js';
 
 const defaultJobOptions = {
     attempts: 3,
@@ -36,6 +40,9 @@ const startOrderWorker = () => {
     return worker;
 };
 
+// DISPATCH_TIMEOUT_CHECK reads and writes orders; without a connection every
+// query buffers and times out.
+if (config.bullmqEnabled) await connectDB();
 const worker = startOrderWorker();
 if (worker) {
     const shutdown = async () => {

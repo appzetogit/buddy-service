@@ -104,7 +104,7 @@ const buildMessageBody = (payload = {}) => {
 
     message.android = {
         priority: 'high',
-        ...(isRing ? { ttl: '60s' } : {}),
+        ...(isRing ? { ttl: 60 * 1000 } : {}),
         notification: {
             channel_id: isRing ? RING_CHANNEL_ID : 'default',
             sound: isRing ? RING_SOUND : 'default',
@@ -466,7 +466,7 @@ export const sendNotificationToOwner = async ({ ownerType, ownerId, payload, pla
             }
         }
         logger.info(
-            `FCM push sent to ${ownerType}:${ownerId} (${platform || 'all'}). Success=${response.successCount}, Failure=${response.failureCount}`
+            `FCM push sent to ${ownerType}:${ownerId} (${platform || 'all'}). Success=${response.successCount}, Failure=${response.failureCount}${response.failureCount ? " errors=" + JSON.stringify([...new Set((response.results || []).filter((r) => !r.ok).map((r) => (r.code || "") + ": " + (r.error || "")))]) : ""}`
         );
         return response;
     } catch (error) {

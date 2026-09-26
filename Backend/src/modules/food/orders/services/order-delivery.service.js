@@ -624,7 +624,7 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
     'dispatch.isShared': true,
     'dispatch.sharedPartnerId': null,
     'dispatch.deliveryPartnerId': { $ne: new mongoose.Types.ObjectId(deliveryPartnerId) },
-    orderStatus: { $in: ['accepted', 'preparing', 'ready_for_pickup', 'picked_up'] },
+    orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up'] },
   };
 
   const filter = partnerCapacity.hasCapacity
@@ -1134,40 +1134,14 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
         )]
         : [];
 
+      // notifyRestaurantNewOrder already pushes the order with its details. A second
+      // id-only push here re-rendered the restaurant app's order card blank.
       if (pickupRestaurantIds.length > 0) {
         for (const rid of pickupRestaurantIds) {
           await notifyRestaurantNewOrder(order, rid);
-          await notifyOwnerSafely(
-            { ownerType: 'RESTAURANT', ownerId: rid },
-            {
-              title: 'New order — rider assigned',
-              body: `Order #${order.order_id || order._id.toString()} needs your acceptance.`,
-              data: {
-                type: 'new_order',
-                orderId: order._id.toString(),
-                orderMongoId: order._id?.toString?.() || '',
-                dispatchStatus: order.dispatch?.status,
-                link: '/food/restaurant/orders',
-              },
-            },
-          );
         }
       } else {
         await notifyRestaurantNewOrder(order);
-        await notifyOwnerSafely(
-          { ownerType: 'RESTAURANT', ownerId: restaurantIdStr || order.restaurantId },
-          {
-            title: 'New order — rider assigned',
-            body: `Order #${order.order_id || order._id.toString()} needs your acceptance.`,
-            data: {
-              type: 'new_order',
-              orderId: order._id.toString(),
-              orderMongoId: order._id?.toString?.() || '',
-              dispatchStatus: order.dispatch?.status,
-              link: '/food/restaurant/orders',
-            },
-          },
-        );
       }
     } catch (error) {
       logger.error(

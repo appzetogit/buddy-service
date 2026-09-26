@@ -5,6 +5,7 @@ import { requireRoles } from '../../../../core/roles/role.middleware.js';
 import * as orderController from '../../orders/controllers/order.controller.js';
 import { registerDeliveryPartnerController, updateDeliveryPartnerProfileController, updateDeliveryPartnerBankDetailsController, listSupportTicketsController, createSupportTicketController, getSupportTicketByIdController, updateDeliveryPartnerDetailsController, updateDeliveryPartnerProfilePhotoBase64Controller, updateAvailabilityController, getWalletController, createWithdrawalRequestController, createCashDepositOrderController, verifyCashDepositPaymentController, getEarningsController, getTripHistoryController, getPocketDetailsController, getEmergencyHelpController, getCashLimitController, getDeliveryReferralStatsController, getActiveEarningAddonsController } from '../controllers/delivery.controller.js';
 import { deleteDeliveryAccountController } from '../controllers/deleteAccount.controller.js';
+import { fetchPolyline } from '../../orders/utils/googleMaps.js';
 
 const router = express.Router();
 
@@ -33,6 +34,18 @@ router.patch('/availability', authMiddleware, requireRoles('DELIVERY_PARTNER', '
 router.get('/support-tickets', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), listSupportTicketsController);
 router.post('/support-tickets', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), createSupportTicketController);
 router.get('/support-tickets/:id', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), getSupportTicketByIdController);
+
+// Road route for the rider app's map. Google Directions via the server key (the
+// app's own Maps key has no Directions access). `polyline` is '' when Google
+// fails; the app then falls back to a straight line.
+router.get('/route', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), async (req, res) => {
+    const [oLat, oLng, dLat, dLng] = ['originLat', 'originLng', 'destLat', 'destLng'].map((k) => Number(req.query[k]));
+    if (![oLat, oLng, dLat, dLng].every(Number.isFinite)) {
+        return res.status(400).json({ success: false, message: 'originLat, originLng, destLat and destLng are required' });
+    }
+    const polyline = await fetchPolyline({ lat: oLat, lng: oLng }, { lat: dLat, lng: dLng });
+    return res.json({ success: true, message: 'Route', data: { polyline } });
+});
 
 // ----- Orders -----
 router.get('/orders/current', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.getCurrentTripDeliveryController);

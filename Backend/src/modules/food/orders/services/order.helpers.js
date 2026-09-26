@@ -1041,10 +1041,16 @@ function slimPublicPartner(partner) {
     fullName: partner.fullName || partner.name || '',
     phone: partner.phone || partner.phoneNumber || '',
     phoneNumber: partner.phoneNumber || partner.phone || '',
-    avatar: partner.avatar || partner.profileImage || null,
-    profileImage: partner.profileImage || partner.avatar || null,
+    // The partner model stores the photo as `profilePhoto`; keep the older
+    // names as aliases so existing clients read it too.
+    avatar: partner.avatar || partner.profileImage || partner.profilePhoto || null,
+    profileImage: partner.profileImage || partner.avatar || partner.profilePhoto || null,
     rating: partner.rating,
     totalRatings: partner.totalRatings,
+    // Shown to the customer on the tracking screen, like other delivery apps.
+    vehicleType: partner.vehicleType || '',
+    vehicleName: partner.vehicleName || '',
+    vehicleNumber: partner.vehicleNumber || '',
   };
 }
 
@@ -1909,6 +1915,47 @@ export function buildDeliverySocketPayload(orderDoc, restaurantDoc = null) {
   };
 }
 
+/**
+ * FCM `data` for a rider offer push, built from `buildDeliverySocketPayload`.
+ * These are the fields the rider app's native offer card (and its Flutter
+ * fallback) render — a push carrying only the order id shows a blank card.
+ * FCM data values must be strings.
+ */
+export function buildOfferPushData(payload) {
+  const p = payload || {};
+  const loc = p.restaurantLocation || {};
+  const str = (v) => (v === undefined || v === null ? '' : String(v));
+  // Multi-restaurant offers: without these the card only names the first store.
+  const stops = (Array.isArray(p.pickups) ? p.pickups : [])
+    .filter((s) => !s?.permanentlyDropped && String(s?.status || '') !== 'cancelled')
+    .map((s) => ({
+      restaurantId: str(s.restaurantId?._id || s.restaurantId),
+      restaurantName: str(s.restaurantName),
+      address: str(s.location?.address || s.location?.formattedAddress),
+      status: str(s.status),
+      sequence: Number(s.sequence) || 0,
+    }))
+    .sort((a, b) => a.sequence - b.sequence);
+  return {
+    isMultiRestaurant: str(stops.length > 1),
+    pickupNames: stops.map((s) => s.restaurantName).filter(Boolean).join(' + '),
+    pickups: stops.length > 1 ? JSON.stringify(stops) : '',
+    type: 'new_order',
+    orderId: str(p.orderMongoId),
+    orderMongoId: str(p.orderMongoId),
+    orderDisplayId: p.orderId ? `#${p.orderId}` : '',
+    restaurantName: str(p.restaurantName),
+    restaurantAddress: str(p.restaurantAddress),
+    restaurantPhone: str(p.restaurantPhone),
+    restaurantLat: str(loc.latitude),
+    restaurantLng: str(loc.longitude),
+    customerName: str(p.customerName),
+    customerAddress: str(p.customerAddress),
+    riderEarning: str(p.riderEarning),
+    paymentMethod: str(p.paymentMethod),
+  };
+}
+
 export function canExposeOrderToRestaurant(orderLike) {
   const method = String(orderLike?.payment?.method || "").toLowerCase();
   const status = String(orderLike?.payment?.status || "").toLowerCase();
@@ -1975,6 +2022,15 @@ export async function notifyRestaurantNewOrder(orderDoc, restaurantIdOverride = 
           orderId: orderDoc._id.toString(),
           orderMongoId: orderDoc._id?.toString?.() || "",
           link: `/restaurant/orders/${orderDoc._id?.toString?.() || ""}`,
+          // Fields the restaurant app's native order card renders; without them
+          // it shows a blank card. FCM data values must be strings.
+          orderDisplayId: `#${payload.orderId || ""}`,
+          customerName: String(leanOrder.customerName || ""),
+          address: String(leanOrder.deliveryAddress?.formattedAddress || ""),
+          itemCount: String((leanOrder.items || []).reduce((n, i) => n + (Number(i.quantity) || 1), 0)),
+          itemsList: (leanOrder.items || []).map((i) => `${i.quantity || 1}× ${i.name}`).join(", ").slice(0, 300),
+          total: String(leanOrder.pricing?.total ?? ""),
+          paymentMethod: String(leanOrder.payment?.method || ""),
         },
       },
     );
