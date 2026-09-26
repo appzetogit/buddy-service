@@ -1,4 +1,4 @@
-import { Menu, Search } from "lucide-react"
+import { MapPin, Menu, Search } from "lucide-react"
 import { useRestaurantSession } from "@food/context/RestaurantSessionContext"
 
 function formatRestaurantLocation(restaurant) {
@@ -49,6 +49,10 @@ export default function RestaurantPanelHeader({
     restaurant?.name ||
     restaurant?.businessName ||
     "Your restaurant"
+
+  const heading = title || restaurantName
+  const locationText = showLocation ? formatRestaurantLocation(restaurant) : ""
+  const showLocRow = Boolean(locationText)
 
   return (
     <header
