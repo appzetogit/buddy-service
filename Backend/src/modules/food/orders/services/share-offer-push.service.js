@@ -45,15 +45,25 @@ export async function pushShareableOrder(order, sharedFromId) {
   excluded.add(String(sharedFromId));
 
   const zoneId = order.zoneId?._id || order.zoneId;
-  const filter = { status: 'approved', availabilityStatus: 'online' };
-  if (zoneId) filter.$or = [{ zone: zoneId }, { zone: null }, { zone: { $exists: false } }];
-
-  const partners = await FoodDeliveryPartner.find(filter).select('_id').limit(MAX_TARGETS * 4).lean();
-  const targets = partners
+  const online = await FoodDeliveryPartner.find({ status: 'approved', availabilityStatus: 'online' })
+    .select('_id zone')
+    .lean();
+  const inZone = zoneId
+    ? online.filter((p) => !p.zone || String(p.zone) === String(zoneId))
+    : online;
+  const targets = inZone
     .map((p) => String(p._id))
     .filter((id) => !excluded.has(id))
     .slice(0, MAX_TARGETS)
     .map((ownerId) => ({ ownerType: 'DELIVERY_PARTNER', ownerId }));
+
+  // Always logged, so "nobody got the request" can be traced to the filter that
+  // emptied the list.
+  logger.info(
+    `Second-driver request ${order._id}: online=${online.length} inZone=${inZone.length} ` +
+      `busyOrSelf=${inZone.length - inZone.filter((p) => !excluded.has(String(p._id))).length} ` +
+      `pushingTo=${targets.length}`,
+  );
   if (targets.length === 0) return 0;
 
   const p = buildDeliverySocketPayload(order, order.restaurantId);
@@ -79,6 +89,5 @@ export async function pushShareableOrder(order, sharedFromId) {
       zoneId: zoneId ? String(zoneId) : '',
     },
   });
-  logger.info(`Second-driver request for ${order._id} pushed to ${targets.length} rider(s).`);
   return targets.length;
 }
