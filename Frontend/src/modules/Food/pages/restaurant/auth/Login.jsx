@@ -11,6 +11,8 @@ import { hasModuleSession } from "@food/utils/auth"
 
 const DEFAULT_COUNTRY_CODE = "+91"
 
+const toIndianMobileDigits = (value) => (value || "").replace(/\D/g, "").slice(0, 10)
+
 export default function RestaurantLogin() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -42,6 +44,8 @@ export default function RestaurantLogin() {
       navigate(location.pathname, { replace: true, state: {} })
     }
   }, [location.pathname, location.state, navigate])
+
+  const applyPhoneInput = (value) => setPhone(toIndianMobileDigits(value))
 
   const validatePhone = (num) => {
     const digits = toIndianMobileDigits(num)
