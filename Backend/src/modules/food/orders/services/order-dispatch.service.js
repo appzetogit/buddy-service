@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { FoodOrder, FoodSettings } from '../models/order.model.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
-import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model.js';
+import { FoodDeliveryPartner, takesDeliveryService } from '../../delivery/models/deliveryPartner.model.js';
 import { FoodDeliveryCashDeposit } from '../../delivery/models/foodDeliveryCashDeposit.model.js';
 import { FoodDeliveryCashLimit } from '../../admin/models/deliveryCashLimit.model.js';
 import { BuddyIdentity } from '../../../../core/identity/buddyIdentity.model.js';
@@ -230,8 +230,16 @@ async function filterPartnersByCashLimit(partners = [], options = {}) {
 
 async function listNearbyOnlineDeliveryPartners(
   restaurantId,
-  { maxKm = 15, limit = 25, requiredAmount = 0, allowOverLimitFallback = true } = {},
+  { maxKm = 15, limit = 25, requiredAmount = 0, allowOverLimitFallback = true, service = null } = {},
 ) {
+  // Riders who opted out of this kind of job (food vs quick commerce) never see it.
+  const serviceFilter = service ? takesDeliveryService(service) : {};
+  // Quick Commerce approval is `isVerified`; `status` tracks the food side, so a
+  // QC-only rider is `pending` there and would otherwise never get a QC job.
+  const qcJob = service === 'quickCommerce';
+  const approvedFor = (p) => p.status === 'approved' || (qcJob && p.isVerified === true);
+  const approvedQuery = (statuses) =>
+    qcJob ? { $or: [{ status: { $in: statuses } }, { isVerified: true }] } : { status: { $in: statuses } };
   let coordinates = null;
   if (restaurantId && restaurantId.location && Array.isArray(restaurantId.location.coordinates)) {
     coordinates = restaurantId.location.coordinates;
@@ -247,8 +255,8 @@ async function listNearbyOnlineDeliveryPartners(
 
   if (!coordinates) {
     const partners = await FoodDeliveryPartner.find({
-      status: "approved",
       availabilityStatus: "online",
+      $and: [serviceFilter, approvedQuery(["approved"])],
     })
       .select("_id status name")
       .limit(Math.max(1, limit))
@@ -269,8 +277,9 @@ async function listNearbyOnlineDeliveryPartners(
   const [rLng, rLat] = coordinates;
   const allOnline = await FoodDeliveryPartner.find({
     availabilityStatus: "online",
+    ...serviceFilter,
   })
-    .select("_id status lastLat lastLng lastLocationAt name presence")
+    .select("_id status isVerified lastLat lastLng lastLocationAt name presence")
     .lean();
 
   const scored = [];
@@ -290,18 +299,18 @@ async function listNearbyOnlineDeliveryPartners(
   };
 
   for (const p of allOnline) {
-    if (!allowedStatuses.includes(p.status)) continue;
+    if (!allowedStatuses.includes(p.status) && !approvedFor(p)) continue;
 
     const stalePresence = hasStalePresence(p);
     const isStale = !p.lastLocationAt || (Date.now() - new Date(p.lastLocationAt).getTime()) > STALE_GPS_MS;
     if (p.lastLat == null || p.lastLng == null || isStale) {
-      scored.push({ partnerId: p._id, distanceKm: 999, status: p.status, stalePresence });
+      scored.push({ partnerId: p._id, distanceKm: 999, status: p.status, approved: approvedFor(p), stalePresence });
       continue;
     }
 
     const d = haversineKm(rLat, rLng, p.lastLat, p.lastLng);
     if (Number.isFinite(d) && d <= maxKm) {
-      scored.push({ partnerId: p._id, distanceKm: d, status: p.status, lat: p.lastLat, lng: p.lastLng, stalePresence });
+      scored.push({ partnerId: p._id, distanceKm: d, status: p.status, approved: approvedFor(p), lat: p.lastLat, lng: p.lastLng, stalePresence });
     }
   }
 
@@ -355,8 +364,8 @@ async function listNearbyOnlineDeliveryPartners(
 
   if (picked.length === 0) {
     const anyOnline = await FoodDeliveryPartner.find({
-      status: { $in: allowedStatuses },
       availabilityStatus: "online",
+      $and: [serviceFilter, approvedQuery(allowedStatuses)],
     })
       .select("_id status name identityId")
       .limit(Math.max(1, limit))
@@ -376,7 +385,7 @@ async function listNearbyOnlineDeliveryPartners(
   }
 
   const final = (config.env === 'production')
-    ? picked.filter(p => p.status === 'approved')
+    ? picked.filter(p => p.approved)
     : picked;
 
   const cashEligibleFinal = await filterPartnersByCashLimit(final, {
@@ -523,6 +532,7 @@ export async function tryAutoAssign(orderId, options = {}) {
       limit: 15,
       requiredAmount,
       allowOverLimitFallback: true,
+      service: isQc ? 'quickCommerce' : 'food',
     };
 
     // Use normalized pickup from adapter
@@ -822,6 +832,7 @@ export async function resendDeliveryNotificationRestaurant(orderId, restaurantId
     limit: 15,
     requiredAmount,
     allowOverLimitFallback: true,
+    service: 'food',
   });
   const shortlistedCount = Array.isArray(preview?.partners) ? preview.partners.length : 0;
 

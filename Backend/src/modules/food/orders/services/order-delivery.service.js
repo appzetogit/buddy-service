@@ -620,6 +620,11 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
     },
   };
 
+  // A rider who chose Quick Commerce only is not offered open food orders;
+  // their own in-flight orders still show.
+  const optIn = await FoodDeliveryPartner.findById(deliveryPartnerId).select('deliveryServices').lean();
+  const takesFood = !optIn?.deliveryServices?.length || optIn.deliveryServices.includes('food');
+
   const shareableFilter = {
     'dispatch.isShared': true,
     'dispatch.sharedPartnerId': null,
@@ -627,7 +632,7 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
     orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up'] },
   };
 
-  const filter = partnerCapacity.hasCapacity
+  const filter = partnerCapacity.hasCapacity && takesFood
     ? {
       $or: [
         {
