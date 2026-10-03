@@ -19,8 +19,7 @@ async function seed() {
         // 1. Create Tabs
         const tabs = await ServiceTab.create([
             { title: 'Food', serviceKey: 'food', sortOrder: 1 },
-            { title: 'Taxi', serviceKey: 'taxi', sortOrder: 2 },
-            { title: 'Quick Commerce', serviceKey: 'quick-commerce', sortOrder: 3 }
+            { title: 'Taxi', serviceKey: 'taxi', sortOrder: 2 }
         ]);
         console.log('Tabs seeded');
 

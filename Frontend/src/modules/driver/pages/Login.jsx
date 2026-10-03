@@ -201,10 +201,10 @@ export default function DriverLogin() {
             </p>
             <h1 className="text-white text-[30px] leading-[1.15] font-extrabold tracking-tight mb-2">
               One partner account.<br />
-              Food <span className="text-green-300">&</span> Quick Commerce.
+              Food Delivery.
             </h1>
             <p className="text-green-50 text-[13px] font-medium max-w-[290px]">
-              Sign in once to receive restaurant and quick-commerce deliveries.
+              Sign in to receive restaurant deliveries.
             </p>
           </div>
         </div>

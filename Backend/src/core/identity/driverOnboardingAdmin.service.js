@@ -3,11 +3,10 @@ import { ValidationError, NotFoundError } from '../auth/errors.js';
 import { BuddyIdentity } from './buddyIdentity.model.js';
 import { FoodDeliveryPartner } from '../../modules/food/delivery/models/deliveryPartner.model.js';
 
-export const ONBOARDING_SERVICES = ['food', 'quickCommerce'];
+export const ONBOARDING_SERVICES = ['food'];
 
 const SERVICE_LABELS = {
   food: 'Food',
-  quickCommerce: 'Quick Commerce',
 };
 
 const normalizeService = (service) => {
@@ -33,14 +32,6 @@ const legacyFoodStatus = (partner) => {
   return 'pending';
 };
 
-const legacyQcStatus = (partner) => {
-  if (!partner) return 'not_enabled';
-  if (partner.isVerified === true) return 'approved';
-  const s = String(partner.status || '').toLowerCase();
-  if (s === 'rejected') return 'rejected';
-  return 'pending';
-};
-
 export const getEffectiveServiceStatus = (identity, service, partner = null) => {
   const svc = normalizeService(service);
   const stored = identity?.serviceStatuses?.[svc];
@@ -60,17 +51,7 @@ export const getEffectiveServiceStatus = (identity, service, partner = null) => 
     return { status: 'not_enabled', rejectionReason: '', rejectedAt: null, approvedAt: null };
   }
 
-  if (svc === 'food') {
-    const status = legacyFoodStatus(partner);
-    return {
-      status,
-      rejectionReason: partner?.rejectionReason || '',
-      rejectedAt: partner?.rejectedAt || null,
-      approvedAt: partner?.approvedAt || null,
-    };
-  }
-
-  const status = legacyQcStatus(partner);
+  const status = legacyFoodStatus(partner);
   return {
     status,
     rejectionReason: partner?.rejectionReason || '',
@@ -288,17 +269,6 @@ const syncFoodPartnerForService = async (identity, service, statusPatch) => {
     }
   }
 
-  if (service === 'quickCommerce') {
-    partner.isVerified = statusPatch.status === 'approved';
-    if (statusPatch.status === 'rejected') {
-      partner.status = 'rejected';
-      partner.rejectionReason = statusPatch.rejectionReason || '';
-      partner.rejectedAt = statusPatch.rejectedAt || new Date();
-    } else if (statusPatch.status === 'approved') {
-      if (partner.status !== 'approved') partner.status = partner.status || 'pending';
-    }
-  }
-
   await partner.save();
   return partner;
 };
@@ -322,7 +292,7 @@ export async function approveDriverService(requestId, service) {
   });
   await identity.save();
 
-  if (svc === 'food' || svc === 'quickCommerce') {
+  if (svc === 'food') {
     await syncFoodPartnerForService(identity, svc, { status: 'approved', approvedAt });
   }
 
@@ -354,7 +324,7 @@ export async function rejectDriverService(requestId, service, reason) {
   });
   await identity.save();
 
-  if (svc === 'food' || svc === 'quickCommerce') {
+  if (svc === 'food') {
     await syncFoodPartnerForService(identity, svc, {
       status: 'rejected',
       rejectionReason: normalizedReason,
@@ -368,5 +338,4 @@ export async function rejectDriverService(requestId, service, reason) {
 
 export const summariseCapabilitiesFromIdentity = (identity, partner = null) => ({
   food: getEffectiveServiceStatus(identity, 'food', partner).status,
-  quickCommerce: getEffectiveServiceStatus(identity, 'quickCommerce', partner).status,
 });
