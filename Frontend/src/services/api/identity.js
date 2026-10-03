@@ -37,7 +37,7 @@ const DRIVER_ROUTES = {
  * frontend reads from (food, generic, legacy fallbacks).
  *
  * After this runs, ProtectedRoute / axios / cart guards on any of:
- *   /food/user, /qc/*  will see the user as logged in.
+ *   /food/user  will see the user as logged in.
  */
 export function persistUserIdentitySession({ accessToken, refreshToken, user, identity }) {
   if (!accessToken) return;
@@ -50,7 +50,7 @@ export function persistUserIdentitySession({ accessToken, refreshToken, user, id
     localStorage.setItem("userToken", accessToken);
     localStorage.setItem("userInfo", JSON.stringify(safeUser));
 
-    // QC AuthContext + legacy code paths
+    // legacy generic token keys still read by some code paths
     localStorage.setItem("token", accessToken);
     localStorage.setItem("accessToken", accessToken);
     if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
