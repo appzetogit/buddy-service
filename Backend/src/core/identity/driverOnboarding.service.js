@@ -15,7 +15,7 @@ const FOOD_VEHICLE_TYPES = ['bike', 'scooter'];
 const LEGACY_VEHICLE_TYPES = ['bike', 'scooter', 'auto', 'car'];
 
 const needsFoodVehicleStep = (services = []) =>
-  services.includes('food') || services.includes('quickCommerce');
+  services.includes('food');
 
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RE_AADHAAR = /^\d{12}$/;
@@ -204,7 +204,7 @@ const normalizeFoodVehicleType = (value = '') => {
 
 const assertCreatableProfiles = async (identity, services = []) => {
   const normalizedServices = Array.isArray(services) ? services : [];
-  if (normalizedServices.includes('food') || normalizedServices.includes('quickCommerce')) {
+  if (normalizedServices.includes('food')) {
     await assertUniquePhoneForProfiles(identity, { food: true });
     const foodNumber = identity.foodVehicle?.number || identity.vehicle?.number;
     await assertUniqueVehicleNumber(identity, foodNumber);
@@ -504,7 +504,7 @@ const assertOnboardingDataComplete = (identityDoc, services = []) => {
     throw new ValidationError('Selfie is required before submitting');
   }
 
-  if (services.includes('food') || services.includes('quickCommerce')) {
+  if (services.includes('food')) {
     const foodVehicle = identityDoc.foodVehicle || {};
     if (!foodVehicle.number || !foodVehicle.make || !foodVehicle.model) {
       throw new ValidationError('Add your delivery vehicle details');
@@ -539,11 +539,9 @@ export const completeOnboarding = async (identity, body) => {
   const serviceRejected = (svc) =>
     getEffectiveServiceStatus(identityDoc, svc, existingPartner).status === 'rejected';
 
-  const foodResubmit = services.includes('food') && serviceRejected('food');
-  const qcResubmit = services.includes('quickCommerce') && serviceRejected('quickCommerce');
-  const isResubmit = foodResubmit || qcResubmit;
+  const isResubmit = services.includes('food') && serviceRejected('food');
 
-  const needsPartner = services.includes('food') || services.includes('quickCommerce');
+  const needsPartner = services.includes('food');
   const createdPartner = needsPartner ? await ensureFoodPartner(identityDoc) : null;
 
   if (isResubmit) {
@@ -639,8 +637,6 @@ const ensureFoodPartner = async (identity) => {
   const fields = buildFoodPartnerFields(identity);
   const foodRejected =
     getEffectiveServiceStatus(identity, 'food', existing).status === 'rejected';
-  const qcRejected =
-    getEffectiveServiceStatus(identity, 'quickCommerce', existing).status === 'rejected';
 
   if (existing) {
     if (!existing.identityId) {
@@ -649,10 +645,8 @@ const ensureFoodPartner = async (identity) => {
 
     const foodApproved =
       getEffectiveServiceStatus(identity, 'food', existing).status === 'approved';
-    const qcApproved =
-      getEffectiveServiceStatus(identity, 'quickCommerce', existing).status === 'approved';
 
-    if (foodApproved && qcApproved && !foodRejected && !qcRejected) {
+    if (foodApproved && !foodRejected) {
       return existing;
     }
 
@@ -671,9 +665,6 @@ const ensureFoodPartner = async (identity) => {
         approvedAt: foodApproved ? existing.approvedAt : undefined,
         status: foodApproved ? existing.status : 'pending',
       });
-      if (qcRejected) {
-        existing.isVerified = false;
-      }
       existing.submissionHistory = Array.isArray(existing.submissionHistory)
         ? existing.submissionHistory
         : [];
@@ -684,9 +675,6 @@ const ensureFoodPartner = async (identity) => {
     }
 
     existing.set(fields);
-    if (qcRejected) {
-      existing.isVerified = false;
-    }
     await existing.save();
     return existing;
   }
@@ -700,9 +688,8 @@ const ensureFoodPartner = async (identity) => {
 };
 
 /**
- * Lets an already-onboarded driver add a new capability (e.g. they signed up
- * for food only, now want quick commerce too). No KYC re-entry — the identity
- * already has it.
+ * Lets an already-onboarded driver (re)enable a capability. No KYC re-entry —
+ * the identity already has it.
  */
 export const enableCapability = async (identity, service) => {
   if (!identity.onboardingComplete) {
@@ -712,7 +699,7 @@ export const enableCapability = async (identity, service) => {
   if (!VALID_SERVICES.includes(svc)) {
     throw new ValidationError(`service must be one of: ${VALID_SERVICES.join(', ')}`);
   }
-  if (svc === 'food' || svc === 'quickCommerce') {
+  if (svc === 'food') {
     await assertCreatableProfiles(identity, [svc]);
     const partner = await ensureFoodPartner(identity);
     setServiceStatusOnIdentity(identity, svc, {
@@ -737,10 +724,8 @@ export const getOnboardingState = async (identity) => {
   const { partner } = await findPartnerProfiles(identity);
   const capabilities = summarisePartnerCapabilities(identity, partner);
   const foodStatus = getEffectiveServiceStatus(identity, 'food', partner);
-  const qcStatus = getEffectiveServiceStatus(identity, 'quickCommerce', partner);
   const foodRejected = foodStatus.status === 'rejected';
-  const qcRejected = qcStatus.status === 'rejected';
-  const resubmitAllowed = foodRejected || qcRejected;
+  const resubmitAllowed = foodRejected;
   const onboardingLocked = Boolean(identity.onboardingComplete) && !resubmitAllowed;
 
   return {
@@ -765,24 +750,15 @@ export const getOnboardingState = async (identity) => {
     capabilities,
     serviceStatuses: {
       food: foodStatus,
-      quickCommerce: qcStatus,
     },
     rejectedServices: [
       foodRejected ? 'food' : null,
-      qcRejected ? 'quickCommerce' : null,
     ].filter(Boolean),
     rejection: {
       food: foodRejected
         ? {
             reason: foodStatus.rejectionReason || '',
             rejectedAt: foodStatus.rejectedAt || null,
-            partnerId: partner?._id ? String(partner._id) : null,
-          }
-        : null,
-      quickCommerce: qcRejected
-        ? {
-            reason: qcStatus.rejectionReason || '',
-            rejectedAt: qcStatus.rejectedAt || null,
             partnerId: partner?._id ? String(partner._id) : null,
           }
         : null,

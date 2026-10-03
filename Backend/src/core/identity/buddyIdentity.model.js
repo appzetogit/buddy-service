@@ -168,12 +168,10 @@ const buddyIdentitySchema = new mongoose.Schema(
     },
     onboardingServices: {
       type: [String],
-      enum: ['food', 'quickCommerce', 'taxi'],
       default: [],
     },
     serviceStatuses: {
       food: { type: serviceStatusSchema, default: () => ({ status: 'not_enabled' }) },
-      quickCommerce: { type: serviceStatusSchema, default: () => ({ status: 'not_enabled' }) },
       taxi: { type: serviceStatusSchema, default: () => ({ status: 'not_enabled' }) },
     },
     kyc: {

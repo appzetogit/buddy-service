@@ -141,11 +141,6 @@ const userSchema = new mongoose.Schema(
         currentLocation: {
             type: buildLocationSchema(),
             default: undefined
-        },
-        // Compatibility for QC module
-        walletBalance: {
-            type: Number,
-            default: 0
         }
     },
     {

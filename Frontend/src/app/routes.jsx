@@ -29,14 +29,13 @@ const FoodAppWrapper = () => {
 }
 
 const AdminRouter = lazy(() => import('../modules/Food/components/admin/AdminRouter'))
-const QCApp = lazy(() => import('@qc/index'))
 
 const AppRoutes = () => {
   const location = useLocation()
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const foodAdminToken = localStorage.getItem('admin_accessToken') || localStorage.getItem('auth_admin');
+    const foodAdminToken = localStorage.getItem('admin_accessToken');
     if (foodAdminToken && !localStorage.getItem('adminToken')) {
       localStorage.setItem('adminToken', foodAdminToken);
     }
@@ -79,8 +78,7 @@ const AppRoutes = () => {
     if (
       route.startsWith('/food/') ||
       route.startsWith('/admin') ||
-      route.startsWith('/driver') ||
-      route.startsWith('/qc')
+      route.startsWith('/driver')
     ) {
       localStorage.setItem(NATIVE_LAST_ROUTE_KEY, route)
     }
@@ -97,7 +95,6 @@ const AppRoutes = () => {
 
       <Route path="/food/*" element={<FoodAppWrapper />} />
 
-      <Route path="/qc/*" element={<Suspense fallback={<PageLoader />}><QCApp /></Suspense>} />
 
       <Route path="/admin/*" element={<AdminRouter />} />
 

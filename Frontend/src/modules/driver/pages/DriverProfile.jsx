@@ -553,7 +553,7 @@ export default function DriverProfile() {
           {
             id: "wallet",
             label: "Wallet & Earnings",
-            sub: "Food & Quick Commerce wallet",
+            sub: "Food delivery wallet",
             icon: <Wallet size={20} />,
             path: links.wallet,
           },
@@ -806,7 +806,7 @@ export default function DriverProfile() {
 
         <CapabilityCard
           Icon={Bike}
-          title="Food & Quick"
+          title="Food Delivery"
           capability={capabilities.food}
           active={activeService === "food"}
           onClick={() =>

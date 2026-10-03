@@ -6,10 +6,6 @@
   --profile-accent: #16a34a;
 }
 
-.unified-profile[data-service="qc"] {
-  --profile-accent: #10b981;
-}
-
 .profile-service-switcher {
   display: flex;
   gap: 0.5rem;

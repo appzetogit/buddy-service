@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { FoodOrder, FoodSettings } from '../models/order.model.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
-import { FoodDeliveryPartner, takesDeliveryService } from '../../delivery/models/deliveryPartner.model.js';
+import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model.js';
 import { FoodDeliveryCashDeposit } from '../../delivery/models/foodDeliveryCashDeposit.model.js';
 import { FoodDeliveryCashLimit } from '../../admin/models/deliveryCashLimit.model.js';
 import { BuddyIdentity } from '../../../../core/identity/buddyIdentity.model.js';
@@ -21,52 +21,6 @@ import {
   MAX_DISPATCH_ATTEMPTS,
 } from './order.helpers.js';
 import { fetchRoadDistancesKm } from '../utils/googleMaps.js';
-
-// Singleton initializer loop for Socket Bridge at server boot.
-//
-// Bounded: this module is also imported by the standalone BullMQ workers (see
-// ecosystem.config.cjs), where initSocket() is never called, so getIO() stays null forever. An
-// unbounded retry left a 200ms timer spinning for the lifetime of every worker process.
-const SOCKET_BRIDGE_RETRY_MS = 200;
-const SOCKET_BRIDGE_MAX_ATTEMPTS = 150; // ~30s, ample for boot ordering in the web process
-let socketBridgeInitialized = false;
-let socketBridgeAttempts = 0;
-
-function scheduleSocketBridgeRetry() {
-  socketBridgeAttempts += 1;
-  if (socketBridgeAttempts >= SOCKET_BRIDGE_MAX_ATTEMPTS) {
-    logger.warn(
-      '[SocketBridge] Socket.IO unavailable in this process after ' +
-      `${socketBridgeAttempts} attempts; giving up. Expected in BullMQ worker processes — ` +
-      'but note that socket emits from this process will be dropped unless the Redis adapter is attached.',
-    );
-    return;
-  }
-  setTimeout(tryInitSocketBridge, SOCKET_BRIDGE_RETRY_MS).unref?.();
-}
-
-function tryInitSocketBridge() {
-  if (socketBridgeInitialized) return;
-  try {
-    const io = getIO(true);
-    if (io) {
-      import('../../../../shared/adapters/socket-bridge.service.js')
-        .then(({ initializeSocketBridge }) => {
-          initializeSocketBridge(io);
-          socketBridgeInitialized = true;
-          logger.info('[SocketBridge] Successfully initialized once at server boot via order-dispatch service hook.');
-        })
-        .catch((err) => {
-          logger.warn(`[SocketBridge] Failed to load socket-bridge.service.js: ${err.message}`);
-        });
-    } else {
-      scheduleSocketBridgeRetry();
-    }
-  } catch {
-    scheduleSocketBridgeRetry();
-  }
-}
-tryInitSocketBridge();
 
 /**
  * Candidate ordering: live riders first, then nearest.
@@ -230,16 +184,8 @@ async function filterPartnersByCashLimit(partners = [], options = {}) {
 
 async function listNearbyOnlineDeliveryPartners(
   restaurantId,
-  { maxKm = 15, limit = 25, requiredAmount = 0, allowOverLimitFallback = true, service = null } = {},
+  { maxKm = 15, limit = 25, requiredAmount = 0, allowOverLimitFallback = true } = {},
 ) {
-  // Riders who opted out of this kind of job (food vs quick commerce) never see it.
-  const serviceFilter = service ? takesDeliveryService(service) : {};
-  // Quick Commerce approval is `isVerified`; `status` tracks the food side, so a
-  // QC-only rider is `pending` there and would otherwise never get a QC job.
-  const qcJob = service === 'quickCommerce';
-  const approvedFor = (p) => p.status === 'approved' || (qcJob && p.isVerified === true);
-  const approvedQuery = (statuses) =>
-    qcJob ? { $or: [{ status: { $in: statuses } }, { isVerified: true }] } : { status: { $in: statuses } };
   let coordinates = null;
   if (restaurantId && restaurantId.location && Array.isArray(restaurantId.location.coordinates)) {
     coordinates = restaurantId.location.coordinates;
@@ -255,8 +201,8 @@ async function listNearbyOnlineDeliveryPartners(
 
   if (!coordinates) {
     const partners = await FoodDeliveryPartner.find({
+      status: "approved",
       availabilityStatus: "online",
-      $and: [serviceFilter, approvedQuery(["approved"])],
     })
       .select("_id status name")
       .limit(Math.max(1, limit))
@@ -277,9 +223,8 @@ async function listNearbyOnlineDeliveryPartners(
   const [rLng, rLat] = coordinates;
   const allOnline = await FoodDeliveryPartner.find({
     availabilityStatus: "online",
-    ...serviceFilter,
   })
-    .select("_id status isVerified lastLat lastLng lastLocationAt name presence")
+    .select("_id status lastLat lastLng lastLocationAt name presence")
     .lean();
 
   const scored = [];
@@ -299,18 +244,18 @@ async function listNearbyOnlineDeliveryPartners(
   };
 
   for (const p of allOnline) {
-    if (!allowedStatuses.includes(p.status) && !approvedFor(p)) continue;
+    if (!allowedStatuses.includes(p.status)) continue;
 
     const stalePresence = hasStalePresence(p);
     const isStale = !p.lastLocationAt || (Date.now() - new Date(p.lastLocationAt).getTime()) > STALE_GPS_MS;
     if (p.lastLat == null || p.lastLng == null || isStale) {
-      scored.push({ partnerId: p._id, distanceKm: 999, status: p.status, approved: approvedFor(p), stalePresence });
+      scored.push({ partnerId: p._id, distanceKm: 999, status: p.status, stalePresence });
       continue;
     }
 
     const d = haversineKm(rLat, rLng, p.lastLat, p.lastLng);
     if (Number.isFinite(d) && d <= maxKm) {
-      scored.push({ partnerId: p._id, distanceKm: d, status: p.status, approved: approvedFor(p), lat: p.lastLat, lng: p.lastLng, stalePresence });
+      scored.push({ partnerId: p._id, distanceKm: d, status: p.status, lat: p.lastLat, lng: p.lastLng, stalePresence });
     }
   }
 
@@ -364,8 +309,8 @@ async function listNearbyOnlineDeliveryPartners(
 
   if (picked.length === 0) {
     const anyOnline = await FoodDeliveryPartner.find({
+      status: { $in: allowedStatuses },
       availabilityStatus: "online",
-      $and: [serviceFilter, approvedQuery(allowedStatuses)],
     })
       .select("_id status name identityId")
       .limit(Math.max(1, limit))
@@ -385,7 +330,7 @@ async function listNearbyOnlineDeliveryPartners(
   }
 
   const final = (config.env === 'production')
-    ? picked.filter(p => p.approved)
+    ? picked.filter(p => p.status === 'approved')
     : picked;
 
   const cashEligibleFinal = await filterPartnersByCashLimit(final, {
@@ -446,13 +391,8 @@ export async function tryAutoAssign(orderId, options = {}) {
 
   const isObjectId = mongoose.Types.ObjectId.isValid(orderId);
   const FoodOrder = mongoose.model('FoodOrder');
-  const Order = mongoose.model('Order');
 
-  let order = null;
-  let isQc = false;
-
-  // Try to find in Food Order
-  order = await FoodOrder.findOneAndUpdate(
+  const order = await FoodOrder.findOneAndUpdate(
     {
       _id: isObjectId ? new mongoose.Types.ObjectId(orderId) : null,
       orderStatus: { $in: Array.from(dispatchableStatuses) },
@@ -477,47 +417,19 @@ export async function tryAutoAssign(orderId, options = {}) {
   ).populate(['restaurantId', 'userId', 'zoneId']);
 
   if (!order) {
-    // Try to find in QC Order
-    const qcQuery = {
-      workflowStatus: 'DELIVERY_SEARCH',
-      'dispatch.status': { $in: ['unassigned', 'offered', 'timed_out'] },
-      // Same self-healing lock as the food path above.
-      ...lockIsFree,
-    };
-    if (isObjectId) {
-      qcQuery._id = new mongoose.Types.ObjectId(orderId);
-    } else {
-      qcQuery.orderId = orderId;
-    }
-
-
-    order = await Order.findOneAndUpdate(
-      qcQuery,
-      {
-        $set: { 'dispatch.dispatchingAt': new Date() }
-      },
-      { new: true }
-    ).populate(['seller', 'customer']);
-
-    if (order) {
-      isQc = true;
-    }
-  }
-
-  if (!order) {
     logger.info(`tryAutoAssign: Skip for ${orderId} (not dispatchable, already dispatching, accepted, or lock active).`);
     return null;
   }
 
   try {
     const offeredIds = (order.dispatch?.offeredTo || []).map(o => o.partnerId.toString());
-    const paymentMethod = String(isQc ? (order.paymentMode || 'COD') : (order.payment?.method || 'cash')).toLowerCase();
+    const paymentMethod = String(order.payment?.method || 'cash').toLowerCase();
     const isCashOrder = paymentMethod === 'cash' || paymentMethod === 'cod';
     const requiredAmount = isCashOrder ? Number(order.pricing?.total || 0) : 0;
-    
+
     // RADIUS EXPANSION LOGIC
-    const isPriority = isQc ? false : ['confirmed', 'preparing', 'ready_for_pickup', 'ready'].includes(order.orderStatus);
-    
+    const isPriority = ['confirmed', 'preparing', 'ready_for_pickup', 'ready'].includes(order.orderStatus);
+
     let maxKm = 15;
     if (isPriority) {
       maxKm = 60;
@@ -532,22 +444,29 @@ export async function tryAutoAssign(orderId, options = {}) {
       limit: 15,
       requiredAmount,
       allowOverLimitFallback: true,
-      service: isQc ? 'quickCommerce' : 'food',
     };
 
-    // Use normalized pickup from adapter
-    const { normalizePickupForDispatch } = await import('../../../../shared/adapters/qc-dispatch.adapter.js');
-    const pickupTarget = normalizePickupForDispatch(order, isQc ? 'quick' : 'food');
-
+    const restaurant = order.restaurantId || {};
+    let pickupCoordinates = [0, 0];
+    if (Array.isArray(restaurant.location?.coordinates)) {
+      pickupCoordinates = restaurant.location.coordinates;
+    } else if (restaurant.location?.longitude != null && restaurant.location?.latitude != null) {
+      pickupCoordinates = [Number(restaurant.location.longitude), Number(restaurant.location.latitude)];
+    }
+    const pickupTarget = {
+      entityId: restaurant._id || restaurant,
+      entityName: restaurant.restaurantName || restaurant.name || 'Food Restaurant',
+      location: { type: 'Point', coordinates: pickupCoordinates },
+    };
 
     const { partners } = await listNearbyOnlineDeliveryPartners(pickupTarget, searchOptions);
-    
+
 
     // TIERED ALERT LOGIC
     const isPhase2 = attempt >= 3;
     const isPhase3 = attempt >= 6; // ~6 minutes
 
-    if (isPhase3 && !isQc) {
+    if (isPhase3) {
       logger.error(`[CRITICAL] Order ${order._id} unassigned for ${attempt} mins. Triggering Admin Alert (Phase 3).`);
       try {
         await notifyOwnersSafely(
@@ -568,7 +487,7 @@ export async function tryAutoAssign(orderId, options = {}) {
     if (eligible.length === 0) {
       logger.info(`tryAutoAssign: No NEW eligible partners in ${maxKm}km for order ${order._id}. Restarting hunt...`);
 
-      if (!isQc && attempt >= MAX_DISPATCH_ATTEMPTS) {
+      if (attempt >= MAX_DISPATCH_ATTEMPTS) {
         try {
           const { cancelOrderNoDriverFound } = await import('./order.service.js');
           await cancelOrderNoDriverFound(order._id.toString());
@@ -577,15 +496,9 @@ export async function tryAutoAssign(orderId, options = {}) {
         }
         return order;
       }
-      
+
       if (partners.length > 0) {
-        let payload;
-        if (isQc) {
-          const { adaptQcOrderToFoodShape } = await import('../../../../shared/adapters/delivery-response.adapter.js');
-          payload = buildDeliverySocketPayload(adaptQcOrderToFoodShape(order), null);
-        } else {
-          payload = buildDeliverySocketPayload(order, order.restaurantId);
-        }
+        const payload = buildDeliverySocketPayload(order, order.restaurantId);
         // Re-broadcast to the already-offered pool. Through publish() so it is durable and so
         // it works from the BullMQ worker, where getIO() is null.
         const distanceByPartner = new Map(
@@ -609,20 +522,14 @@ export async function tryAutoAssign(orderId, options = {}) {
       await addOrderJob({
         action: 'DISPATCH_TIMEOUT_CHECK',
         orderMongoId: order._id.toString(),
-        orderId: isQc ? order.orderId : order._id.toString(),
+        orderId: order._id.toString(),
         attempt: attempt + 1
       }, { delay: 30000 }); // Retry faster (30s) if no one found
 
       return order;
     }
 
-    let payload;
-    if (isQc) {
-      const { adaptQcOrderToFoodShape } = await import('../../../../shared/adapters/delivery-response.adapter.js');
-      payload = buildDeliverySocketPayload(adaptQcOrderToFoodShape(order), null);
-    } else {
-      payload = buildDeliverySocketPayload(order, order.restaurantId);
-    }
+    const payload = buildDeliverySocketPayload(order, order.restaurantId);
 
     const phase1Batch = eligible.slice(0, Math.min(3, eligible.length));
 
@@ -667,7 +574,7 @@ export async function tryAutoAssign(orderId, options = {}) {
     //
     // Fire-and-forget: notifyOwnersSafely fans out sequentially, and dispatch must not block on
     // it. `eligible` is bounded by searchOptions.limit (15), so the fan-out stays small.
-    if (!isQc && offerBatch.length > 0) {
+    if (offerBatch.length > 0) {
       const pushTargets = offerBatch.map((p) => ({
         ownerType: 'DELIVERY_PARTNER',
         ownerId: p.partnerId,
@@ -704,8 +611,7 @@ export async function tryAutoAssign(orderId, options = {}) {
     order.dispatch.offeredTo = order.dispatch.offeredTo || [];
     order.dispatch.offeredTo.push(...offeredToEntries);
 
-    const collectionName = isQc ? 'quick_orders' : 'food_orders';
-    const updateRes = await mongoose.connection.db.collection(collectionName).updateOne(
+    const updateRes = await mongoose.connection.db.collection('food_orders').updateOne(
       { _id: order._id },
       {
         $set: {
@@ -721,14 +627,13 @@ export async function tryAutoAssign(orderId, options = {}) {
     await addOrderJob({
       action: 'DISPATCH_TIMEOUT_CHECK',
       orderMongoId: order._id.toString(),
-      orderId: isQc ? order.orderId : order._id.toString(),
+      orderId: order._id.toString(),
       attempt: attempt + 1
     }, { delay: 60000 });
 
     return order;
   } finally {
-    const collectionName = isQc ? 'quick_orders' : 'food_orders';
-    await mongoose.connection.db.collection(collectionName).updateOne(
+    await mongoose.connection.db.collection('food_orders').updateOne(
       { _id: order._id },
       { $unset: { 'dispatch.dispatchingAt': '' } }
     );
@@ -738,14 +643,8 @@ export async function tryAutoAssign(orderId, options = {}) {
 
 export async function processDispatchTimeout(orderId, partnerId, options = {}) {
   const FoodOrder = mongoose.model('FoodOrder');
-  const Order = mongoose.model('Order');
 
-  let order = await FoodOrder.findById(orderId);
-  let isQc = false;
-  if (!order) {
-    order = await Order.findById(orderId);
-    if (order) isQc = true;
-  }
+  const order = await FoodOrder.findById(orderId);
   if (!order) return;
 
   const jobAttempt = Number(options.attempt || 0);
@@ -753,7 +652,7 @@ export async function processDispatchTimeout(orderId, partnerId, options = {}) {
     ? jobAttempt
     : (order.dispatch?.offeredTo?.length || 0) + 1;
 
-  if (!isQc && nextAttempt >= MAX_DISPATCH_ATTEMPTS) {
+  if (nextAttempt >= MAX_DISPATCH_ATTEMPTS) {
     try {
       const { cancelOrderNoDriverFound } = await import('./order.service.js');
       await cancelOrderNoDriverFound(order._id.toString());
@@ -783,8 +682,7 @@ export async function processDispatchTimeout(orderId, partnerId, options = {}) {
     // two overlapping timeout jobs for the same order silently lost one another's writes, and a
     // rider who had already declined could be re-offered indefinitely while a fresh rider was
     // skipped. A positional update touches only the matching element.
-    const collectionName = isQc ? 'quick_orders' : 'food_orders';
-    await mongoose.connection.db.collection(collectionName).updateOne(
+    await mongoose.connection.db.collection('food_orders').updateOne(
       { _id: order._id },
       {
         $set: {
@@ -832,7 +730,6 @@ export async function resendDeliveryNotificationRestaurant(orderId, restaurantId
     limit: 15,
     requiredAmount,
     allowOverLimitFallback: true,
-    service: 'food',
   });
   const shortlistedCount = Array.isArray(preview?.partners) ? preview.partners.length : 0;
 

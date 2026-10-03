@@ -27,7 +27,7 @@ Yeh ek **monorepo** hai:
 
 Backend ke andar `Backend/src/modules/food/` me role-wise sub-modules hain: `admin`, `restaurant`, `delivery`, `user`, `orders`, `dining` (table booking), `landing`, `search`, `shared`, `services`, `utils`.
 
-> Note: isi backend me ek dusra product bhi hai — `Backend/src/modules/quickCommerce/` (grocery jaisa) — jo `core/` (auth, users, payments, notifications) share karta hai food module ke saath. Yeh documentation sirf **food delivery flow** pe focus karti hai.
+> Note: Yeh documentation sirf **food delivery flow** pe focus karti hai.
 
 ## 4 Actors (Roles) Jinka Flow Cover Kiya Gaya Hai
 
@@ -142,7 +142,7 @@ Base: `POST /v1/food/auth/delivery/request-otp` → `verify-otp`
    - `PATCH /v1/food/admin/delivery/:id/approve` → status `approved`, ab partner orders accept kar sakta hai
    - `PATCH /v1/food/admin/delivery/:id/reject` → status `rejected` (rejectionReason ke saath)
 6. Jab tak `approved` nahi hota, login response me `pendingApproval: true` milta hai (rejected ho to `rejectionReason` bhi), tokens nahi milte — kaam nahi kar sakta.
-7. Ek naya **Driver Onboarding Wizard v2** bhi hai (`core/identity/driverOnboarding.routes.js` → `/v1/driver/onboarding/*`) jo unified `BuddyIdentity` system ka part hai — yeh newer flow hai jisme ek hi identity food aur quickCommerce dono me driver mode toggle kar sakti hai.
+7. Ek naya **Driver Onboarding Wizard v2** bhi hai (`core/identity/driverOnboarding.routes.js` → `/v1/driver/onboarding/*`) jo unified `BuddyIdentity` system ka part hai — yeh newer flow hai jisme ek identity food delivery me driver mode toggle karti hai.
 
 ## 2.4 Admin — Login
 
@@ -153,7 +153,7 @@ Base: `POST /v1/food/auth/admin/login`
 2. `Admin` model me do type hote hain:
    - `superadmin` → sab kuch access
    - `subadmin` → sirf specific `permissions[]` array ke hisaab se limited access
-3. `servicesAccess: [food, quickCommerce]` field decide karta hai admin kaunse product access kar sakta hai.
+3. `servicesAccess: [food]` field decide karta hai admin kaunse product access kar sakta hai.
 4. **Forgot Password Flow (OTP via Email, password ke through nahi):**
    - `POST /v1/food/auth/admin/forgot-password/request-otp` → OTP email pe bheja jata hai (`AdminResetOtp` model, 10-min expiry, max attempt limit)
    - `POST /v1/food/auth/admin/forgot-password/reset` → OTP verify karke naya password set

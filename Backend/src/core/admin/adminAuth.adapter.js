@@ -10,7 +10,7 @@ const sanitizeAdmin = (admin = {}) => {
 };
 
 /**
- * Unified admin login used by Food, QC, and Taxi entry points.
+ * Unified admin login used by Food and Taxi entry points.
  */
 export const unifiedAdminLogin = async (email, password) => {
   const result = await coreAdminLogin(email, password);
@@ -26,13 +26,6 @@ export const unifiedAdminLogin = async (email, password) => {
 /** Food / core auth response shape */
 export const toCoreAuthLoginResponse = (result) => result;
 
-/** QC legacy response shape ({ token, admin, accessToken, refreshToken }) */
-export const toQcLoginResponse = (result) => ({
-  token: result.accessToken,
-  accessToken: result.accessToken,
-  refreshToken: result.refreshToken,
-  admin: sanitizeAdmin(result.user),
-});
 
 /** Taxi legacy response shape ({ token, admin }) */
 export const toTaxiLoginResponse = async (result, enrichAdmin = (items) => items) => {

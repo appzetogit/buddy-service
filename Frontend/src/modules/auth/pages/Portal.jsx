@@ -1,7 +1,7 @@
 import React from "react"
 import { motion } from "framer-motion"
 import { useNavigate } from "react-router-dom"
-import { UtensilsCrossed, ShoppingBasket, Car, Bed, ArrowRight, ShieldCheck, Star } from "lucide-react"
+import { UtensilsCrossed, Car, Bed, ArrowRight, ShieldCheck, Star } from "lucide-react"
 
 const SERVICES = [
   {
@@ -14,17 +14,6 @@ const SERVICES = [
     color: "from-[#FF4D4D] to-[#CB202D]",
     badge: "Fast",
     badgeIcon: "⚡"
-  },
-  {
-    id: "grocery",
-    name: "Quick Commerce",
-    description: "20-Min Essentials",
-    image: "/super-app/grocery.png",
-    path: "/food/user",
-    icon: ShoppingBasket,
-    color: "from-[#4CAF50] to-[#2DAB52]",
-    badge: "Instant",
-    badgeIcon: "⏱️"
   },
   {
     id: "taxi",

@@ -1,6 +1,6 @@
 import { Client } from '@googlemaps/google-maps-services-js';
 import { logger } from '../../utils/logger.js';
-import { getRedisClient } from '../../modules/quickCommerce/config/redis.js';
+import { getRedisClient } from './sharedRedisClient.js';
 import { haversineMeters, formatDistanceLabel } from './haversine.util.js';
 
 /**
@@ -9,7 +9,7 @@ import { haversineMeters, formatDistanceLabel } from './haversine.util.js';
  * generalized from "restaurant list" to "any two points" so it can serve all
  * three legs: user<->restaurant, restaurant<->driver, driver<->user.
  *
- * Uses the same ioredis client as geocode.service.js (quickCommerce's), with
+ * Uses the same ioredis client as geocode.service.js, with
  * an in-memory Map fallback so a distance lookup never hard-fails just
  * because the cache is unavailable.
  */

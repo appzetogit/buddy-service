@@ -30,7 +30,6 @@ import {
   History,
   Shield,
   Star,
-  Heart,
   Package,
 } from "lucide-react";
 import { ENABLE_DINING } from "@/shared/featureFlags";
@@ -869,72 +868,6 @@ export default function Profile() {
           </Link>
         </div>
         ) : null}
-        {/* Quick Commerce Summary Section */}
-        <div className="mb-4">
-          <div className="flex items-center gap-2 mb-2 px-1">
-            <div className="w-1 h-4 bg-[#10B981] rounded"></div>
-            <h3 className="text-base font-semibold text-gray-900 dark:text-white">
-              Quick Commerce Summary
-            </h3>
-          </div>
-          <Card className="bg-white dark:bg-[#1a1a1a] border-0 shadow-sm rounded-2xl overflow-hidden mb-3">
-            <CardContent className="p-4">
-              <div className="grid grid-cols-2 gap-4 pb-4 border-b border-gray-100 dark:border-gray-800">
-                <div className="flex items-center gap-3">
-                  <div className="bg-emerald-50 dark:bg-emerald-950/20 p-2 rounded-xl text-emerald-600">
-                    <Wallet className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">QC Wallet</p>
-                    <p className="text-sm font-bold text-slate-800 dark:text-white">
-                      ₹{masterData?.wallets?.food_qc_balance != null ? Number(masterData.wallets.food_qc_balance).toFixed(0) : "0"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="bg-rose-50 dark:bg-rose-950/20 p-2 rounded-xl text-rose-500">
-                    <Heart className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Wishlist</p>
-                    <p className="text-sm font-bold text-slate-800 dark:text-white">
-                      {masterData?.modules?.qc?.wishlistCount ?? masterData?.qc?.wishlistCount ?? 0} Items
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
-                <div className="flex items-center gap-3">
-                  <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl text-slate-600 dark:text-slate-300">
-                    <Building2 className="h-5 w-5" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Orders</span>
-                </div>
-                <span className="text-sm font-bold text-gray-900 dark:text-white">
-                  {masterData?.modules?.qc?.orderCount ?? masterData?.qc?.orderCount ?? 0}
-                </span>
-              </div>
-
-              <div className="pt-3 space-y-2">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Navigation Shortcuts</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <Link to="/qc/orders" className="text-center p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Orders
-                  </Link>
-                  <Link to="/qc/wishlist" className="text-center p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Wishlist
-                  </Link>
-                  <Link to="/qc/transactions" className="text-center p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Payments
-                  </Link>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-
         {/* Food Orders Section */}
         <div className="mb-3">
 

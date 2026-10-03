@@ -33,3 +33,7 @@ pids
 # OS files
 .DS_Store
 Thumbs.db
+
+# Runtime logs
+*.log
+server_run.log

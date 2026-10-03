@@ -1,14 +1,13 @@
 import http from 'http';
 import app from './src/app.js';
 import { config } from './src/config/env.js';
-console.log('[ENV DEBUG] ENABLE_UNIFIED_QC_DISPATCH:', process.env.ENABLE_UNIFIED_QC_DISPATCH);
 import { validateConfig } from './src/config/validateEnv.js';
 import { connectDB, disconnectDB } from './src/config/db.js';
 import { connectRedis, closeRedis } from './src/config/redis.js';
 import { initSocket } from './src/config/socket.js';
 import { initializeQueues, closeBullMQConnection } from './src/queues/index.js';
 import { expireExpiredOffers } from './src/modules/food/admin/services/admin.service.js';
-import { seedDefaultAdmin } from './src/modules/quickCommerce/seeds/seedAdmin.js';
+import { seedDefaultAdmin } from './src/core/admin/seedAdmin.js';
 import { syncExpiredFssaiNotifications } from './src/modules/food/restaurant/services/fssaiExpiry.service.js';
 
 import { logger } from './src/utils/logger.js';

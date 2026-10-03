@@ -235,7 +235,7 @@ Nothing here changes what events exist. It changes how reliably the pipe stays u
 - **Bug.** The URL-normalisation block is copy-pasted and *differs* between
   `useDeliveryNotifications.js:686-740` and `useRestaurantNotifications.js:333-475`
   (~140 lines of near-duplicate regex, with different localhost-blocking rules and
-  different transports). Three more copies exist in the quickCommerce and taxi
+  different transports). Further copies exist in the taxi
   modules. Fixes land in one and not the others.
 - **Fix.** Extract `Frontend/src/services/socket/createRealtimeSocket.js` — one URL
   resolver, one options object, one auth-refresh handler, one debug surface. The

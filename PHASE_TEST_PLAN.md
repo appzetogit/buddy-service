@@ -321,8 +321,7 @@ Run this first. If it fails, do not proceed to the phase suites.
 1. **Live socket payloads carry no `seq`/`eventId`; no client-side dedup** (deferred 4b). Recovery works via `/sync` replay only.
 2. **No multi-stop list UI** in the driver app (deferred 5b) — sequencing works, but stops aren't rendered as an ordered list.
 3. **No customer two-driver tracking UI / no restaurant labelled-handover UI** (deferred 6b). `legProgress` and the split map are served but unrendered.
-4. **QC (`quick_orders`) path not consolidated** — still 49 interleaved branches. Any change to shared dispatch/delivery code can affect quick-commerce; regression-test QC separately.
-5. Tier-2 multi-restaurant cancellation only pushes to the primary restaurant.
+4. Tier-2 multi-restaurant cancellation only pushes to the primary restaurant.
 
 ---
 

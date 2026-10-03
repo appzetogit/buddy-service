@@ -494,7 +494,7 @@ export async function getCurrentTripDelivery(deliveryPartnerId) {
   }
 
   const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
-  let order = await FoodOrder.findOne({
+  const order = await FoodOrder.findOne({
     $or: [
       { 'dispatch.deliveryPartnerId': partnerId },
       { 'dispatch.sharedPartnerId': partnerId }
@@ -522,62 +522,6 @@ export async function getCurrentTripDelivery(deliveryPartnerId) {
     .populate({ path: 'dispatch.sharedPartnerId', select: 'name fullName phone phoneNumber profileImage' })
     .sort({ updatedAt: -1 })
     .lean();
-
-  if (!order) {
-    const Order = mongoose.model('Order');
-    const qcOrder = await Order.findOne({
-      $or: [
-        { 'dispatch.deliveryPartnerId': partnerId },
-        { 'deliveryBoy': partnerId }
-      ],
-      workflowStatus: {
-        $in: ['DELIVERY_ASSIGNED', 'PICKUP_READY', 'OUT_FOR_DELIVERY'],
-      },
-    })
-      .populate({
-        path: 'seller',
-        select: 'shopName name phone location address city state profileImage',
-      })
-      .populate({ path: 'customer', select: 'name phone' })
-      .populate({ path: 'dispatch.deliveryPartnerId', select: 'name fullName phone phoneNumber profileImage' })
-      .populate({ path: 'deliveryBoy', select: 'name fullName phone phoneNumber profileImage' })
-      .sort({ updatedAt: -1 })
-      .lean();
-
-    if (qcOrder) {
-      order = {
-        ...qcOrder,
-        _id: qcOrder._id,
-        orderId: qcOrder.orderId,
-        orderStatus: qcOrder.workflowStatus === 'OUT_FOR_DELIVERY' ? 'picked_up' : (qcOrder.workflowStatus === 'PICKUP_READY' ? 'ready_for_pickup' : 'confirmed'),
-        restaurantId: {
-          ...qcOrder.seller,
-          restaurantName: qcOrder.seller?.shopName || qcOrder.seller?.name,
-        },
-        userId: qcOrder.customer,
-        deliveryAddress: {
-          addressLine1: qcOrder.address?.address,
-          landmark: qcOrder.address?.landmark,
-          location: {
-            type: 'Point',
-            coordinates: qcOrder.address?.location ? [qcOrder.address.location.lng, qcOrder.address.location.lat] : []
-          }
-        },
-        paymentMethod: qcOrder.paymentMode === 'ONLINE' ? 'online' : 'cash',
-        pricing: qcOrder.pricing,
-        deliveryState: {
-          currentPhase: qcOrder.workflowStatus === 'OUT_FOR_DELIVERY' ? 'en_route_to_delivery' : (qcOrder.workflowStatus === 'PICKUP_READY' ? 'at_pickup' : 'en_route_to_pickup'),
-          status: qcOrder.workflowStatus === 'OUT_FOR_DELIVERY' ? 'picked_up' : (qcOrder.workflowStatus === 'PICKUP_READY' ? 'reached_pickup' : 'accepted'),
-        },
-        deliveryVerification: {
-          dropOtp: {
-            required: true,
-            verified: !!qcOrder.otpValidatedAt
-          }
-        }
-      };
-    }
-  }
 
   if (!order) return null;
   const tx = await FoodTransaction.findOne({ orderId: order._id }).lean();
@@ -620,11 +564,6 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
     },
   };
 
-  // A rider who chose Quick Commerce only is not offered open food orders;
-  // their own in-flight orders still show.
-  const optIn = await FoodDeliveryPartner.findById(deliveryPartnerId).select('deliveryServices').lean();
-  const takesFood = !optIn?.deliveryServices?.length || optIn.deliveryServices.includes('food');
-
   const shareableFilter = {
     'dispatch.isShared': true,
     'dispatch.sharedPartnerId': null,
@@ -632,7 +571,7 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
     orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up'] },
   };
 
-  const filter = partnerCapacity.hasCapacity && takesFood
+  const filter = partnerCapacity.hasCapacity
     ? {
       $or: [
         {
@@ -716,76 +655,11 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
 
   const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
 
-  let existingOrder = await FoodOrder.findOne(identity)
+  const existingOrder = await FoodOrder.findOne(identity)
     .select('pricing payment dispatch orderStatus riderEarning platformProfit settlementBreakdown')
     .lean();
 
   if (!existingOrder) {
-    const Order = mongoose.model('Order');
-    const qcOrder = await Order.findOne(identity).populate('customer');
-    if (qcOrder) {
-      const now = new Date();
-      qcOrder.dispatch = qcOrder.dispatch || {};
-      qcOrder.dispatch.deliveryPartnerId = partnerId;
-      qcOrder.dispatch.acceptedAt = now;
-      qcOrder.dispatch.assignedAt = qcOrder.dispatch.assignedAt || now;
-      qcOrder.dispatch.status = 'accepted';
-      qcOrder.deliveryBoy = partnerId;
-      qcOrder.deliveryPartner = partnerId;
-      qcOrder.workflowStatus = 'DELIVERY_ASSIGNED';
-
-      const isUnified = process.env.ENABLE_UNIFIED_QC_DISPATCH === 'true';
-      if (isUnified) {
-        qcOrder.status = 'pending';
-      } else {
-        qcOrder.status = 'confirmed';
-      }
-      await qcOrder.save();
-
-      try {
-        const io = getIO();
-        if (io) {
-          const payload = {
-            orderId: qcOrder.orderId,
-            status: isUnified ? 'pending' : 'confirmed',
-            workflowStatus: 'DELIVERY_ASSIGNED',
-            at: now.toISOString()
-          };
-          io.to(`order:${qcOrder.orderId}`).emit('order:status:update', payload);
-          const cid = qcOrder.customer?._id || qcOrder.customer;
-          if (cid) {
-            io.to(`customer:${cid.toString()}`).emit('order:status:update', payload);
-          }
-          const claimedPayload = {
-            orderId: qcOrder.orderId,
-            claimedBy: deliveryPartnerId.toString()
-          };
-          io.to('all_delivery').emit('order_claimed', claimedPayload);
-
-          if (isUnified && qcOrder.seller) {
-            const roomName = `seller:${qcOrder.seller.toString()}`;
-            const emitPayload = {
-              orderId: qcOrder.orderId,
-              workflowStatus: 'DELIVERY_ASSIGNED',
-            };
-            io.to(roomName).emit('order:new', emitPayload);
-          }
-        }
-      } catch (err) {
-        console.warn('[acceptOrderDelivery] QC socket emit failed:', err.message);
-      }
-
-      return {
-        _id: qcOrder._id,
-        orderId: qcOrder.orderId,
-        orderStatus: isUnified ? 'pending' : 'confirmed',
-        dispatch: {
-          status: 'accepted',
-          deliveryPartnerId: partnerId,
-          acceptedAt: now
-        }
-      };
-    }
     throw new NotFoundError('Order not found');
   }
 
@@ -1285,46 +1159,8 @@ export async function rejectOrderDelivery(orderId, deliveryPartnerId) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError('Order id required');
 
-  const isObjectId = mongoose.Types.ObjectId.isValid(orderId);
-  let order = await FoodOrder.findOne(identity).select('+deliveryOtp');
-
-  if (!order) {
-    const Order = mongoose.model('Order');
-    let qcOrder = await Order.findOne(identity);
-    if (qcOrder) {
-      const now = new Date();
-      qcOrder.dispatch = qcOrder.dispatch || {};
-      const offer = qcOrder.dispatch.offeredTo?.find(
-        (item) => String(item.partnerId) === String(deliveryPartnerId) && item.action === 'offered'
-      );
-      if (offer) offer.action = 'rejected';
-
-      qcOrder.dispatch.status = 'unassigned';
-      qcOrder.dispatch.deliveryPartnerId = undefined;
-      qcOrder.dispatch.assignedAt = undefined;
-      qcOrder.dispatch.acceptedAt = undefined;
-
-      qcOrder.dispatch.history = qcOrder.dispatch.history || [];
-      qcOrder.dispatch.history.push({
-        at: now,
-        action: 'rejected',
-        partnerId: new mongoose.Types.ObjectId(deliveryPartnerId),
-        note: 'Rejected by rider'
-      });
-
-      await qcOrder.save();
-
-      // Trigger rider search retry using Food dispatch engine
-      void dispatchService
-        .tryAutoAssign(qcOrder._id)
-        .catch((error) =>
-          logger.error(`SmartDispatch QC: Auto-assign after reject failed: ${error.message}`),
-        );
-
-      return { success: true, orderId: qcOrder.orderId };
-    }
-    throw new NotFoundError('Order not found');
-  }
+  const order = await FoodOrder.findOne(identity).select('+deliveryOtp');
+  if (!order) throw new NotFoundError('Order not found');
 
   const wasOffered = (order.dispatch?.offeredTo || []).some(
     (item) =>
@@ -1376,53 +1212,8 @@ export async function confirmReachedPickupDelivery(orderId, deliveryPartnerId) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError('Order id required');
 
-  let order = await FoodOrder.findOne(identity).select('+deliveryOtp');
-  let isQcOrder = false;
-  if (!order) {
-    const Order = mongoose.model('Order');
-    order = await Order.findOne(identity);
-    if (!order) throw new NotFoundError('Order not found');
-    isQcOrder = true;
-  }
-
-  if (isQcOrder) {
-    const isPrimary = (order.dispatch?.deliveryPartnerId?.toString() === deliveryPartnerId.toString()) || (order.deliveryBoy?.toString() === deliveryPartnerId.toString());
-    if (!isPrimary) {
-      throw new ForbiddenError('Not your order');
-    }
-    if (order.workflowStatus === 'DELIVERED' || order.status === 'delivered') {
-      throw new ValidationError('Order already delivered');
-    }
-
-    if (order.workflowStatus !== 'PICKUP_READY') {
-      order.workflowStatus = 'PICKUP_READY';
-      order.status = 'confirmed';
-      order.orderStatus = 'confirmed';
-      order.pickupReadyAt = new Date();
-      order.deliveryRiderStep = 2;
-      await order.save();
-
-      try {
-        const io = getIO();
-        if (io) {
-          const payload = {
-            orderId: order.orderId,
-            workflowStatus: 'PICKUP_READY',
-            status: 'confirmed',
-            at: new Date().toISOString()
-          };
-          io.to(`order:${order.orderId}`).emit('order:status:update', payload);
-          const cid = order.customer?._id || order.customer;
-          if (cid) {
-            io.to(`customer:${cid.toString()}`).emit('order:status:update', payload);
-          }
-        }
-      } catch (err) {
-        console.warn('[confirmReachedPickupDelivery] QC socket emit failed:', err.message);
-      }
-    }
-    return order.toObject();
-  }
+  const order = await FoodOrder.findOne(identity).select('+deliveryOtp');
+  if (!order) throw new NotFoundError('Order not found');
 
   const isPrimary = order.dispatch?.deliveryPartnerId?.toString() === deliveryPartnerId.toString();
   const isShared = order.dispatch?.sharedPartnerId?.toString() === deliveryPartnerId.toString();
@@ -1559,55 +1350,8 @@ export async function confirmReachedPickupDelivery(orderId, deliveryPartnerId) {
 
 export async function confirmPickupDelivery(orderId, deliveryPartnerId, billImageUrl) {
   const identity = buildOrderIdentityFilter(orderId);
-  let order = await FoodOrder.findOne(identity).select('+deliveryOtp');
-  let isQcOrder = false;
-  if (!order) {
-    const Order = mongoose.model('Order');
-    order = await Order.findOne(identity);
-    if (!order) throw new NotFoundError('Order not found');
-    isQcOrder = true;
-  }
-
-  if (isQcOrder) {
-    const isPrimary = (order.dispatch?.deliveryPartnerId?.toString() === deliveryPartnerId.toString()) || (order.deliveryBoy?.toString() === deliveryPartnerId.toString());
-    if (!isPrimary) {
-      throw new ForbiddenError('Not your order');
-    }
-
-    const prePickup = ['DELIVERY_ASSIGNED', 'PICKUP_READY'];
-    if (!prePickup.includes(order.workflowStatus)) {
-      throw new ValidationError('Invalid state for pickup confirmation');
-    }
-
-    const now = new Date();
-    order.workflowStatus = 'OUT_FOR_DELIVERY';
-    order.status = 'out_for_delivery';
-    order.orderStatus = 'out_for_delivery';
-    order.pickupConfirmedAt = now;
-    order.outForDeliveryAt = now;
-    order.deliveryRiderStep = 3;
-    await order.save();
-
-    try {
-      const io = getIO();
-      if (io) {
-        const payload = {
-          orderId: order.orderId,
-          workflowStatus: 'OUT_FOR_DELIVERY',
-          status: 'out_for_delivery',
-          at: now.toISOString()
-        };
-        io.to(`order:${order.orderId}`).emit('order:status:update', payload);
-        const cid = order.customer?._id || order.customer;
-        if (cid) {
-          io.to(`customer:${cid.toString()}`).emit('order:status:update', payload);
-        }
-      }
-    } catch (err) {
-      console.warn('[confirmPickupDelivery] QC socket emit failed:', err.message);
-    }
-    return order.toObject();
-  }
+  const order = await FoodOrder.findOne(identity).select('+deliveryOtp');
+  if (!order) throw new NotFoundError('Order not found');
 
   const isPrimary = order.dispatch?.deliveryPartnerId?.toString() === deliveryPartnerId.toString();
   const isShared = order.dispatch?.sharedPartnerId?.toString() === deliveryPartnerId.toString();
@@ -1797,73 +1541,8 @@ export async function confirmReachedDropDelivery(orderId, deliveryPartnerId) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError('Order id required');
 
-  let order = await FoodOrder.findOne(identity).select('+deliveryOtp');
-  let isQcOrder = false;
-  if (!order) {
-    const Order = mongoose.model('Order');
-    order = await Order.findOne(identity);
-    if (!order) throw new NotFoundError('Order not found');
-    isQcOrder = true;
-  }
-
-  if (isQcOrder) {
-    const isPrimary = (order.dispatch?.deliveryPartnerId?.toString() === deliveryPartnerId.toString()) || (order.deliveryBoy?.toString() === deliveryPartnerId.toString());
-    if (!isPrimary) {
-      throw new ForbiddenError('Not your order');
-    }
-
-    if (order.workflowStatus !== 'OUT_FOR_DELIVERY') {
-      throw new ValidationError('Order not ready for OTP');
-    }
-
-    const OrderOtp = mongoose.model('OrderOtp');
-    const code = String(Math.floor(1000 + Math.random() * 9000));
-    const codeHash = OrderOtp.hashCode(code);
-    const expiresAt = new Date(Date.now() + 300000); // 5 minutes
-
-    await OrderOtp.deleteMany({ orderId: order.orderId, consumedAt: null });
-    await OrderOtp.create({
-      orderId: order.orderId,
-      orderMongoId: order._id,
-      codeHash,
-      code,
-      expiresAt,
-      lastGeneratedAt: new Date()
-    });
-
-    order.deliveryRiderStep = 4;
-    await order.save();
-
-    try {
-      const io = getIO();
-      if (io) {
-        const cid = order.customer?.toString();
-        if (cid) {
-          io.to(`customer:${cid}`).emit('order:otp', { orderId: order.orderId, code, expiresAt });
-          io.to(`customer:${cid}`).emit('delivery:otp:generated', {
-            orderId: order.orderId,
-            otp: code,
-            expiresAt,
-            deliveryPersonNearby: true
-          });
-        }
-        const payload = {
-          orderId: order.orderId,
-          otpSent: true,
-          at: new Date().toISOString()
-        };
-        io.to(`order:${order.orderId}`).emit('order:status:update', payload);
-      }
-    } catch (err) {
-      console.warn('[confirmReachedDropDelivery] QC socket emit failed:', err.message);
-    }
-
-    const resOrder = order.toObject();
-    resOrder.deliveryVerification = {
-      dropOtp: { required: true, verified: false }
-    };
-    return resOrder;
-  }
+  const order = await FoodOrder.findOne(identity).select('+deliveryOtp');
+  if (!order) throw new NotFoundError('Order not found');
 
   const isPrimary = toPartnerId(order.dispatch?.deliveryPartnerId) === toPartnerId(deliveryPartnerId);
   const isShared = toPartnerId(order.dispatch?.sharedPartnerId) === toPartnerId(deliveryPartnerId);
@@ -2039,64 +1718,8 @@ export async function confirmSplitDelivery(orderId, deliveryPartnerId) {
 
 export async function verifyDropOtpDelivery(orderId, deliveryPartnerId, otp) {
   const identity = buildOrderIdentityFilter(orderId);
-  let order = await FoodOrder.findOne(identity).select('+deliveryOtp');
-  let isQcOrder = false;
-  if (!order) {
-    const Order = mongoose.model('Order');
-    order = await Order.findOne(identity);
-    if (!order) throw new NotFoundError('Order not found');
-    isQcOrder = true;
-  }
-
-  if (isQcOrder) {
-    const isPrimary = (order.dispatch?.deliveryPartnerId?.toString() === deliveryPartnerId.toString()) || (order.deliveryBoy?.toString() === deliveryPartnerId.toString());
-    if (!isPrimary) {
-      throw new ForbiddenError('Not your order');
-    }
-
-    if (order.workflowStatus !== 'OUT_FOR_DELIVERY') {
-      throw new ValidationError('Invalid state for OTP verification');
-    }
-
-    const otpStr = String(otp || '').trim();
-    if (!otpStr) throw new ValidationError('OTP is required');
-
-    const OrderOtp = mongoose.model('OrderOtp');
-    const otpDoc = await OrderOtp.findOne({
-      orderId: order.orderId,
-      consumedAt: null,
-    }).sort({ createdAt: -1 });
-
-    if (!otpDoc) {
-      throw new ValidationError('No active OTP');
-    }
-    if (otpDoc.expiresAt < new Date()) {
-      throw new ValidationError('OTP expired');
-    }
-    if (otpDoc.attempts >= otpDoc.maxAttempts) {
-      throw new ValidationError('Too many OTP attempts');
-    }
-
-    const match = OrderOtp.hashCode(otpStr) === otpDoc.codeHash;
-    if (!match) {
-      await OrderOtp.updateOne({ _id: otpDoc._id }, { $inc: { attempts: 1 } });
-      throw new ValidationError('Invalid OTP');
-    }
-
-    await OrderOtp.updateOne(
-      { _id: otpDoc._id },
-      { $set: { consumedAt: new Date() } },
-    );
-
-    order.otpValidatedAt = new Date();
-    await order.save();
-
-    const resOrder = order.toObject();
-    resOrder.deliveryVerification = {
-      dropOtp: { required: true, verified: true }
-    };
-    return { order: resOrder };
-  }
+  const order = await FoodOrder.findOne(identity).select('+deliveryOtp');
+  if (!order) throw new NotFoundError('Order not found');
 
   const isPrimary = toPartnerId(order.dispatch?.deliveryPartnerId) === toPartnerId(deliveryPartnerId);
   const isShared = toPartnerId(order.dispatch?.sharedPartnerId) === toPartnerId(deliveryPartnerId);
@@ -2184,97 +1807,8 @@ export async function verifyDropOtpDelivery(orderId, deliveryPartnerId, otp) {
 
 export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
   const identity = buildOrderIdentityFilter(orderId);
-  let order = await FoodOrder.findOne(identity).select('+deliveryOtp');
-  let isQcOrder = false;
-  if (!order) {
-    const Order = mongoose.model('Order');
-    order = await Order.findOne(identity);
-    if (!order) throw new NotFoundError('Order not found');
-    isQcOrder = true;
-  }
-
-  if (isQcOrder) {
-    const isPrimary = (order.dispatch?.deliveryPartnerId?.toString() === deliveryPartnerId.toString()) || (order.deliveryBoy?.toString() === deliveryPartnerId.toString());
-    if (!isPrimary) {
-      throw new ForbiddenError('Not your order');
-    }
-
-    if (order.workflowStatus !== 'OUT_FOR_DELIVERY') {
-      throw new ValidationError('Invalid state for delivery completion');
-    }
-
-    const OrderOtp = mongoose.model('OrderOtp');
-    const otpDoc = await OrderOtp.findOne({
-      orderId: order.orderId,
-    }).sort({ createdAt: -1 });
-
-    if (!order.otpValidatedAt) {
-      const { otp } = body;
-      if (!otp) {
-        throw new ValidationError('Customer handover OTP is required. Verify the OTP from the customer before completing delivery.');
-      }
-      if (!otpDoc || otpDoc.consumedAt) {
-        if (!otpDoc || OrderOtp.hashCode(String(otp)) !== otpDoc.codeHash) {
-          throw new ValidationError('Invalid handover OTP provided.');
-        }
-      } else {
-        if (otpDoc.expiresAt < new Date()) {
-          throw new ValidationError('OTP expired');
-        }
-        if (otpDoc.attempts >= otpDoc.maxAttempts) {
-          throw new ValidationError('Too many OTP attempts');
-        }
-        const match = OrderOtp.hashCode(String(otp)) === otpDoc.codeHash;
-        if (!match) {
-          await OrderOtp.updateOne({ _id: otpDoc._id }, { $inc: { attempts: 1 } });
-          throw new ValidationError('Invalid handover OTP provided.');
-        }
-        await OrderOtp.updateOne(
-          { _id: otpDoc._id },
-          { $set: { consumedAt: new Date() } }
-        );
-      }
-    }
-
-    const now = new Date();
-    order.workflowStatus = 'DELIVERED';
-    order.status = 'delivered';
-    order.orderStatus = 'delivered';
-    order.deliveredAt = now;
-    await order.save();
-
-    try {
-      const { applyDeliveredSettlement } = await import("../../../../quickCommerce/services/orderSettlement.js");
-      await applyDeliveredSettlement(order, order.orderId);
-    } catch (settleErr) {
-      console.error('[completeDelivery] QC settlement failed:', settleErr.message);
-    }
-
-    try {
-      const io = getIO();
-      if (io) {
-        const payload = {
-          orderId: order.orderId,
-          workflowStatus: 'DELIVERED',
-          status: 'delivered',
-          at: now.toISOString()
-        };
-        io.to(`order:${order.orderId}`).emit('order:status:update', payload);
-        const cid = order.customer?._id || order.customer;
-        if (cid) {
-          io.to(`customer:${cid.toString()}`).emit('order:status:update', payload);
-        }
-      }
-    } catch (err) {
-      console.warn('[completeDelivery] QC socket emit failed:', err.message);
-    }
-
-    const resOrder = order.toObject();
-    resOrder.deliveryVerification = {
-      dropOtp: { required: true, verified: true }
-    };
-    return resOrder;
-  }
+  const order = await FoodOrder.findOne(identity).select('+deliveryOtp');
+  if (!order) throw new NotFoundError('Order not found');
 
   const pid = order.dispatch?.deliveryPartnerId?.toString();
   const sid = order.dispatch?.sharedPartnerId?.toString();
@@ -2586,26 +2120,8 @@ export async function updateOrderStatusDelivery(orderId, deliveryPartnerId, orde
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError('Order id required');
 
-  let order = await FoodOrder.findOne(identity).select('+deliveryOtp');
-  let isQcOrder = false;
-  if (!order) {
-    const Order = mongoose.model('Order');
-    order = await Order.findOne(identity);
-    if (!order) throw new NotFoundError('Order not found');
-    isQcOrder = true;
-  }
-
-  if (isQcOrder) {
-    const isPrimary = (order.dispatch?.deliveryPartnerId?.toString() === deliveryPartnerId.toString()) || (order.deliveryBoy?.toString() === deliveryPartnerId.toString());
-    if (!isPrimary) {
-      throw new ForbiddenError('Not your order');
-    }
-
-    order.orderStatus = orderStatus;
-    order.status = orderStatus;
-    await order.save();
-    return order.toObject();
-  }
+  const order = await FoodOrder.findOne(identity).select('+deliveryOtp');
+  if (!order) throw new NotFoundError('Order not found');
 
   const isPrimary = order.dispatch?.deliveryPartnerId?.toString() === deliveryPartnerId.toString();
   const isShared = order.dispatch?.sharedPartnerId?.toString() === deliveryPartnerId.toString();

@@ -3,7 +3,6 @@ import { Server } from 'socket.io';
 import { config } from './env.js';
 import { logger } from '../utils/logger.js';
 import { verifyAccessToken } from '../core/auth/token.util.js';
-import { setupQCSocketHandlers, setQCIO } from '../modules/quickCommerce/socket/socketManager.js';
 
 
 let io = null;
@@ -78,7 +77,6 @@ export const initSocket = async (server) => {
             methods: ['GET', 'POST']
         }
     });
-    setQCIO(io);
 
     // Socket auth middleware (Bearer token).
     io.use((socket, next) => {
@@ -152,9 +150,6 @@ export const initSocket = async (server) => {
         const userId = socket.user?.userId;
         const role = socket.user?.role;
         logger.info(`Socket client connected: ${socket.id} (${role || 'UNKNOWN'}:${userId || '-'})`);
-
-        // Quick Commerce Handlers
-        setupQCSocketHandlers(socket, io);
 
         // Auto-join role rooms (lets us emit without a custom join).
         if (userId && role) {

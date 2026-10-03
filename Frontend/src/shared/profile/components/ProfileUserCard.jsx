@@ -44,42 +44,6 @@ export default function ProfileUserCard({
           </div>
         </div>
 
-        {activeService.id === "qc" && activeService.summary?.length > 0 && (
-          <div className="mt-4">
-            <div className="profile-summary-grid">
-              {activeService.summary.slice(0, 2).map((item) => {
-                const Icon = item.icon;
-                const raw = badgeValues[item.key] ?? "0";
-                return (
-                  <div key={item.key} className="flex items-center gap-3">
-                    <div
-                      className="p-2 rounded-xl"
-                      style={{ backgroundColor: "color-mix(in srgb, var(--profile-accent) 12%, white)" }}
-                    >
-                      <Icon className="h-5 w-5" style={{ color: "var(--profile-accent)" }} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{item.label}</p>
-                      <p className="text-sm font-bold text-slate-800 dark:text-white">
-                        {item.prefix || ""}{raw}{item.suffix || ""}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {activeService.summary[2] && (
-              <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {activeService.summary[2].label}
-                </span>
-                <span className="text-sm font-bold text-gray-900 dark:text-white">
-                  {badgeValues[activeService.summary[2].key] ?? "0"}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
       </CardContent>
     </Card>
   );
