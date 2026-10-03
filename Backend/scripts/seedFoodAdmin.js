@@ -10,7 +10,7 @@
  *   FOOD_ADMIN_PASSWORD   default: Admin@12345
  *   FOOD_ADMIN_NAME       default: Super Admin
  *   FOOD_ADMIN_PHONE      default: 9999999999
- *   FOOD_ADMIN_SERVICES   default: food,quickCommerce,taxi
+ *   FOOD_ADMIN_SERVICES   default: food,taxi
  *   MONGO_URI / MONGODB_URI
  */
 
@@ -24,7 +24,7 @@ dotenv.config();
 const FORCE = process.argv.includes('--force');
 
 const parseServices = (raw) => {
-  const allowed = new Set(['food', 'quickCommerce']);
+  const allowed = new Set(['food']);
   return raw
     .split(',')
     .map((item) => item.trim())
@@ -57,7 +57,7 @@ async function seedAdmin() {
   const name = (process.env.FOOD_ADMIN_NAME || 'Super Admin').trim();
   const phone = (process.env.FOOD_ADMIN_PHONE || '9999999999').trim();
   const servicesAccess = parseServices(
-    process.env.FOOD_ADMIN_SERVICES || 'food,quickCommerce,taxi',
+    process.env.FOOD_ADMIN_SERVICES || 'food,taxi',
   );
 
   if (password.length < 6) {

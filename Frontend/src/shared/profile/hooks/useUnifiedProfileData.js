@@ -97,10 +97,7 @@ export function useUnifiedProfileData() {
 
   const badgeValues = useMemo(() => {
     const foodWallet = Number(masterData?.wallets?.food_qc_balance ?? 0);
-    const qcWallet = Number(masterData?.wallets?.food_qc_balance ?? foodWallet);
     const referralReward = Number(masterData?.referrals?.food_reward ?? 0);
-    const qcWishlist = masterData?.modules?.qc?.wishlistCount ?? masterData?.qc?.wishlistCount ?? 0;
-    const qcOrders = masterData?.modules?.qc?.orderCount ?? masterData?.qc?.orderCount ?? 0;
 
     return {
       foodWallet: `₹${foodWallet.toFixed(0)}`,
@@ -110,9 +107,6 @@ export function useUnifiedProfileData() {
       foodProfileCompletion: `${profileCompletion}% completed`,
       vegMode: vegMode ? "ON" : "OFF",
       appearance,
-      qcWallet: `₹${qcWallet.toFixed(0)}`,
-      qcWishlist: String(qcWishlist),
-      qcOrders: String(qcOrders),
     };
   }, [masterData, addresses, savedAddressSummary, profileCompletion, vegMode, appearance]);
 

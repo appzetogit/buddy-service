@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
 import { MapPin, ChevronDown, Search, Mic, Bell, CheckCircle2, Tag, Gift, AlertCircle, Clock, BellOff, X, IndianRupee, UtensilsCrossed, ShoppingBag, Zap, Sparkles, Flame, Bike } from 'lucide-react';
 
 function cn(...inputs) {
@@ -115,7 +114,6 @@ export default function UnifiedHeader({
 
   const services = [
     { id: "food", label: "Food", icon: "/super-app/food.png", isImage: true, color: "bg-[#F0F9F9]", activeBg: "bg-[#E0F2F1]", path: "/food/user" },
-    { id: "quick", label: "Mart", icon: "/super-app/grocery.png", isImage: true, color: "bg-[#F0F9F9]", activeBg: "bg-[#E0F2F1]", badge: "MEGA", path: "/qc" },
   ];
 
   return (
@@ -284,12 +282,6 @@ export default function UnifiedHeader({
                     <motion.button
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
-                        if (service.id === 'quick') {
-                          toast('Mart is Coming Soon! 🚀', {
-                            description: 'We are working hard to bring you the best grocery delivery experience.',
-                          });
-                          return;
-                        }
                         setActiveTab?.(service.id);
                         navigate(service.path);
                       }}

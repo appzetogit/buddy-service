@@ -43,7 +43,6 @@
   --sidebar-accent-foreground: #16A34A;
   --sidebar-border: #F1F5F9;
   --sidebar-ring: #16A34A;
-  --qc-bg: oklch(0.88 0.08 24.59);
 }
 
 @theme inline {
@@ -145,9 +144,6 @@
     animation: scroll 15s linear infinite;
   }
 
-  .bg-qc-header {
-    background: linear-gradient(to bottom, oklch(0.88 0.08 24.59 / 0.15), oklch(0.88 0.08 24.59 / 0.95) 50%, oklch(0.88 0.08 24.59 / 0.9));
-  }
 }
 
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }

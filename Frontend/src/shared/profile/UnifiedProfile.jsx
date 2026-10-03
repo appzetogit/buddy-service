@@ -35,15 +35,11 @@ import "./profile.css";
 
 const USER_SESSION_PREFERENCE_KEYS = ["userVegMode", "food-under-250-filters"];
 
-const TEST_PUSH_STATUS_POLL_INTERVAL_MS = 1500;
-const TEST_PUSH_STATUS_MAX_ATTEMPTS = 20;
-
-function detectServiceFromPath(pathname) {
-  if (pathname.startsWith("/qc")) return "qc";
+function detectServiceFromPath() {
   return "food";
 }
 
-function resolveInitialService(searchParams, pathname) {
+function resolveInitialService(searchParams) {
   const fromQuery = searchParams.get("service");
   if (fromQuery && PROFILE_SERVICE_IDS.includes(fromQuery)) return fromQuery;
 
@@ -54,7 +50,7 @@ function resolveInitialService(searchParams, pathname) {
     // ignore
   }
 
-  return detectServiceFromPath(pathname);
+  return detectServiceFromPath();
 }
 
 export default function UnifiedProfile() {
@@ -92,7 +88,6 @@ export default function UnifiedProfile() {
   const [deleteStep, setDeleteStep] = useState(1);
   const [deleteCaptcha, setDeleteCaptcha] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isTestingPush, setIsTestingPush] = useState(false);
 
   useEffect(() => {
     registerWebPushForCurrentModule().catch(console.error);
@@ -137,69 +132,6 @@ export default function UnifiedProfile() {
     },
     [openLocationSelector],
   );
-
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  const handleTestPush = async () => {
-    if (isTestingPush) return;
-    setIsTestingPush(true);
-    try {
-      const { describePushSupport, ensureFcmTokenRegistered, startForegroundPushListener } =
-        await import("@core/firebase/pushClient");
-      const { customerApi } = await import(
-        "@modules/customer/services/customerApi"
-      );
-
-      const support = describePushSupport();
-      if (!support.supported) {
-        throw new Error(support.message || "Push notifications are not supported.");
-      }
-
-      await ensureFcmTokenRegistered({ role: "customer", platform: "web" });
-      await startForegroundPushListener();
-      const res = await customerApi.testPushNotification();
-      const orderId = res?.data?.result?.orderId || "";
-
-      if (!orderId) {
-        toast.success("Test push triggered");
-        return;
-      }
-
-      let statusResult = null;
-      for (let attempt = 0; attempt < TEST_PUSH_STATUS_MAX_ATTEMPTS; attempt += 1) {
-        const statusRes = await customerApi.getTestPushNotificationStatus(orderId);
-        const result = statusRes?.data?.result || {};
-        const status = String(result.status || "").trim().toLowerCase();
-        if (status === "sent" || status === "failed") {
-          statusResult = result;
-          break;
-        }
-        if (attempt < TEST_PUSH_STATUS_MAX_ATTEMPTS - 1) await wait(TEST_PUSH_STATUS_POLL_INTERVAL_MS);
-      }
-
-      if (!statusResult) {
-        toast.message(`Test push processing (${orderId})`);
-        return;
-      }
-      if (statusResult.status === "sent") {
-        toast.success(`Test push sent (${orderId})`);
-      } else {
-        toast.error(`Test push failed (${orderId})`, {
-          description: String(statusResult.failureReason || "Delivery failed."),
-        });
-      }
-    } catch (error) {
-      toast.error("Failed to trigger test push", {
-        description: error?.response?.data?.message || error?.message || "Unknown error",
-      });
-    } finally {
-      setIsTestingPush(false);
-    }
-  };
-
-  const handleHeaderAction = (action) => {
-    if (action === "testPush") handleTestPush();
-  };
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
@@ -266,18 +198,10 @@ export default function UnifiedProfile() {
     }
   };
 
-  const headerActionState = {
-    testPush: { loading: isTestingPush, disabled: isTestingPush },
-  };
-
   return (
     <AnimatedPage className="unified-profile min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a]" data-service={activeServiceId}>
       <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-6 md:py-8 lg:py-10 pb-20 sm:pb-24">
-        <ProfileHeader
-          service={activeService}
-          onHeaderAction={handleHeaderAction}
-          headerActions={headerActionState}
-        />
+        <ProfileHeader service={activeService} />
 
 
 

@@ -644,25 +644,6 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
             </div>
           )}
 
-          {/* Quick Commerce Switcher */}
-          <div className={cn("mt-2 animate-[slideIn_0.4s_ease-out_0.32s_both]", isCollapsed ? "px-1" : "px-0")}>
-            <Link 
-              to="/qc/admin" 
-              className={cn(
-                "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 text-white hover:from-emerald-500 hover:to-green-500 transition-all duration-300 shadow-lg shadow-emerald-900/20 group border border-emerald-400/20",
-                isCollapsed && "justify-center"
-              )}
-              title={isCollapsed ? "Switch to Quick Commerce" : undefined}
-            >
-              <Zap className={cn("w-4 h-4 shrink-0 text-emerald-100 group-hover:scale-110 transition-transform", isCollapsed ? "" : "")} />
-              {!isCollapsed && (
-                <div className="flex-1 flex items-center justify-between overflow-hidden">
-                  <span className="font-semibold text-xs uppercase tracking-wider truncate">Quick Commerce</span>
-                  <ChevronRight className="w-3.5 h-3.5 shrink-0 text-emerald-200 group-hover:translate-x-0.5 transition-transform" />
-                </div>
-              )}
-            </Link>
-          </div>
         </div>
 
         {/* Navigation Menu */}

@@ -1,7 +1,6 @@
 import React from "react"
 import { motion } from "framer-motion"
 import { useNavigate } from "react-router-dom"
-import { toast } from "sonner"
 import { 
   UtensilsCrossed, 
   ShoppingBag, 
@@ -25,18 +24,6 @@ const MODULES = [
     iconColor: "text-orange-600",
     path: "/food/user",
     stats: "500+ Restaurants"
-  },
-  {
-    id: "quick-commerce",
-    title: "Quick Commerce",
-    description: "Groceries, daily essentials, and more delivered in minutes. Never wait in line again.",
-    icon: ShoppingBag,
-    color: "from-emerald-500 to-teal-500",
-    shadow: "shadow-emerald-500/20",
-    bg: "bg-emerald-50",
-    iconColor: "text-emerald-600",
-    path: "/quick-commerce",
-    stats: "10 Min Delivery"
   }
 ]
 
@@ -115,12 +102,6 @@ export default function MasterLandingPage() {
                 transition={{ delay: 0.3 + idx * 0.1, type: "spring", stiffness: 100 }}
                 whileHover={{ y: -12, scale: 1.02 }}
                 onClick={() => {
-                  if (module.id === "quick-commerce") {
-                    toast("Mart is Coming Soon! 🚀", {
-                      description: "We are working hard to bring you the best grocery delivery experience.",
-                    });
-                    return;
-                  }
                   navigate(module.path);
                 }}
                 className="group cursor-pointer"

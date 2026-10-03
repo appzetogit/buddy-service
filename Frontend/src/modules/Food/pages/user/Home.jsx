@@ -124,7 +124,6 @@ import HomeMobileHero from "@food/components/user/home/HomeMobileHero";
 import HomeMobileCategories from "@food/components/user/home/HomeMobileCategories";
 import HomeMobileStickyBar from "@food/components/user/home/HomeMobileStickyBar";
 import PromoRow from "@food/components/user/home/PromoRow";
-import QuickSection from "@food/components/user/home/QuickSection";
 import "@food/styles/landing.css";
 
 
@@ -2201,28 +2200,7 @@ export default function Home() {
             />
           </div>
 
-          {activeTab !== "food" && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
-              className="px-4 pb-6 food-mobile-content"
-            >
-              <div className="rounded-[28px] bg-gradient-to-br from-[#efe7ff] via-[#ffe0ef] to-[#dff6e7] px-6 py-10 text-center shadow-[0_12px_26px_rgba(0,0,0,0.08)]">
-                <div className="text-sm font-black uppercase tracking-[0.3em] text-[#6b5bb5]">Coming Soon</div>
-                <div className="mt-3 text-2xl font-black text-[#2b2b3f]">
-                  Quick Commerce
-                </div>
-                <p className="mt-2 text-sm font-semibold text-[#2b2b3f]/70">
-                  We are preparing the next experience for you.
-                </p>
-              </div>
-            </motion.div>
-          )}
-
           <AnimatePresence mode="wait">
-            {activeTab === "food" ? (
               <motion.div
                 key="food-content"
                 initial={{ opacity: 0 }}
@@ -2247,18 +2225,6 @@ export default function Home() {
 
               
               </motion.div>
-            ) : (
-              <motion.div
-                key="quick-content"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.3 }}
-                className="food-mobile-content"
-              >
-                <QuickSection />
-              </motion.div>
-            )}
           </AnimatePresence>
         </div>
 

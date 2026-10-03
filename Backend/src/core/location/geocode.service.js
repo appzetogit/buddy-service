@@ -1,19 +1,17 @@
 import { Client } from "@googlemaps/google-maps-services-js";
 import crypto from "crypto";
-import { getRedisClient } from "../../modules/quickCommerce/config/redis.js";
+import { getRedisClient } from "./sharedRedisClient.js";
 import GeocodeCache from "./geocodeCache.model.js";
 
 /**
- * Centralized geocoding service (forward + reverse), moved from
- * Backend/src/modules/quickCommerce/services/mapsGeocodeService.js as the
- * single backend geocoder shared by all Food-module actors (user, restaurant,
- * delivery partner). The old quickCommerce module path now re-exports from
- * here so existing importers keep working unchanged.
+ * Centralized geocoding service (forward + reverse), the single backend
+ * geocoder shared by all Food-module actors (user, restaurant, delivery
+ * partner).
  *
- * Deliberately keeps using quickCommerce's ioredis-based client (not the
- * project-root `redis` package client in Backend/src/config/redis.js) - the
- * two are different clients with different `.set(...)` call conventions, and
- * this preserves the cache's existing behavior exactly.
+ * Deliberately keeps using an ioredis-based client (not the project-root
+ * `redis` package client in Backend/src/config/redis.js) - the two are
+ * different clients with different `.set(...)` call conventions, and this
+ * preserves the cache's existing behavior exactly.
  */
 
 const client = new Client({});
@@ -306,6 +304,5 @@ export async function geocodeByPlaceId(placeId) {
   return result;
 }
 
-// Backward-compatible names for existing importers (quickCommerce controllers/services).
 export const geocodeAddress = forwardGeocode;
 export const geocodePlaceId = geocodeByPlaceId;

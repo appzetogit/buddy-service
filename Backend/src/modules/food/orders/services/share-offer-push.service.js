@@ -1,5 +1,5 @@
 import { FoodOrder } from '../models/order.model.js';
-import { FoodDeliveryPartner, takesDeliveryService } from '../../delivery/models/deliveryPartner.model.js';
+import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model.js';
 import { notifyOwnersSafely } from '../../../../core/notifications/firebase.service.js';
 import { logger } from '../../../../utils/logger.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
@@ -46,7 +46,7 @@ export async function pushShareableOrder(order, sharedFromId) {
   excluded.add(String(sharedFromId));
 
   const zoneId = order.zoneId?._id || order.zoneId;
-  const online = await FoodDeliveryPartner.find({ status: 'approved', availabilityStatus: 'online', ...takesDeliveryService('food') })
+  const online = await FoodDeliveryPartner.find({ status: 'approved', availabilityStatus: 'online' })
     .select('_id zone')
     .lean();
   const inZone = zoneId
