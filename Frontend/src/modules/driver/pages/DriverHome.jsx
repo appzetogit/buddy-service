@@ -7,7 +7,6 @@ import {
   Sparkles,
   AlertCircle,
   Pencil,
-  Package,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,7 +23,6 @@ const normalizeMode = (raw) => (OFF_VALUES.has(raw) ? "off" : raw);
 
 const SERVICE_STATUS_CARDS = [
   { key: "food", label: "Food", Icon: Bike, accent: "text-orange-400" },
-  { key: "quickCommerce", label: "Quick Commerce", Icon: Package, accent: "text-emerald-400" },
 ];
 
 /**
@@ -36,13 +34,12 @@ export default function DriverHome() {
   const [mode, setMode] = useState("off");
   const [capabilities, setCapabilities] = useState({
     food: "not_enabled",
-    quickCommerce: "not_enabled",
   });
   const [identity, setIdentity] = useState(null);
   const [bootLoading, setBootLoading] = useState(true);
   const [switching, setSwitching] = useState(false);
   const [latLng, setLatLng] = useState(null);
-  const [rejection, setRejection] = useState({ food: null, quickCommerce: null });
+  const [rejection, setRejection] = useState({ food: null });
   const [resubmitAllowed, setResubmitAllowed] = useState(false);
 
   useEffect(() => {
@@ -69,7 +66,7 @@ export default function DriverHome() {
           return;
         }
         setResubmitAllowed(Boolean(onboardingState?.resubmitAllowed));
-        setRejection(onboardingState?.rejection || { food: null, quickCommerce: null });
+        setRejection(onboardingState?.rejection || { food: null });
         setIdentity(onboardingState?.identity || onboardingState || null);
         if (onboardingState?.capabilities) setCapabilities(onboardingState.capabilities);
         if (modeState?.capabilities) setCapabilities((prev) => ({ ...prev, ...modeState.capabilities }));
@@ -92,14 +89,11 @@ export default function DriverHome() {
   }, [navigate]);
 
   const foodRejected = capabilities?.food === "rejected";
-  const qcRejected = capabilities?.quickCommerce === "rejected";
-  const anyRejected = foodRejected || qcRejected;
+  const anyRejected = foodRejected;
   const foodEnabled = capabilities?.food && capabilities.food !== "not_enabled";
-  const qcEnabled = capabilities?.quickCommerce && capabilities.quickCommerce !== "not_enabled";
   const foodApproved = capabilities?.food === "approved" || capabilities?.food === "enabled" || capabilities?.food === "active";
-  const qcApproved = capabilities?.quickCommerce === "approved" || capabilities?.quickCommerce === "enabled" || capabilities?.quickCommerce === "active";
-  const deliveryApproved = foodApproved || qcApproved;
-  const deliveryEnabled = foodEnabled || qcEnabled;
+  const deliveryApproved = foodApproved;
+  const deliveryEnabled = foodEnabled;
 
   const applyMode = async (next) => {
     setSwitching(true);
@@ -111,7 +105,7 @@ export default function DriverHome() {
       if (next === "off") {
         toast.success("You're offline — not receiving jobs");
       } else if (next === "food") {
-        toast.success("Food & Quick Commerce is now active");
+        toast.success("You're online — receiving food orders");
       }
     } catch (err) {
       const msg = getApiErrorMessage(err, "Could not switch mode — finish your current job first");
@@ -285,7 +279,7 @@ export default function DriverHome() {
             </span>
           </div>
           <p className="text-[13px] text-gray-500 mb-4 leading-relaxed">
-            Turn on delivery mode to receive food and quick-commerce orders.
+            Turn on delivery mode to receive food orders.
           </p>
 
           <div
@@ -300,11 +294,11 @@ export default function DriverHome() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-bold text-[14px] flex items-center gap-2 flex-wrap">
-                Food & Quick Commerce
-                {deliveryEnabled && !deliveryApproved && !foodRejected && !qcRejected && (
+                Food Delivery
+                {deliveryEnabled && !deliveryApproved && !foodRejected && (
                   <span className="text-[10px] uppercase tracking-widest text-amber-400">Pending</span>
                 )}
-                {(foodRejected || qcRejected) && (
+                {foodRejected && (
                   <span className="text-[10px] uppercase tracking-widest text-red-400">Rejected</span>
                 )}
                 {!deliveryEnabled && (
@@ -312,7 +306,7 @@ export default function DriverHome() {
                 )}
               </div>
               <div className="text-gray-400 text-[12px] mt-0.5">
-                Restaurant orders and quick-commerce deliveries
+                Restaurant orders
               </div>
             </div>
             <label className="relative inline-flex items-center shrink-0 cursor-pointer">
@@ -320,7 +314,7 @@ export default function DriverHome() {
                 type="checkbox"
                 className="sr-only peer"
                 checked={foodActive}
-                disabled={!deliveryEnabled || (deliveryEnabled && !deliveryApproved) || foodRejected || qcRejected || switching}
+                disabled={!deliveryEnabled || (deliveryEnabled && !deliveryApproved) || foodRejected || switching}
                 onChange={(e) => toggleFoodMode(e.target.checked)}
               />
               <div
@@ -349,7 +343,7 @@ export default function DriverHome() {
 
         <CapabilityCard
           Icon={Bike}
-          title="Food & Quick Commerce"
+          title="Food Delivery"
           status={capabilities.food}
           enabled={deliveryEnabled}
           href="/food/delivery"
