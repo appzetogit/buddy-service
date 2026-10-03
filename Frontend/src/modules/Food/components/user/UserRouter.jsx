@@ -55,7 +55,7 @@ const CollectionDetail = lazy(() => import("@food/pages/user/CollectionDetail"))
 
 
 
-// Profile — unified across Food, Taxi & QC (see src/shared/profile/UnifiedProfile.jsx)
+// Profile — unified across Food & Taxi (see src/shared/profile/UnifiedProfile.jsx)
 const UnifiedProfile = lazy(() => import("@/shared/profile/UnifiedProfile"))
 // Legacy Food-only profile (kept for reference; route now uses UnifiedProfile)
 // const Profile = lazy(() => import("@food/pages/user/profile/Profile"))

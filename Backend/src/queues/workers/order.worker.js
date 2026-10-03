@@ -6,9 +6,6 @@ import { getBullMQConnection } from '../connection.js';
 import { ORDER_QUEUE } from '../queue.constants.js';
 import { processOrderJob } from '../processors/order.processor.js';
 import { connectDB } from '../../config/db.js';
-// Dispatch looks up the quick-commerce model by name (`mongoose.model('Order')`),
-// which only exists once this file is loaded — the API server gets it via its routes.
-import '../../modules/quickCommerce/models/order.js';
 
 const defaultJobOptions = {
     attempts: 3,
