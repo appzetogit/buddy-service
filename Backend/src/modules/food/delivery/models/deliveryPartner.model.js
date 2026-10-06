@@ -106,6 +106,14 @@ const deliveryPartnerSchema = new mongoose.Schema(
             default: 'offline'
         },
         /**
+         * Which delivery jobs the rider chose to take while online. Unset means
+         * both — partners (and app versions) from before the choice existed.
+         */
+        deliveryServices: {
+            type: [{ type: String, enum: ['food', 'quickCommerce'] }],
+            default: undefined,
+        },
+        /**
          * Socket-derived liveness, written on connect/disconnect and refreshed by the client
          * heartbeat. `availabilityStatus` alone is an explicit API toggle with no liveness
          * signal, so a partner who force-quits the app stays 'online' forever and keeps
@@ -217,4 +225,9 @@ deliveryPartnerSchema.index({ lastLocation: '2dsphere' });
 deliveryPartnerSchema.index({ location: '2dsphere' });
 
 export const FoodDeliveryPartner = mongoose.model('FoodDeliveryPartner', deliveryPartnerSchema);
+
+/** Mongo filter for partners who take `service` jobs (no saved choice = all). */
+export const takesDeliveryService = (service) => ({
+    $or: [{ deliveryServices: null }, { deliveryServices: { $size: 0 } }, { deliveryServices: service }],
+});
 

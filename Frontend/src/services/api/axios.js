@@ -63,6 +63,9 @@ function getModuleFromUrl(url = "") {
     normalized.includes("/driver/mode")
   ) return "driver";
 
+  // Quick Commerce seller APIs (/v1/seller/*) authenticate with the seller session
+  if (/(^|\/)seller(\/|$)/.test(normalized)) return "seller";
+
   // Delivery detection - Catch all delivery-specific functional and auth routes
   if (
     normalized.includes("/food/delivery") || 
@@ -116,6 +119,9 @@ function getAccessToken(config) {
     // 2. Fallback to legacy generic token only for user module.
     // Using generic token for delivery/restaurant can send wrong role token
     // and trigger 403 on protected role-based endpoints.
+    if (module === "seller") {
+      return localStorage.getItem("auth_seller") || null;
+    }
     if (module === "user") {
       return localStorage.getItem("accessToken") || null;
     }
