@@ -21,6 +21,7 @@ import {
   MAX_DISPATCH_ATTEMPTS,
 } from './order.helpers.js';
 import { fetchRoadDistancesKm } from '../utils/googleMaps.js';
+import { filterPartnersByOrderCapacity } from './rider-capacity.service.js';
 
 /**
  * Candidate ordering: live riders first, then nearest.
@@ -184,8 +185,23 @@ async function filterPartnersByCashLimit(partners = [], options = {}) {
 
 export async function listNearbyOnlineDeliveryPartners(
   restaurantId,
-  { maxKm = 15, limit = 25, requiredAmount = 0, allowOverLimitFallback = true, service = null } = {},
+  {
+    maxKm = 15,
+    limit = 25,
+    requiredAmount = 0,
+    allowOverLimitFallback = true,
+    service = null,
+    excludeOrderId = null,
+  } = {},
 ) {
+  // Order stacking: a rider may hold up to `maxConcurrentOrders` accepted jobs (default 2)
+  // across Food + Quick Commerce. Anyone already at the limit is removed from every candidate
+  // list below, so a full rider never even sees the offer. `excludeOrderId` keeps the order
+  // being dispatched out of the tally, which matters on re-dispatch of an order the rider
+  // already holds. Fails open - see rider-capacity.service.js.
+  const withFreeSlot = (partners) =>
+    filterPartnersByOrderCapacity(partners, { excludeOrderId });
+
   // Riders who opted out of this kind of job (food vs quick commerce) never see it.
   const serviceFilter = service ? takesDeliveryService(service) : {};
   // Quick Commerce approval is `isVerified`; `status` tracks the food side, so a
@@ -221,10 +237,11 @@ export async function listNearbyOnlineDeliveryPartners(
       { requiredAmount, allowOverLimitFallback },
     );
     const modeEligible = await excludeTaxiModePartners(cashEligiblePartners);
+    const slotEligible = await withFreeSlot(modeEligible);
 
     return {
       restaurant: null,
-      partners: modeEligible.map((p) => ({ partnerId: p.partnerId || p._id, distanceKm: null })),
+      partners: slotEligible.map((p) => ({ partnerId: p.partnerId || p._id, distanceKm: null })),
     };
   }
 
@@ -328,9 +345,10 @@ export async function listNearbyOnlineDeliveryPartners(
     const eligible = await excludeTaxiModePartners(
       anyOnline.map((p) => ({ partnerId: p._id, ...p })),
     );
+    const slotEligible = await withFreeSlot(eligible);
 
     return {
-      partners: eligible.map((p) => ({
+      partners: slotEligible.map((p) => ({
         partnerId: p.partnerId || p._id,
         distanceKm: null,
         status: p.status,
@@ -347,8 +365,9 @@ export async function listNearbyOnlineDeliveryPartners(
     allowOverLimitFallback,
   });
   const modeEligibleFinal = await excludeTaxiModePartners(cashEligibleFinal);
+  const slotEligibleFinal = await withFreeSlot(modeEligibleFinal);
 
-  return { partners: modeEligibleFinal };
+  return { partners: slotEligibleFinal };
 }
 
 export async function getDispatchSettings() {
@@ -454,6 +473,8 @@ export async function tryAutoAssign(orderId, options = {}) {
       requiredAmount,
       allowOverLimitFallback: true,
       service: 'food',
+      // This order must not count against a rider's stacking limit while we hunt for them.
+      excludeOrderId: order._id,
     };
 
     const restaurant = order.restaurantId || {};

@@ -33,6 +33,10 @@ import { FoodRestaurantCommission } from '../models/restaurantCommission.model.j
 import { FoodDeliveryCommissionRule } from '../models/deliveryCommissionRule.model.js';
 import { FoodFeeSettings } from '../models/feeSettings.model.js';
 import { FoodDeliveryBoySettings } from '../models/deliveryBoySettings.model.js';
+import {
+    clampMaxConcurrentOrders,
+    DEFAULT_MAX_CONCURRENT_ORDERS,
+} from '../../orders/services/rider-capacity.service.js';
 import { FeedbackExperience } from '../models/feedbackExperience.model.js';
 import { FoodUser } from '../../../../core/users/user.model.js';
 import { FoodRefreshToken } from '../../../../core/refreshTokens/refreshToken.model.js';
@@ -6700,11 +6704,14 @@ export async function getDeliveryBoySettings() {
             multiOrderEnabled: true,
             multiOrderMaxDistance: 5,
             multiOrderAdditionalCharge: 0,
+            maxConcurrentOrders: DEFAULT_MAX_CONCURRENT_ORDERS,
             deliverySpeedOptions: [],
         };
     }
     return {
         ...settings,
+        // Legacy docs predate order stacking and have no value stored.
+        maxConcurrentOrders: clampMaxConcurrentOrders(settings.maxConcurrentOrders),
         deliverySpeedOptions: sanitizeDeliverySpeedOptions(settings.deliverySpeedOptions),
     };
 }
@@ -6721,6 +6728,9 @@ export async function upsertDeliveryBoySettings(data) {
       updatePayload.multiOrderMaxDistance = clamped;
     }
     if (data.multiOrderAdditionalCharge !== undefined) updatePayload.multiOrderAdditionalCharge = Number(data.multiOrderAdditionalCharge) || 0;
+    if (data.maxConcurrentOrders !== undefined) {
+      updatePayload.maxConcurrentOrders = clampMaxConcurrentOrders(data.maxConcurrentOrders);
+    }
     if (data.splitOrderEnabled !== undefined) updatePayload.splitOrderEnabled = Boolean(data.splitOrderEnabled);
     if (data.splitOrderThreshold !== undefined) updatePayload.splitOrderThreshold = Number(data.splitOrderThreshold) || 20;
     if (data.deliverySpeedOptions !== undefined) {

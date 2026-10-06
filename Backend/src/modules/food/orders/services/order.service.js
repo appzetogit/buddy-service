@@ -104,6 +104,7 @@ import {
   getLegForPartner,
   toPartnerId,
 } from './order-lifecycle.policy.js';
+import { assertRiderHasFreeSlot } from './rider-capacity.service.js';
 
 async function clearUserCartAfterOrder(userId) {
   if (!userId) return;
@@ -2974,6 +2975,11 @@ export async function getCurrentTripDelivery(deliveryPartnerId) {
   return deliveryService.getCurrentTripDelivery(deliveryPartnerId);
 }
 
+/** All trips a rider is running at once (order stacking) plus their remaining capacity. */
+export async function listActiveTripsDelivery(deliveryPartnerId) {
+  return deliveryService.listActiveTripsDelivery(deliveryPartnerId);
+}
+
 // ----- Delivery: available, accept, reject, status -----
 export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
   return deliveryService.listOrdersAvailableDelivery(deliveryPartnerId, query);
@@ -4226,6 +4232,13 @@ export async function shareOrderDelivery(orderId, deliveryPartnerId) {
 export async function acceptSharedOrderDelivery(orderId, newPartnerId) {
   const identity = buildOrderIdentityFilter(orderId);
   const sharedObjectId = new mongoose.Types.ObjectId(newPartnerId);
+
+  // Joining a shared order is taking on a job, so it consumes a stacking slot exactly like a
+  // normal accept. Resolve the Mongo _id first: `identity` also matches the human order_id, and
+  // the exclusion below needs the real _id so a retry by the partner who already joined stays
+  // idempotent (handled further down).
+  const sharedTarget = await FoodOrder.findOne(identity).select('_id').lean();
+  await assertRiderHasFreeSlot(newPartnerId, { excludeOrderId: sharedTarget?._id });
 
   // Atomic claim: the conditional filter (isShared + open slot + not the primary) guarantees
   // only ONE partner can win an open shared slot even under simultaneous joins. Previously this

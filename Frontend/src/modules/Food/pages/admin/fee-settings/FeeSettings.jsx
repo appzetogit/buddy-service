@@ -9,7 +9,9 @@ import { adminAPI } from "@food/api"
 import { toast } from "sonner"
 import PartnerSettingsSection, {
   clampMultiOrderDistanceKm,
+  clampMaxConcurrentOrders,
   MULTI_ORDER_DISTANCE_MAX_KM,
+  MAX_CONCURRENT_ORDERS_DEFAULT,
 } from "./PartnerSettingsSection"
 import DistanceRulesSection from "./DistanceRulesSection"
 
@@ -43,6 +45,7 @@ const DEFAULT_PARTNER_SETTINGS = {
   multiOrderAdditionalCharge: 0,
   splitOrderEnabled: true,
   splitOrderThreshold: 20,
+  maxConcurrentOrders: MAX_CONCURRENT_ORDERS_DEFAULT,
 }
 
 const getSpeedIcon = (iconId) => ADMIN_SPEED_ICONS.find((i) => i.id === iconId)?.Icon || Bike
@@ -104,6 +107,7 @@ export default function FeeSettings() {
           multiOrderAdditionalCharge: data.multiOrderAdditionalCharge || 0,
           splitOrderEnabled: data.splitOrderEnabled !== false,
           splitOrderThreshold: data.splitOrderThreshold || 20,
+          maxConcurrentOrders: clampMaxConcurrentOrders(data.maxConcurrentOrders),
         })
       }
     } catch {
@@ -163,6 +167,7 @@ export default function FeeSettings() {
         multiOrderAdditionalCharge: Number(partnerSettings.multiOrderAdditionalCharge) || 0,
         splitOrderEnabled: partnerSettings.splitOrderEnabled !== false,
         splitOrderThreshold: Number(partnerSettings.splitOrderThreshold) || 20,
+        maxConcurrentOrders: clampMaxConcurrentOrders(partnerSettings.maxConcurrentOrders),
         deliverySpeedOptions: deliverySpeedOptions.map((option, index) => {
           const feeModifier = Number(option.feeModifier) || 0
           const rawDriverShare = Number(option.driverShareAmount) || 0

@@ -354,6 +354,20 @@ export async function getCurrentTripDeliveryController(req, res, next) {
     }
 }
 
+/**
+ * Every trip the rider is running right now (order stacking) plus their remaining capacity.
+ * `/orders/current` stays the single-trip endpoint for older app builds.
+ */
+export async function listActiveTripsDeliveryController(req, res, next) {
+    try {
+        const deliveryPartnerId = req.user?.userId;
+        const result = await orderService.listActiveTripsDelivery(deliveryPartnerId);
+        return sendResponse(res, 200, 'Active trips retrieved', result);
+    } catch (err) {
+        next(err);
+    }
+}
+
 export async function createCollectQrController(req, res, next) {
     try {
         const deliveryPartnerId = req.user?.userId;

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
+import { useDeliveryStore, orderKeyOf, orderAliasesOf } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { DELIVERY_TRIP_POLL_MS, pollEnabled } from '@/services/socket/pollConfig';
 import { useProximityCheck } from '@/modules/DeliveryV2/hooks/useProximityCheck';
 import { useOrderManager } from '@/modules/DeliveryV2/hooks/useOrderManager';
@@ -73,7 +73,14 @@ function BottomPopup({ isOpen, onClose, title, children }) {
  */
 export default function DeliveryHomeV2({ tab = 'feed' }) {
   const navigate = useNavigate();
-  const { isOnline, toggleOnline, riderLocation, activeOrder, tripStatus, setRiderLocation, setActiveOrder, updateTripStatus, clearActiveOrder } = useDeliveryStore();
+  const {
+    isOnline, toggleOnline, riderLocation, activeOrder, tripStatus, setRiderLocation,
+    setActiveOrder, updateTripStatus, clearActiveOrder,
+    // Order stacking: a rider may hold several accepted orders at once.
+    activeOrders, focusedOrderId, focusOrder, setActiveOrders, removeActiveOrder,
+    clearAllActiveOrders, tripStatusByOrder, orderCapacity, setOrderCapacity,
+    canStackAnotherOrder,
+  } = useDeliveryStore();
   const { isWithinRange, distanceToTarget, durationToTarget } = useProximityCheck();
   const { acceptOrder, reachPickup, pickUpOrder, reachDrop, completeDelivery, resetTrip } = useOrderManager();
   const { newOrder, clearNewOrder, sharedOrder, clearSharedOrder, orderStatusUpdate, clearOrderStatusUpdate, claimedOrderId, clearClaimedOrderId, adminNotification, clearAdminNotification, isConnected: isSocketConnected, emitLocation, socket } = useDeliveryNotifications();
@@ -135,8 +142,10 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const activePolylineRef = useRef(null);
   const tripStatusRef = useRef(null);
   const clearLiveTripUiRef = useRef(null);
-  const extractCurrentTripRef = useRef(null);
+  const finishAllTripsRef = useRef(null);
+  const extractActiveTripsRef = useRef(null);
   const applyServerTripRef = useRef(null);
+  const syncActiveTripsRef = useRef(null);
   const hasMountedTripSyncRef = useRef(false);
 
   const [zoom, setZoom] = useState(16);
@@ -164,6 +173,13 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     tripStatusRef.current = tripStatus;
   }, [tripStatus]);
 
+  // Auto-arrival is latched per stage, so switching (or being promoted) to another held order
+  // must clear the latch or the new order's "reached pickup" would be suppressed by the
+  // previous order's run.
+  useEffect(() => {
+    lastAutoArrivalRef.current = { PICKING_UP: false, PICKED_UP: false };
+  }, [focusedOrderId]);
+
   const clearTripMapState = useCallback((orderId) => {
     const trackingId = orderId || activeOrderIdRef.current;
     if (trackingId) {
@@ -180,6 +196,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const finishTrip = useCallback((toastMsg) => {
     const endedOrderId = activeOrderIdRef.current;
     clearTripMapState(endedOrderId);
+    // Order stacking: this closes the FOCUSED trip and promotes the next held order, if any.
     resetTrip();
     setShowVerification(false);
     setIsModalMinimized(false);
@@ -187,25 +204,64 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     clearNewOrder?.();
     clearSharedOrder?.();
     if (toastMsg) toast.error(toastMsg);
+
+    const promoted = useDeliveryStore.getState().activeOrder;
+    if (promoted) {
+      toast.info('Next order is now active', {
+        description: `Continue with order #${promoted.order_id || orderKeyOf(promoted).slice(-6)}.`,
+        duration: 6000,
+      });
+      // A slot just freed up: refresh capacity now rather than waiting for the next poll, so
+      // the rider becomes eligible for a replacement offer immediately. Only when work remains
+      // — on an empty set the sync would re-enter this same callback.
+      void syncActiveTripsRef.current?.().catch(() => { });
+    }
   }, [clearTripMapState, resetTrip, clearNewOrder, clearSharedOrder]);
 
   const clearLiveTripUi = useCallback((toastMsg) => {
     finishTrip(toastMsg);
   }, [finishTrip]);
 
-  const extractCurrentTrip = useCallback((response) => {
-    const data = response?.data?.data;
-    // Prefer explicit activeOrder key (null means no trip — do not fall back to wrapper object)
-    const candidate = data && Object.prototype.hasOwnProperty.call(data, 'activeOrder')
-      ? data.activeOrder
-      : data;
-    if (!candidate) return null;
-    if (!(candidate._id || candidate.orderId || candidate.order_id)) return null;
-    const status = String(
-      candidate.orderStatus || candidate.status || candidate.deliveryStatus || '',
-    ).toLowerCase();
-    if (status.startsWith('cancelled') || status === 'deleted') return null;
-    return candidate;
+  /**
+   * The rider holds nothing any more, per the server.
+   *
+   * Distinct from finishTrip/clearLiveTripUi, which close ONE trip and promote the next held
+   * order. With order stacking, "the server reports no active work" has to wipe the whole local
+   * set - otherwise a second, equally stale order would be promoted onto the screen.
+   */
+  const finishAllTrips = useCallback((toastMsg) => {
+    const endedOrderIds = useDeliveryStore.getState().activeOrders.map(orderKeyOf);
+    for (const id of endedOrderIds) {
+      if (id) clearOrderTracking(id).catch(() => { });
+    }
+    clearAllActiveOrders();
+    clearTripMapState();
+    setShowVerification(false);
+    setIsModalMinimized(false);
+    setIncomingOrder(null);
+    clearNewOrder?.();
+    clearSharedOrder?.();
+    if (toastMsg) toast.error(toastMsg);
+  }, [clearAllActiveOrders, clearTripMapState, clearNewOrder, clearSharedOrder]);
+
+  useEffect(() => {
+    finishAllTripsRef.current = finishAllTrips;
+  }, [finishAllTrips]);
+
+  /**
+   * Normalise `deliveryAPI.getActiveDeliveries()` into the set of trips this rider still has
+   * work on. An empty array genuinely means "nothing in hand", so callers may clear on it.
+   */
+  const extractActiveTrips = useCallback((result) => {
+    const list = Array.isArray(result?.activeOrders) ? result.activeOrders : [];
+    return list.filter((candidate) => {
+      if (!candidate) return false;
+      if (!orderKeyOf(candidate)) return false;
+      const status = String(
+        candidate.orderStatus || candidate.status || candidate.deliveryStatus || '',
+      ).toLowerCase();
+      return !status.startsWith('cancelled') && status !== 'deleted';
+    });
   }, []);
 
   useEffect(() => {
@@ -213,8 +269,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   }, [clearLiveTripUi]);
 
   useEffect(() => {
-    extractCurrentTripRef.current = extractCurrentTrip;
-  }, [extractCurrentTrip]);
+    extractActiveTripsRef.current = extractActiveTrips;
+  }, [extractActiveTrips]);
 
   // Clear map route when trip ends and active order is removed from store.
   useEffect(() => {
@@ -484,19 +540,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     setIsModalMinimized(false);
   }, [tripStatus, showVerification, incomingOrder]);
 
-  // 1. Trip sync — mount once + slow watchdog via refs (avoids /orders/current render loops)
-  const applyServerTrip = useCallback((serverData) => {
-    if (!serverData) {
-      // After this driver completed, backend returns no active trip for them (dual leg done).
-      // Keep the summary modal; only clear the map route.
-      if (tripStatusRef.current === 'COMPLETED') {
-        clearTripMapState();
-        return;
-      }
-      clearLiveTripUiRef.current?.();
-      return;
-    }
-
+  // 1. Trip sync — mount once + slow watchdog via refs (avoids /orders/active render loops)
+  /** Attach map-ready pickup/drop coordinates to a raw server trip. Pure. */
+  const normalizeServerTrip = useCallback((serverData) => {
     const getLoc = (ref, keysLat, keysLng) => {
       if (!ref) return null;
       if (ref.location) {
@@ -526,43 +572,68 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     const cusLoc = getLoc(serverData.deliveryAddress, ['latitude', 'lat'], ['longitude', 'lng']) ||
       getLoc(serverData, ['customer_lat', 'customerLat', 'latitude'], ['customer_lng', 'customerLng', 'longitude']);
 
-    const syncedOrder = {
+    return {
       ...serverData,
       _id: serverData._id,
       orderId: serverData.orderId || serverData.order_id || serverData._id,
       restaurantLocation: finalResLoc,
       customerLocation: cusLoc
     };
+  }, []);
 
-    setActiveOrder(syncedOrder);
-
+  /** Map a server trip onto this rider's UI stage. Dual-leg follows THEIR leg only. */
+  const deriveTripStatus = useCallback((syncedOrder) => {
     const backendStatus = String(
-      serverData.deliveryStatus || serverData.orderState?.status || serverData.orderStatus || serverData.status || ''
+      syncedOrder.deliveryStatus || syncedOrder.orderState?.status
+      || syncedOrder.orderStatus || syncedOrder.status || ''
     ).toLowerCase();
-    const currentPhase = serverData.deliveryState?.currentPhase;
-    const { tripStatus: existingTripStatus } = useDeliveryStore.getState();
+    const currentPhase = syncedOrder.deliveryState?.currentPhase;
 
-    // Dual-leg: each driver's UI follows THEIR leg — never the other driver's arrival/pickup.
     const legTripStatus = tripStatusFromMyLeg(syncedOrder, getCurrentRiderId());
-    let nextTripStatus = legTripStatus;
-    if (!nextTripStatus) {
-      if (['delivered', 'completed'].includes(backendStatus)) {
-        nextTripStatus = 'COMPLETED';
-      } else if (currentPhase === 'at_drop' || ['reached_drop'].includes(backendStatus)) {
-        nextTripStatus = 'REACHED_DROP';
-      } else if (['picked_up', 'delivering'].includes(backendStatus)) {
-        nextTripStatus = 'PICKED_UP';
-      } else if (currentPhase === 'at_pickup' || ['reached_pickup'].includes(backendStatus)) {
-        nextTripStatus = 'REACHED_PICKUP';
-      } else if (['confirmed', 'preparing', 'ready_for_pickup', 'accepted', 'created'].includes(backendStatus)) {
-        nextTripStatus = 'PICKING_UP';
+    if (legTripStatus) return legTripStatus;
+
+    if (['delivered', 'completed'].includes(backendStatus)) return 'COMPLETED';
+    if (currentPhase === 'at_drop' || backendStatus === 'reached_drop') return 'REACHED_DROP';
+    if (['picked_up', 'delivering'].includes(backendStatus)) return 'PICKED_UP';
+    if (currentPhase === 'at_pickup' || backendStatus === 'reached_pickup') return 'REACHED_PICKUP';
+    if (['confirmed', 'preparing', 'ready_for_pickup', 'accepted', 'created'].includes(backendStatus)) {
+      return 'PICKING_UP';
+    }
+    return null;
+  }, []);
+
+  /**
+   * Sync the full set of trips the rider is holding (order stacking).
+   *
+   * The focused trip keeps driving the map and action sheets; the others are kept in the store
+   * so the rider can switch between them. An empty list means the rider is genuinely free.
+   */
+  const applyServerTrips = useCallback((serverTrips) => {
+    const trips = Array.isArray(serverTrips) ? serverTrips : [];
+
+    if (trips.length === 0) {
+      // After this driver completed, the backend reports no active trip for them (dual leg
+      // done). Keep the summary modal; only clear the map route.
+      if (tripStatusRef.current === 'COMPLETED') {
+        clearTripMapState();
+        return;
       }
+      finishAllTripsRef.current?.();
+      return;
     }
 
-    // Never revive an active route after this driver finished the trip.
+    const synced = trips.map(normalizeServerTrip);
+    setActiveOrders(synced);
+
+    // Re-read focus: setActiveOrders keeps the current one when it is still in hand.
+    const { focusedOrderId: nextFocusId, tripStatus: existingTripStatus } = useDeliveryStore.getState();
+    const focused = synced.find((o) => orderKeyOf(o) === nextFocusId) || synced[0];
+    const nextTripStatus = deriveTripStatus(focused);
+
+    // Never revive an active route after this driver finished the focused trip.
     if (existingTripStatus === 'COMPLETED') {
       if (nextTripStatus && nextTripStatus !== 'COMPLETED') return;
-      clearTripMapState(syncedOrder?._id || syncedOrder?.orderId);
+      clearTripMapState(orderKeyOf(focused));
       return;
     }
 
@@ -570,13 +641,29 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       updateTripStatus(nextTripStatus);
     }
     if (nextTripStatus === 'COMPLETED') {
-      clearTripMapState(syncedOrder?._id || syncedOrder?.orderId);
+      clearTripMapState(orderKeyOf(focused));
     }
-  }, [setActiveOrder, updateTripStatus, clearTripMapState]);
+  }, [normalizeServerTrip, deriveTripStatus, setActiveOrders, updateTripStatus, clearTripMapState]);
 
   useEffect(() => {
-    applyServerTripRef.current = applyServerTrip;
-  }, [applyServerTrip]);
+    applyServerTripRef.current = applyServerTrips;
+  }, [applyServerTrips]);
+
+  /**
+   * One place that fetches the rider's held trips and pushes them into the store, so the mount
+   * sync, the watchdog, the visibility re-check and every socket-driven refetch all agree.
+   */
+  const syncActiveTrips = useCallback(async () => {
+    const result = await deliveryAPI.getActiveDeliveries();
+    if (result?.capacity) setOrderCapacity(result.capacity);
+    const trips = extractActiveTripsRef.current?.(result) ?? [];
+    applyServerTripRef.current?.(trips);
+    return trips;
+  }, [setOrderCapacity]);
+
+  useEffect(() => {
+    syncActiveTripsRef.current = syncActiveTrips;
+  }, [syncActiveTrips]);
 
   // Mount-only initial sync — empty deps prevent callback-identity loops
   useEffect(() => {
@@ -585,10 +672,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     let cancelled = false;
     const syncWithServer = async () => {
       try {
-        const response = await deliveryAPI.getCurrentDelivery();
-        if (cancelled) return;
-        const trip = extractCurrentTripRef.current?.(response) ?? null;
-        applyServerTripRef.current?.(trip);
+        await syncActiveTripsRef.current?.();
       } catch (err) {
         console.error('Order Sync Failed:', err);
         if (!cancelled) clearLiveTripUiRef.current?.();
@@ -598,33 +682,31 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     return () => { cancelled = true; };
   }, []);
 
-  // Slow presence check while a trip is open (clear-only; does not re-apply trip state)
+  // Slow presence check while a trip is open (clear-only; does not re-apply trip state, so a
+  // locally advanced stage is never regressed by a server copy that has not caught up yet).
   useEffect(() => {
     const orderKey = activeOrder?._id || activeOrder?.orderId;
     if (!orderKey) return undefined;
 
-    const localIds = new Set(
-      [activeOrder._id, activeOrder.orderId, activeOrder.orderMongoId, activeOrder.order_id]
-        .filter(Boolean)
-        .map((id) => String(id)),
-    );
+    const localIds = new Set(orderAliasesOf(activeOrder));
 
     let cancelled = false;
     const verifyStillActive = async () => {
       try {
-        const response = await deliveryAPI.getCurrentDelivery();
+        const result = await deliveryAPI.getActiveDeliveries();
         if (cancelled) return;
-        const serverData = extractCurrentTripRef.current?.(response) ?? null;
-        if (!serverData) {
+        if (result?.capacity) setOrderCapacity(result.capacity);
+        const serverTrips = extractActiveTripsRef.current?.(result) ?? [];
+        if (serverTrips.length === 0) {
           // After completion the backend no longer returns an active trip — keep the summary modal.
           if (tripStatusRef.current === 'COMPLETED') return;
-          clearLiveTripUiRef.current?.('This order is no longer active');
+          finishAllTripsRef.current?.('This order is no longer active');
           return;
         }
-        const serverIds = [serverData._id, serverData.orderId, serverData.order_id, serverData.orderMongoId]
-          .filter(Boolean)
-          .map((id) => String(id));
-        const stillOurs = serverIds.some((id) => localIds.has(id));
+        // Order stacking: the focused trip only has to appear SOMEWHERE in the held set.
+        const stillOurs = serverTrips.some((trip) =>
+          orderAliasesOf(trip).some((id) => localIds.has(id)),
+        );
         if (!stillOurs) {
           clearLiveTripUiRef.current?.('This order is no longer assigned to you');
         }
@@ -650,12 +732,13 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
       if (!activeOrderIdRef.current) return;
-      deliveryAPI.getCurrentDelivery()
-        .then((response) => {
-          const serverData = extractCurrentTripRef.current?.(response) ?? null;
-          if (!serverData) {
+      deliveryAPI.getActiveDeliveries()
+        .then((result) => {
+          if (result?.capacity) setOrderCapacity(result.capacity);
+          const serverTrips = extractActiveTripsRef.current?.(result) ?? [];
+          if (serverTrips.length === 0) {
             if (tripStatusRef.current === 'COMPLETED') return;
-            clearLiveTripUiRef.current?.('This order is no longer active');
+            finishAllTripsRef.current?.('This order is no longer active');
           }
         })
         .catch(() => { });
@@ -821,11 +904,20 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   useEffect(() => { if (newOrder) setIncomingOrder(newOrder); }, [newOrder]);
 
+  // Order stacking: an offer is dismissed only when the rider genuinely has no free slot left
+  // (backend limit, default 2), or when the offer is for an order they already hold. Before
+  // stacking, ANY active order killed every incoming offer — that is what made a second order
+  // impossible to accept.
   useEffect(() => {
-    if (activeOrder && incomingOrder) {
+    if (!incomingOrder) return;
+    const incomingIds = orderAliasesOf(incomingOrder);
+    const alreadyHeld = activeOrders.some((held) =>
+      orderAliasesOf(held).some((id) => incomingIds.includes(id)),
+    );
+    if (alreadyHeld || !canStackAnotherOrder()) {
       setIncomingOrder(null);
     }
-  }, [activeOrder, incomingOrder]);
+  }, [activeOrders, incomingOrder, orderCapacity, canStackAnotherOrder]);
 
   // When another delivery partner claims the incoming order (via socket 'order_claimed'),
   // dismiss the NewOrderModal and inform this delivery boy.
@@ -840,34 +932,30 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     clearClaimedOrderId();
   }, [claimedOrderId]);
 
-  // Handle Shared Orders (splitting orders)
+  // Handle Shared Orders (splitting orders). Joining one takes a stacking slot like any accept.
   useEffect(() => {
-    if (sharedOrder && !activeOrder) {
+    if (sharedOrder && canStackAnotherOrder()) {
       setIncomingOrder(sharedOrder);
     }
-  }, [sharedOrder, activeOrder]);
+  }, [sharedOrder, activeOrders, orderCapacity, canStackAnotherOrder]);
 
+  // Offer hydration. Runs even while a trip is in progress, because a rider with a free slot
+  // must keep seeing new offers — that is the whole point of order stacking. It stops only when
+  // every slot is taken, and the backend stops serving offers at the same point anyway.
   useEffect(() => {
     if (!isOnline) return;
-    if (activeOrder) return;
 
     let cancelled = false;
 
     const hydrateAvailableOrder = async () => {
       try {
-        const currentResponse = await deliveryAPI.getCurrentDelivery();
+        // Refresh the held set + capacity first: it decides whether an offer may be shown, and
+        // it is also how a trip accepted on another device shows up here.
+        const heldTrips = await syncActiveTripsRef.current?.();
         if (cancelled) return;
-
-        const data = currentResponse?.data?.data;
-        const currentPayload =
-          data?.activeOrder && (data.activeOrder._id || data.activeOrder.orderId || data.activeOrder.order_id)
-            ? data.activeOrder
-            : null;
-
-        if (currentPayload) {
-          applyServerTripRef.current?.(currentPayload);
-          return;
-        }
+        if (!useDeliveryStore.getState().canStackAnotherOrder()) return;
+        // A freshly promoted trip needs the rider's attention before a new offer does.
+        if (heldTrips?.length && tripStatusRef.current === 'COMPLETED') return;
 
         const availableResponse = await deliveryAPI.getOrders({ limit: 20, page: 1 });
         const availablePayload =
@@ -936,7 +1024,10 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       window.clearInterval(poller);
       if (socket) socket.off('order_earnings_split');
     };
-  }, [activeOrder?._id, activeOrder?.orderId, isOnline, isSocketConnected, socket]);
+    // No longer keyed on the focused order: the loop must keep running during a trip so a rider
+    // with a free slot still receives offers, and restarting it on every focus switch would
+    // only reset the poll clock.
+  }, [isOnline, isSocketConnected, socket]);
 
   useEffect(() => {
     if (orderStatusUpdate) {
@@ -952,18 +1043,17 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         .filter(Boolean)
         .map((id) => String(id));
 
-      const { activeOrder: currentActive } = useDeliveryStore.getState();
+      const {
+        activeOrder: currentActive,
+        activeOrders: currentHeld,
+      } = useDeliveryStore.getState();
+
+      // Order stacking: an update may target ANY held order, not just the focused one.
+      const heldMatch = currentHeld.find((held) =>
+        orderAliasesOf(held).some((id) => updateIds.includes(id)),
+      ) || null;
       const matchesActiveOrder = Boolean(
-        currentActive &&
-        [
-          currentActive._id,
-          currentActive.orderId,
-          currentActive.orderMongoId,
-          currentActive.order_id,
-        ]
-          .filter(Boolean)
-          .map((id) => String(id))
-          .some((id) => updateIds.includes(id)),
+        currentActive && orderAliasesOf(currentActive).some((id) => updateIds.includes(id)),
       );
 
       const isCancelledUpdate =
@@ -979,6 +1069,16 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         return;
       }
 
+      // A stacked order the rider is not currently looking at was cancelled: drop just that one
+      // and leave the trip in front of them untouched.
+      if (isCancelledUpdate && heldMatch) {
+        toast.error(orderStatusUpdate.message || 'One of your orders was cancelled');
+        clearOrderTracking(orderKeyOf(heldMatch)).catch(() => {});
+        removeActiveOrder(orderKeyOf(heldMatch));
+        clearOrderStatusUpdate();
+        return;
+      }
+
       const isPartialRestaurantDrop =
         String(orderStatusUpdate.failureReason || '').toLowerCase() ===
         'restaurant_partially_dropped' ||
@@ -990,14 +1090,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           orderStatusUpdate.message ||
           'A restaurant was removed. Continue with remaining pickups.',
         );
-        deliveryAPI
-          .getCurrentDelivery()
-          .then((response) => {
-            const trip = extractCurrentTripRef.current?.(response) ?? null;
-            if (trip) {
-              applyServerTripRef.current?.(trip);
-              return;
-            }
+        Promise.resolve(syncActiveTripsRef.current?.())
+          .then((trips) => {
+            if (trips?.length) return;
             const latest = useDeliveryStore.getState().activeOrder;
             if (!latest) return;
             setActiveOrder({
@@ -1023,15 +1118,13 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         return;
       }
 
-      // Live status / pickup updates: refetch full trip so pickups + dispatch stay fresh
-      if (matchesActiveOrder) {
-        deliveryAPI.getCurrentDelivery()
-          .then((response) => {
-            const trip = extractCurrentTripRef.current?.(response) ?? null;
-            if (trip) {
-              applyServerTripRef.current?.(trip);
-              return;
-            }
+      // Live status / pickup updates: refetch the whole held set so pickups + dispatch stay
+      // fresh. `heldMatch` rather than `matchesActiveOrder`, so an update about a stacked order
+      // the rider is not looking at still refreshes that order's data.
+      if (heldMatch) {
+        Promise.resolve(syncActiveTripsRef.current?.())
+          .then((trips) => {
+            if (trips?.length) return;
             // No active trip for this rider (e.g. dual leg already delivered) — clear map only.
             if (tripStatusRef.current === 'COMPLETED') {
               clearTripMapState();
@@ -1105,7 +1198,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
       clearOrderStatusUpdate();
     }
-  }, [orderStatusUpdate, clearOrderStatusUpdate, setActiveOrder, clearLiveTripUi, clearTripMapState, updateTripStatus]);
+  }, [orderStatusUpdate, clearOrderStatusUpdate, setActiveOrder, clearLiveTripUi, clearTripMapState, updateTripStatus, removeActiveOrder]);
 
   // Handle Real-time Admin Notifications
   useEffect(() => {
@@ -1208,6 +1301,43 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                 exit={{ opacity: 0, y: -10 }}
                 className="px-3 md:px-4 mt-0.5"
               >
+                {/* ─── ORDER STACK SWITCHER (only when more than one order is in hand) ─── */}
+                {activeOrders.length > 1 && (
+                  <div className="mb-2 flex items-center gap-2 overflow-x-auto no-scrollbar">
+                    <span className="shrink-0 text-[8px] font-black uppercase tracking-[0.15em] text-gray-400">
+                      {activeOrders.length} Orders
+                    </span>
+                    {activeOrders.map((order, index) => {
+                      const key = orderKeyOf(order);
+                      const isFocused = key === focusedOrderId;
+                      const stage = tripStatusByOrder[key] || 'PICKING_UP';
+                      const stageLabel = {
+                        PICKING_UP: 'To store',
+                        REACHED_PICKUP: 'At store',
+                        PICKED_UP: 'To drop',
+                        REACHED_DROP: 'At drop',
+                        COMPLETED: 'Done',
+                      }[stage] || 'Active';
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => focusOrder(key)}
+                          className={`shrink-0 rounded-xl px-3 py-1.5 border transition-all active:scale-95 text-left ${isFocused
+                            ? 'bg-[#16A34A] border-[#16A34A] shadow-lg shadow-green-600/20'
+                            : 'bg-white border-gray-200'}`}
+                        >
+                          <span className={`block text-[9px] font-black uppercase tracking-widest leading-none ${isFocused ? 'text-white' : 'text-[#0F172A]'}`}>
+                            #{order.order_id || `${index + 1}`}
+                          </span>
+                          <span className={`block text-[8px] font-bold uppercase tracking-tight mt-0.5 ${isFocused ? 'text-white/70' : 'text-gray-400'}`}>
+                            {stageLabel}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {activeOrder ? (
                   <div className="grid grid-cols-2 gap-2 w-full">
                     {/* LEFT: DISTANCE (Vibrant Green Card) */}
@@ -1257,6 +1387,18 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                     </div>
                   </div>
                 ) : null}
+
+                {/* Stacking limit reached: tell the rider WHY no new offers are coming in. */}
+                {activeOrder && !canStackAnotherOrder() && (
+                  <div className="mt-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2">
+                    <p className="text-[9px] font-black uppercase tracking-[0.14em] text-blue-600">
+                      Order Slots Full ({orderCapacity?.ordersInHand ?? activeOrders.length}/{orderCapacity?.maxConcurrentOrders ?? 2})
+                    </p>
+                    <p className="mt-0.5 text-[10px] font-semibold text-blue-900">
+                      Deliver your current orders to start receiving new ones.
+                    </p>
+                  </div>
+                )}
 
                 {!activeOrder && cashLimitNotice?.blocked && (
                   <div className="mt-2 rounded-2xl border border-amber-300/40 bg-amber-500/10 px-4 py-2">
@@ -1528,6 +1670,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                         const isTaken = msg.toLowerCase().includes('already accepted') ||
                           msg.toLowerCase().includes('another partner') ||
                           msg.toLowerCase().includes('no longer available') ||
+                          // Stacking limit hit (e.g. the second order landed first): the card is
+                          // dead either way, so dismiss it instead of leaving it on screen.
+                          msg.toLowerCase().includes('maximum number of orders') ||
                           (err?.response?.status === 403) || (err?.response?.status === 404);
 
                         if (isTaken) {
