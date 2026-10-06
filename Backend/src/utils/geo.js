@@ -22,3 +22,20 @@ export const toPoint = (coordinates, fieldName) => ({
   type: 'Point',
   coordinates: normalizePoint(coordinates, fieldName),
 });
+
+/** Ray-casting point-in-polygon test. `polygon` is an array of {latitude, longitude}. */
+export const isPointInPolygon = (lat, lng, polygon) => {
+  if (!Array.isArray(polygon) || polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].longitude;
+    const yi = polygon[i].latitude;
+    const xj = polygon[j].longitude;
+    const yj = polygon[j].latitude;
+    const intersect =
+      yi > lat !== yj > lat &&
+      lng < ((xj - xi) * (lat - yi)) / (yj - yi + 0.0) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+};

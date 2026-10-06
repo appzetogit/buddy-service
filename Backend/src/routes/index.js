@@ -10,6 +10,12 @@ import {
 } from '../modules/food/dining/controllers/diningPublic.controller.js';
 import uploadRoutes from '../modules/uploads/routes/upload.routes.js';
 import restaurantAdminRoutes from '../modules/food/admin/routes/admin.routes.js';
+import quickCommerceAdminRoutes from '../modules/quick-commerce/routes/admin.routes.js';
+import quickCommerceRoutes from '../modules/quick-commerce/routes/quick-commerce.routes.js';
+import quickCommerceSellerRoutes from '../modules/quick-commerce/seller/routes/seller.routes.js';
+import quickCommerceDeliveryRoutes from '../modules/quick-commerce/delivery/quickDelivery.routes.js';
+import commonOnboardingFeeRoutes from '../modules/common/routes/onboardingFee.routes.js';
+import commonMapsRoutes from '../modules/common/routes/maps.routes.js';
 import userRoutes from '../modules/food/user/routes/user.routes.js';
 import orderUserRoutes from '../modules/food/orders/routes/order.routes.user.js';
 import diningUserRoutes from '../modules/food/dining/routes/dining.routes.user.js';
@@ -67,6 +73,12 @@ router.use('/v1/uploads', uploadRoutes);
 router.get('/v1/food/admin/business-settings/public', businessSettingsController.getBusinessSettings);
 
 router.use('/v1/food/admin', authMiddleware, requireRoles('ADMIN'), restaurantAdminRoutes);
+router.use('/v1/quick-commerce/admin', authMiddleware, requireRoles('ADMIN'), quickCommerceAdminRoutes);
+router.use('/v1/quick-commerce/delivery', quickCommerceDeliveryRoutes);
+router.use('/v1/quick-commerce', quickCommerceRoutes);
+router.use('/v1/seller', quickCommerceSellerRoutes);
+router.use('/v1/common/onboarding-fees', commonOnboardingFeeRoutes);
+router.use('/v1/common/maps', commonMapsRoutes);
 router.use('/v1/food/user', authMiddleware, requireRoles('USER'), userRoutes);
 router.use('/v1/profile', authMiddleware, requireRoles('USER'), masterProfileRoutes);
 

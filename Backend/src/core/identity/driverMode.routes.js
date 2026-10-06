@@ -18,11 +18,12 @@ router.get('/mode', driverOnly, async (req, res, next) => {
 
 router.post('/mode', driverOnly, async (req, res, next) => {
   try {
-    const { mode, latitude, longitude, selfieImageUrl } = req.body || {};
+    const { mode, latitude, longitude, selfieImageUrl, services } = req.body || {};
     const result = await setDriverMode(req.identity, mode, {
       latitude,
       longitude,
       selfieImageUrl,
+      services,
     });
     return sendResponse(res, 200, `Mode set to ${mode}`, result);
   } catch (err) {

@@ -52,6 +52,7 @@ import {
 import { cn } from "@food/utils/utils"
 import { Input } from "@food/components/ui/input"
 import { adminSidebarMenu } from "@food/utils/adminSidebarMenu"
+import { quickAdminSidebarMenu } from "@food/utils/quickAdminSidebarMenu"
 import BusinessLogo from "@food/components/BusinessLogo"
 import { toast } from "sonner"
 const debugLog = (...args) => {}
@@ -107,6 +108,8 @@ const iconMap = {
 
 export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange }) {
   const location = useLocation()
+  const isQuickCommerce = location.pathname.startsWith("/admin/quick-commerce")
+  const activeMenu = isQuickCommerce ? quickAdminSidebarMenu : adminSidebarMenu
   const [searchQuery, setSearchQuery] = useState("")
   const [badges, setBadges] = useState({})
 
@@ -168,7 +171,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
 
     // Generate defaults if empty
     const state = {}
-    adminSidebarMenu.forEach((item) => {
+    activeMenu.forEach((item) => {
       if (item.type === "section") {
         item.items.forEach((subItem) => {
           if (subItem.type === "expandable") {
@@ -213,13 +216,13 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   // Filter menu items based on search query
   const filteredMenuData = useMemo(() => {
     if (!searchQuery.trim()) {
-      return adminSidebarMenu
+      return activeMenu
     }
 
     const query = searchQuery.toLowerCase().trim()
     const filtered = []
 
-    adminSidebarMenu.forEach((item) => {
+    activeMenu.forEach((item) => {
       if (item.type === "link") {
         if (item.label.toLowerCase().includes(query)) {
           filtered.push(item)
@@ -257,7 +260,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     })
 
     return filtered
-  }, [searchQuery])
+  }, [searchQuery, activeMenu])
 
   // Auto-expand sections with matches when searching
   useEffect(() => {
@@ -267,7 +270,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
       setExpandedSections((prev) => {
         const newExpandedState = { ...prev }
 
-        adminSidebarMenu.forEach((item) => {
+        activeMenu.forEach((item) => {
           if (item.type === "section") {
             item.items.forEach((subItem) => {
               if (subItem.type === "expandable") {
@@ -288,7 +291,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
         return newExpandedState
       })
     }
-  }, [searchQuery])
+  }, [searchQuery, activeMenu])
 
   const isActive = (path, allPaths = []) => {
     const currentPath = location.pathname.replace(/\/+$/, "") || "/"
@@ -328,6 +331,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   const toggleSection = (sectionKey) => {
     setExpandedSections((prev) => {
       const isCurrentlyOpen = Boolean(prev[sectionKey])
+      const keys = Array.from(new Set([...Object.keys(prev), sectionKey]))
 
       // Accordion behavior:
       // 1) If current section is open -> close it.
@@ -340,7 +344,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
       }
 
       const next = {}
-      Object.keys(prev).forEach((key) => {
+      keys.forEach((key) => {
         next[key] = key === sectionKey
       })
       return next
@@ -615,6 +619,32 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
               <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-wider text-left">
                 Admin Panel
               </h2>
+            </div>
+          )}
+
+          {/* Food / Quick Commerce module switcher — swaps the whole menu below */}
+          {!isCollapsed && (
+            <div className="mb-3 flex items-center gap-1 rounded-xl border border-neutral-800 bg-neutral-900 p-1 animate-[slideIn_0.4s_ease-out_0.15s_both]">
+              <Link
+                to="/admin/food"
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide transition-all",
+                  !isQuickCommerce ? "bg-white text-neutral-900 shadow" : "text-neutral-400 hover:text-white"
+                )}
+              >
+                <UtensilsCrossed className="w-3.5 h-3.5" />
+                Food
+              </Link>
+              <Link
+                to="/admin/quick-commerce"
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide transition-all",
+                  isQuickCommerce ? "bg-white text-neutral-900 shadow" : "text-neutral-400 hover:text-white"
+                )}
+              >
+                <Package className="w-3.5 h-3.5" />
+                Quick Commerce
+              </Link>
             </div>
           )}
 
