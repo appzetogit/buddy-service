@@ -635,6 +635,7 @@ export const getProfile = async (userId, role) => {
       break;
     case ROLES.ADMIN:
       profile = await Admin.findById(id).select("-password").lean();
+      if (profile) profile.role = ROLES.ADMIN;
       break;
     case ROLES.RESTAURANT:
       {

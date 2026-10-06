@@ -3,6 +3,8 @@ import { Toaster } from 'sonner'
 import { StrictMode } from 'react'
 import { Provider as ReduxProvider } from 'react-redux'
 import { store } from './store'
+import { AuthProvider } from '../core/context/AuthContext.jsx'
+import { ToastProvider } from '../shared/components/ui/Toast.jsx'
 
 function shouldUseHashRouter() {
   if (typeof window === 'undefined') return false
@@ -27,8 +29,12 @@ export function AppProviders({ children }) {
     <StrictMode>
       <ReduxProvider store={store}>
         <Router>
-          {children}
-          <Toaster position="top-center" richColors offset="80px" />
+          <AuthProvider>
+            <ToastProvider>
+              {children}
+              <Toaster position="top-center" richColors offset="80px" />
+            </ToastProvider>
+          </AuthProvider>
         </Router>
       </ReduxProvider>
     </StrictMode>

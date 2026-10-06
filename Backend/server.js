@@ -148,6 +148,13 @@ const startServer = async () => {
             } catch (err) {
                 logger.error(`Stuck orders watchdog error: ${err.message}`);
             }
+            // Quick Commerce keeps its own orders, so it needs its own re-offer sweep.
+            try {
+                const { recoverStuckQuickOrders } = await import('./src/modules/quick-commerce/services/quickDispatch.service.js');
+                await recoverStuckQuickOrders();
+            } catch (err) {
+                logger.error(`Quick commerce dispatch watchdog error: ${err.message}`);
+            }
         };
         runStuckOrdersWatchdog();
         stuckOrdersWatchdogInterval = setInterval(runStuckOrdersWatchdog, 30 * 1000);

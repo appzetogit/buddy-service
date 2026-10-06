@@ -39,6 +39,9 @@ export default function DriverHome() {
   const [bootLoading, setBootLoading] = useState(true);
   const [switching, setSwitching] = useState(false);
   const [latLng, setLatLng] = useState(null);
+  // Which job types the rider takes while online. null = never chosen: stay silent so the
+  // server keeps its saved value (and food-only riders are never locked out).
+  const [services, setServices] = useState(null);
   const [rejection, setRejection] = useState({ food: null });
   const [resubmitAllowed, setResubmitAllowed] = useState(false);
 
@@ -71,6 +74,7 @@ export default function DriverHome() {
         if (onboardingState?.capabilities) setCapabilities(onboardingState.capabilities);
         if (modeState?.capabilities) setCapabilities((prev) => ({ ...prev, ...modeState.capabilities }));
         if (modeState?.activeService) setMode(normalizeMode(modeState.activeService));
+        if (Array.isArray(modeState?.services) && modeState.services.length) setServices(modeState.services);
       } catch (err) {
         if (err?.response?.status === 401) navigate("/driver/login", { replace: true });
       } finally {
@@ -95,13 +99,17 @@ export default function DriverHome() {
   const deliveryApproved = foodApproved;
   const deliveryEnabled = foodEnabled;
 
-  const applyMode = async (next) => {
+  const applyMode = async (next, chosenServices = services) => {
     setSwitching(true);
     try {
-      const res = await driverModeAPI.set(next, latLng || {});
+      const res = await driverModeAPI.set(next, {
+        ...(latLng || {}),
+        ...(next === "food" && chosenServices ? { services: chosenServices } : {}),
+      });
       const data = res?.data?.data || res?.data || {};
       setMode(normalizeMode(data?.activeService) || "off");
       if (data?.capabilities) setCapabilities(data.capabilities);
+      if (Array.isArray(data?.services) && data.services.length) setServices(data.services);
       if (next === "off") {
         toast.success("You're offline — not receiving jobs");
       } else if (next === "food") {
@@ -332,6 +340,55 @@ export default function DriverHome() {
               />
             </label>
           </div>
+
+          {deliveryEnabled && deliveryApproved && !foodRejected && (
+            <div className="mt-3 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+              <div className="text-[11px] uppercase tracking-widest text-gray-400 font-bold">
+                Jobs you want
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                {[
+                  { id: "food", label: "Food" },
+                  { id: "quickCommerce", label: "Quick Commerce" },
+                ].map((svc) => {
+                  // No saved choice yet = taking everything, so show both as on.
+                  const selected = !services || services.includes(svc.id);
+                  return (
+                    <button
+                      key={svc.id}
+                      type="button"
+                      disabled={switching}
+                      onClick={() => {
+                        const current = services || ["food", "quickCommerce"];
+                        const next = current.includes(svc.id)
+                          ? current.filter((s) => s !== svc.id)
+                          : [...current, svc.id];
+                        if (!next.length) {
+                          toast.error("Pick at least one kind of job");
+                          return;
+                        }
+                        setServices(next);
+                        // Persist straight away only while online; otherwise it rides along on go-online.
+                        if (foodActive) applyMode("food", next);
+                      }}
+                      className={[
+                        "px-3 py-1.5 rounded-xl text-[12px] font-bold border transition-colors",
+                        selected
+                          ? "bg-green-50 border-green-500/40 text-green-700"
+                          : "bg-white border-gray-200 text-gray-400",
+                        switching ? "opacity-60" : "",
+                      ].join(" ")}
+                    >
+                      {svc.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="text-gray-400 text-[11px] mt-2">
+                Quick Commerce needs its own admin approval.
+              </div>
+            </div>
+          )}
 
           {switching && (
             <div className="flex items-center justify-center gap-2 mt-4 text-[12px] text-gray-400">

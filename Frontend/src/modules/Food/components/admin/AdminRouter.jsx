@@ -120,6 +120,8 @@ const DiningList = lazy(() => import("@food/pages/admin/system/DiningList"));
 const DiningRequests = lazy(() => import("@food/pages/admin/system/DiningRequests"));
 const EditRestaurant = lazy(() => import("@food/pages/admin/restaurant/EditRestaurant"));
 const AdminLogin = lazy(() => import("@food/pages/admin/auth/AdminLogin"));
+// Quick Commerce admin (ported module) — same admin session/layout, separate tab.
+const QuickCommerceAdminRoutes = lazy(() => import("../../../quickCommerce/admin/routes/index.jsx"));
 const AdminSignup = lazy(() => import("@food/pages/admin/auth/AdminSignup"));
 const AdminForgotPassword = lazy(() => import("@food/pages/admin/auth/AdminForgotPassword"));
 
@@ -288,6 +290,8 @@ export default function AdminRouter() {
             <Route path="dining-requests" element={<DiningRequests />} />
           </Route>
 
+          {/* QUICK COMMERCE ADMIN — ported module, nested like food/* above */}
+          <Route path="quick-commerce/*" element={<QuickCommerceAdminRoutes />} />
 
         </Route>
 
