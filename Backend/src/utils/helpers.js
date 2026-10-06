@@ -1,3 +1,9 @@
+export const PAGINATION_DEFAULTS = {
+    defaultPage: 1,
+    defaultLimit: 30,
+    maxLimit: 1000,
+};
+
 export const buildPaginationOptions = (query, options = {}) => {
     const maxLimit = Number(options.maxLimit) > 0 ? Number(options.maxLimit) : 100;
     const defaultLimit = Number(options.defaultLimit) > 0 ? Number(options.defaultLimit) : 20;

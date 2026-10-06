@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { deliveryAPI } from '@food/api';
+import { quickDeliveryAPI, isQuickDeliveryOrder } from '@quickCommerce/delivery/quickDeliveryApi';
 import { toast } from 'sonner';
 import {
   getCurrentRiderId,
@@ -18,6 +19,11 @@ export const useOrderManager = () => {
   const {
     activeOrder, tripStatus, updateTripStatus, clearActiveOrder, setActiveOrder, riderLocation
   } = useDeliveryStore();
+
+  // Quick Commerce jobs live in their own collection, so they use the QC rider endpoints.
+  // Same method names, so every call below stays unchanged.
+  const apiFor = (orderLike = activeOrder) =>
+    (isQuickDeliveryOrder(orderLike) ? quickDeliveryAPI : deliveryAPI);
 
   const resolveOrderId = (orderLike = activeOrder) =>
     orderLike?._id || orderLike?.id || orderLike?.orderId || orderLike?.order_id;
@@ -40,8 +46,8 @@ export const useOrderManager = () => {
     try {
       const isShared = order.isShared || order.dispatch?.isShared;
       const response = isShared
-        ? await deliveryAPI.acceptSharedOrder(orderId)
-        : await deliveryAPI.acceptOrder(orderId);
+        ? await apiFor(order).acceptSharedOrder(orderId)
+        : await apiFor(order).acceptOrder(orderId);
 
       if (response?.data?.success) {
         const fullOrder = response.data.data?.order || order;
@@ -125,7 +131,7 @@ export const useOrderManager = () => {
       throw new Error('Missing order id');
     }
     try {
-      const response = await deliveryAPI.confirmReachedPickup(orderId);
+      const response = await apiFor().confirmReachedPickup(orderId);
       if (response?.data?.success) {
         const updatedOrder = response.data.data?.order;
         if (updatedOrder) {
@@ -157,7 +163,7 @@ export const useOrderManager = () => {
     }
     try {
       // confirmOrderId(orderId, confirmedOrderId, location, data)
-      const response = await deliveryAPI.confirmOrderId(
+      const response = await apiFor().confirmOrderId(
         orderId,
         activeOrder.displayOrderId || orderId,
         riderLocation || {},
@@ -263,7 +269,7 @@ export const useOrderManager = () => {
       throw new Error('Missing order id');
     }
     try {
-      const response = await deliveryAPI.confirmReachedDrop(orderId);
+      const response = await apiFor().confirmReachedDrop(orderId);
       if (response?.data?.success) {
         updateTripStatus('REACHED_DROP');
         // toast.info('Arrived at Customer Location');
@@ -302,7 +308,7 @@ export const useOrderManager = () => {
           toast.error('Handover code is required');
           throw new Error('Missing OTP');
         }
-        const verifyRes = await deliveryAPI.verifyDropOtp(orderId, otp);
+        const verifyRes = await apiFor().verifyDropOtp(orderId, otp);
         if (verifyRes?.data?.success) {
           finalOrder = verifyRes.data?.data?.order || activeOrder;
         } else {
@@ -312,7 +318,7 @@ export const useOrderManager = () => {
       }
 
       try {
-        const completeRes = await deliveryAPI.completeDelivery(orderId, {
+        const completeRes = await apiFor().completeDelivery(orderId, {
           otp: otp && otp !== 'VERIFIED' ? otp : undefined,
           rating: 5,
           paymentMethod: paymentMethodOverride,

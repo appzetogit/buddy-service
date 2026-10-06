@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Outlet } from "react-router-dom"
+import { Outlet, useLocation } from "react-router-dom"
 import AdminSidebar from "./AdminSidebar"
 import AdminNavbar from "./AdminNavbar"
 import { API_BASE_URL } from "@food/api/config"
@@ -9,6 +9,8 @@ const debugError = (...args) => {}
 
 
 export default function AdminLayout() {
+  const location = useLocation();
+  const isQuickCommerce = location.pathname.startsWith("/admin/quick-commerce");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -65,7 +67,15 @@ export default function AdminLayout() {
 
         {/* Page Content */}
         <main className="flex-1 min-h-0 w-full max-w-full overflow-x-hidden overflow-y-auto bg-neutral-100">
-          <Outlet />
+          {/* Quick Commerce pages (ported from Blaze) expect ambient page padding from the layout;
+              Food pages already pad themselves per-page, so only QC gets it here. */}
+          {isQuickCommerce ? (
+            <div className="p-4 sm:p-6">
+              <Outlet />
+            </div>
+          ) : (
+            <Outlet />
+          )}
         </main>
       </div>
     </div>

@@ -2,14 +2,73 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Suspense, lazy, useEffect } from 'react'
 import { AppShellSkeleton } from '@food/components/ui/loading-skeletons'
+import ProtectedRoute from '@core/guards/ProtectedRoute'
+import RoleGuard from '@core/guards/RoleGuard'
+import { UserRole } from '@core/constants/roles'
+import { SettingsProvider } from '@core/context/SettingsContext'
+import { useAuth } from '@core/context/AuthContext'
 
 const NATIVE_LAST_ROUTE_KEY = 'native_last_route'
 
 const FoodApp = lazy(() => import('../modules/Food/routes'))
 const AuthApp = lazy(() => import('../modules/auth/routes'))
 const DriverApp = lazy(() => import('../modules/driver/routes'))
+const QuickCommerceApp = lazy(() => import('../modules/quickCommerce/routes'))
+const SellerApp = lazy(() => import('../modules/seller/routes'))
+const SellerAuthPage = lazy(() => import('../modules/seller/pages/Auth'))
 
 const PageLoader = () => <AppShellSkeleton />
+
+const THEME_VARS = ['--primary', '--secondary', '--primary-color', '--secondary-color']
+
+// Quick Commerce and Seller settings write theme vars onto <html>; restore them on exit so Food keeps its colors.
+const ScopedSettings = ({ children }) => {
+  useEffect(() => {
+    const root = document.documentElement
+    const saved = THEME_VARS.map((name) => [name, root.style.getPropertyValue(name)])
+    return () => saved.forEach(([name, value]) => (value ? root.style.setProperty(name, value) : root.style.removeProperty(name)))
+  }, [])
+  return <SettingsProvider>{children}</SettingsProvider>
+}
+
+const QuickCommerceAppWrapper = () => (
+  <ScopedSettings>
+    <Suspense fallback={<PageLoader />}>
+      <QuickCommerceApp />
+    </Suspense>
+  </ScopedSettings>
+)
+
+const RedirectLegacyQuickCommerce = () => {
+  const location = useLocation()
+  const suffix = location.pathname.replace(/^\/quick-commerce(?:\/user)?/, '')
+  const normalizedSuffix = suffix && suffix !== '/' ? suffix : ''
+  return <Navigate to={`/quick${normalizedSuffix}${location.search}`} replace />
+}
+
+const SellerAppWrapper = () => (
+  <ScopedSettings>
+    <Suspense fallback={<PageLoader />}>
+      <ProtectedRoute>
+        <RoleGuard allowedRoles={[UserRole.SELLER]}>
+          <SellerApp />
+        </RoleGuard>
+      </ProtectedRoute>
+    </Suspense>
+  </ScopedSettings>
+)
+
+const SellerAuthEntry = () => {
+  const { isAuthenticated, role } = useAuth()
+  if (isAuthenticated && role === UserRole.SELLER) return <Navigate to="/seller" replace />
+  return (
+    <ScopedSettings>
+      <Suspense fallback={<PageLoader />}>
+        <SellerAuthPage />
+      </Suspense>
+    </ScopedSettings>
+  )
+}
 
 const UserProfilePathRedirect = () => {
   const location = useLocation()
@@ -92,6 +151,12 @@ const AppRoutes = () => {
       <Route path="/user/auth/*" element={<AuthApp />} />
 
       <Route path="/driver/*" element={<Suspense fallback={<PageLoader />}><DriverApp /></Suspense>} />
+
+      <Route path="/quick/*" element={<QuickCommerceAppWrapper />} />
+      <Route path="/quick-commerce/*" element={<RedirectLegacyQuickCommerce />} />
+      <Route path="/seller/auth" element={<SellerAuthEntry />} />
+      <Route path="/seller" element={<SellerAppWrapper />} />
+      <Route path="/seller/*" element={<SellerAppWrapper />} />
 
       <Route path="/food/*" element={<FoodAppWrapper />} />
 
