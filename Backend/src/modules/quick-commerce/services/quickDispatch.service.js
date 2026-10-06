@@ -14,6 +14,11 @@ import { QuickOrder } from '../models/order.model.js';
 import { Seller } from '../seller/models/seller.model.js';
 import { listNearbyOnlineDeliveryPartners } from '../../food/orders/services/order-dispatch.service.js';
 import { buildOfferPushData, notifyOwnersSafely } from '../../food/orders/services/order.helpers.js';
+import {
+  CAPACITY_REACHED_MESSAGE,
+  claimExceedsStackingLimit,
+  getRiderCapacity,
+} from '../../food/orders/services/rider-capacity.service.js';
 import { getIO, rooms } from '../../../config/socket.js';
 import { logger } from '../../../utils/logger.js';
 
@@ -177,6 +182,9 @@ export async function dispatchQuickOrder(orderId, options = {}) {
       requiredAmount,
       allowOverLimitFallback: true,
       service: 'quickCommerce',
+      // Riders already holding their maximum stacked orders are filtered out by the shared
+      // rider selection; this order itself must not count against them while we hunt.
+      excludeOrderId: order._id,
     });
 
     const alreadyOffered = new Set((order.dispatch?.offeredTo || []).map((o) => String(o.partnerId)));
@@ -239,10 +247,68 @@ export async function dispatchQuickOrder(orderId, options = {}) {
  * First rider to accept wins; everyone else gets "gone". The seller order is created here —
  * this is the moment the shop learns the order exists.
  */
+/**
+ * Undo a QC claim the rider was not entitled to keep, and put the order back on the hunt.
+ *
+ * Only reachable from the stacking reconcile, which runs before the seller fan-out and the
+ * customer notification, so nothing outside this collection has to be unwound. The handover OTP
+ * is cleared too: a new one is minted for whoever accepts next.
+ */
+async function releaseQuickOrderClaim(orderMongoId, partnerId, preClaim = {}) {
+  try {
+    await QuickOrder.updateOne(
+      {
+        _id: orderMongoId,
+        'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(String(partnerId)),
+      },
+      {
+        $set: {
+          'dispatch.status': 'unassigned',
+          'dispatch.deliveryPartnerId': null,
+          orderStatus: preClaim?.orderStatus || 'placed',
+          'deliveryState.currentPhase': preClaim?.deliveryState?.currentPhase || null,
+        },
+        $unset: { 'dispatch.acceptedAt': '', deliveryOtp: '' },
+        $push: {
+          statusHistory: {
+            byRole: 'SYSTEM',
+            from: 'confirmed',
+            to: preClaim?.orderStatus || 'placed',
+            note: 'Accept rolled back: rider was already at their concurrent-order limit',
+            at: new Date(),
+          },
+        },
+      },
+    );
+    void dispatchQuickOrder(String(orderMongoId), { attempt: 2 }).catch((err) =>
+      logger.warn(`[QuickDispatch] re-dispatch after capacity rollback failed: ${err.message}`),
+    );
+  } catch (err) {
+    logger.error(
+      `[QuickDispatch] failed to roll back over-capacity accept for ${orderMongoId}: ${err.message}`,
+    );
+  }
+}
+
 export async function acceptQuickOrder(orderId, partnerId) {
   if (!mongoose.Types.ObjectId.isValid(String(orderId))) {
     return { ok: false, reason: 'INVALID_ORDER' };
   }
+
+  // Order stacking is shared with Food: a rider already holding their maximum (counting both
+  // verticals) cannot take this job, however they got hold of the offer card.
+  const capacity = await getRiderCapacity(partnerId, { excludeOrderId: orderId });
+  if (!capacity.canAcceptMore) {
+    return { ok: false, reason: 'AT_CAPACITY', message: capacity.message };
+  }
+
+  // Snapshot of what the claim below overwrites, so an over-capacity claim can be put back
+  // exactly as it was. Read separately because the claim returns the UPDATED document; the
+  // status could in theory move between this read and the claim, which on the rare rollback
+  // path costs us a slightly stale status and nothing else.
+  const preClaim = await QuickOrder.findById(orderId)
+    .select('orderStatus deliveryState.currentPhase')
+    .lean();
 
   const claimed = await QuickOrder.findOneAndUpdate(
     {
@@ -279,6 +345,17 @@ export async function acceptQuickOrder(orderId, partnerId) {
   );
 
   if (!claimed) return { ok: false, reason: 'ALREADY_TAKEN' };
+
+  // Post-claim stacking guard, mirroring the Food accept path. Two accepts by the same rider
+  // (QC + QC, or QC + Food) can both clear the pre-check above and both claim; the shared
+  // reconcile picks the oldest acceptances and tells the surplus claim to release itself.
+  //
+  // Deliberately placed BEFORE the seller fan-out and the customer notification, so a released
+  // claim never reaches a shop or the customer.
+  if (await claimExceedsStackingLimit(claimed._id, partnerId)) {
+    await releaseQuickOrderClaim(claimed._id, partnerId, preClaim);
+    return { ok: false, reason: 'AT_CAPACITY', message: CAPACITY_REACHED_MESSAGE };
+  }
 
   // Tell the riders who lost the race to drop the card.
   const losers = (claimed.dispatch?.offeredTo || [])

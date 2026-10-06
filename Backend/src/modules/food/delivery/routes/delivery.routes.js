@@ -50,6 +50,8 @@ router.get('/route', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'),
 // ----- Orders -----
 router.get('/orders/current', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.getCurrentTripDeliveryController);
 router.get('/orders/available', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.listOrdersAvailableDeliveryController);
+// Must stay above '/orders/:orderId' so 'active' is not swallowed as an order id.
+router.get('/orders/active', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.listActiveTripsDeliveryController);
 router.get('/orders/:orderId', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.getOrderByIdDeliveryController);
 router.patch('/orders/:orderId/accept', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.acceptOrderDeliveryController);
 router.patch('/orders/:orderId/pickup-sequence', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.setPickupSequenceDeliveryController);

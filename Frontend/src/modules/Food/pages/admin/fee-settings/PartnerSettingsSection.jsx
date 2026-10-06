@@ -1,12 +1,29 @@
 export const MULTI_ORDER_DISTANCE_MIN_KM = 2
 export const MULTI_ORDER_DISTANCE_MAX_KM = 5
 
+/** Mirrors clampMaxConcurrentOrders in Backend rider-capacity.service.js. */
+export const MAX_CONCURRENT_ORDERS_MIN = 1
+export const MAX_CONCURRENT_ORDERS_MAX = 5
+export const MAX_CONCURRENT_ORDERS_DEFAULT = 2
+
 export function clampMultiOrderDistanceKm(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return MULTI_ORDER_DISTANCE_MAX_KM
   return Math.min(
     MULTI_ORDER_DISTANCE_MAX_KM,
     Math.max(MULTI_ORDER_DISTANCE_MIN_KM, n),
+  )
+}
+
+export function clampMaxConcurrentOrders(value) {
+  if (value === null || value === undefined || value === "") {
+    return MAX_CONCURRENT_ORDERS_DEFAULT
+  }
+  const n = Number(value)
+  if (!Number.isFinite(n)) return MAX_CONCURRENT_ORDERS_DEFAULT
+  return Math.min(
+    MAX_CONCURRENT_ORDERS_MAX,
+    Math.max(MAX_CONCURRENT_ORDERS_MIN, Math.trunc(n)),
   )
 }
 
@@ -117,6 +134,35 @@ export default function PartnerSettingsSection({
             placeholder="20"
           />
           <p className="text-xs text-slate-500 mt-1">At or above this item count, base delivery fee is doubled</p>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h2 className="text-lg font-bold text-slate-900 mb-2">Rider Order Stacking</h2>
+        <p className="text-sm text-slate-600 mb-4">
+          How many orders one delivery partner may carry at the same time. At 2, a rider can
+          accept a second order while the first is still running, deliver both, and only then
+          becomes eligible for a third.
+        </p>
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+            Max Orders Per Rider
+          </label>
+          <input
+            type="number"
+            min={MAX_CONCURRENT_ORDERS_MIN}
+            max={MAX_CONCURRENT_ORDERS_MAX}
+            step="1"
+            value={settings.maxConcurrentOrders ?? MAX_CONCURRENT_ORDERS_DEFAULT}
+            onChange={(e) => update({ maxConcurrentOrders: e.target.value })}
+            onBlur={(e) => update({ maxConcurrentOrders: clampMaxConcurrentOrders(e.target.value) })}
+            className="w-full max-w-[200px] px-3 py-2 rounded-lg border border-slate-200 outline-none focus:ring-1 focus:ring-green-500"
+            placeholder={String(MAX_CONCURRENT_ORDERS_DEFAULT)}
+          />
+          <p className="text-xs text-slate-500 mt-1">
+            Allowed range: {MAX_CONCURRENT_ORDERS_MIN}–{MAX_CONCURRENT_ORDERS_MAX}. Counts Food
+            and Quick Commerce jobs together. Set to 1 to go back to one trip at a time.
+          </p>
         </div>
       </div>
     </div>

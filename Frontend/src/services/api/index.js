@@ -2254,6 +2254,36 @@ export const deliveryAPI = {
       return foodRes;
     }
   },
+  /**
+   * GET /food/delivery/orders/active - every trip the rider is running right now.
+   *
+   * Order stacking lets a rider hold more than one accepted order (default 2) and deliver them
+   * together, so this returns a list plus the rider's remaining capacity. Quick Commerce jobs
+   * are appended because the same rider serves both verticals and they share one limit; a QC
+   * failure is ignored so it can never break the food trip sync.
+   *
+   * Resolves to `{ activeOrders, capacity }`.
+   */
+  getActiveDeliveries: async () => {
+    const foodRes = await apiClient.get("/food/delivery/orders/active", {
+      contextModule: "delivery",
+    });
+    const foodData = foodRes?.data?.data || {};
+    const activeOrders = Array.isArray(foodData.activeOrders) ? foodData.activeOrders : [];
+    const capacity = foodData.capacity || null;
+
+    let quickOrders = [];
+    try {
+      const qcRes = await apiClient.get("/quick-commerce/delivery/orders/current", {
+        contextModule: "delivery",
+      });
+      quickOrders = qcRes?.data?.data?.orders || [];
+    } catch {
+      // Quick Commerce is optional for a rider.
+    }
+
+    return { activeOrders: [...activeOrders, ...quickOrders], capacity };
+  },
   acceptOrder: (orderId, body = {}) =>
     apiClient.patch(
       `/food/delivery/orders/${String(orderId)}/accept`,

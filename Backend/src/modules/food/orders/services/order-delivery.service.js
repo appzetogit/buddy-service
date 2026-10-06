@@ -63,6 +63,13 @@ import {
   applyEmploymentAwareDualEarnings,
 } from './order.helpers.js';
 import { haversineMeters } from '../../../../core/location/haversine.util.js';
+import {
+  ACTIVE_FOOD_ORDER_STATUSES,
+  CAPACITY_REACHED_MESSAGE,
+  assertRiderHasFreeSlot,
+  claimExceedsStackingLimit,
+  getRiderCapacity,
+} from './rider-capacity.service.js';
 
 /**
  * Server-side anti-spoof geofence for "reached pickup" / "reached drop".
@@ -488,31 +495,21 @@ async function syncRazorpayQrPayment(orderDoc) {
   return updatedTx?.payment || payment;
 }
 
-export async function getCurrentTripDelivery(deliveryPartnerId) {
-  if (!deliveryPartnerId) {
-    throw new ValidationError('Delivery partner ID required');
-  }
-
+/** Mongo filter for every order this rider currently holds (primary or share partner). */
+function buildActiveTripFilter(deliveryPartnerId) {
   const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
-  const order = await FoodOrder.findOne({
+  return {
     $or: [
       { 'dispatch.deliveryPartnerId': partnerId },
-      { 'dispatch.sharedPartnerId': partnerId }
+      { 'dispatch.sharedPartnerId': partnerId },
     ],
     'dispatch.status': 'accepted',
-    orderStatus: {
-      $in: [
-        'created',
-        'accepted',
-        'confirmed',
-        'preparing',
-        'ready_for_pickup',
-        'reached_pickup',
-        'picked_up',
-        'reached_drop',
-      ],
-    },
-  })
+    orderStatus: { $in: ACTIVE_FOOD_ORDER_STATUSES },
+  };
+}
+
+const activeTripQuery = (filter) =>
+  FoodOrder.find(filter)
     .populate({
       path: 'restaurantId',
       select: 'restaurantName name phone location addressLine1 area city state profileImage',
@@ -520,25 +517,72 @@ export async function getCurrentTripDelivery(deliveryPartnerId) {
     .populate({ path: 'userId', select: 'name phone' })
     .populate({ path: 'dispatch.deliveryPartnerId', select: 'name fullName phone phoneNumber profileImage' })
     .populate({ path: 'dispatch.sharedPartnerId', select: 'name fullName phone phoneNumber profileImage' })
-    .sort({ updatedAt: -1 })
+    // Oldest acceptance first: with order stacking a rider holds several trips at once, and a
+    // list that reshuffles on every `updatedAt` touch would make the app flip between them.
+    .sort({ 'dispatch.acceptedAt': 1, createdAt: 1 })
     .lean();
 
-  if (!order) return null;
-  const tx = await FoodTransaction.findOne({ orderId: order._id }).lean();
-  const out = sanitizeOrderForExternal(order);
-  if (tx) {
-    out.paymentMethod = tx.payment?.method || tx.paymentMethod || out.paymentMethod;
-    out.payment = tx.payment || out.payment;
-    out.pricing = tx.pricing || out.pricing;
-    out.amounts = tx.amounts || out.amounts;
-    out.transactionStatus = tx.status || out.transactionStatus;
+/** Overlay the authoritative transaction snapshot (payment/pricing) onto a trip payload. */
+async function decorateTripsWithTransactions(orders = []) {
+  if (!orders.length) return [];
+  const txRows = await FoodTransaction.find({
+    orderId: { $in: orders.map((o) => o._id) },
+  }).lean();
+  const txByOrderId = new Map(txRows.map((t) => [String(t.orderId), t]));
+
+  return orders.map((order) => {
+    const out = sanitizeOrderForExternal(order);
+    const tx = txByOrderId.get(String(order._id));
+    if (tx) {
+      out.paymentMethod = tx.payment?.method || tx.paymentMethod || out.paymentMethod;
+      out.payment = tx.payment || out.payment;
+      out.pricing = tx.pricing || out.pricing;
+      out.amounts = tx.amounts || out.amounts;
+      out.transactionStatus = tx.status || out.transactionStatus;
+    }
+    return out;
+  });
+}
+
+export async function getCurrentTripDelivery(deliveryPartnerId) {
+  if (!deliveryPartnerId) {
+    throw new ValidationError('Delivery partner ID required');
   }
-  return out;
+
+  // Shape unchanged for existing clients: the single oldest-accepted trip, or null. Riders
+  // running stacked orders use listActiveTripsDelivery() to see all of them.
+  const orders = await activeTripQuery(buildActiveTripFilter(deliveryPartnerId)).limit(1);
+  if (!orders.length) return null;
+  const [trip] = await decorateTripsWithTransactions(orders);
+  return trip || null;
+}
+
+/**
+ * Every trip this rider is currently running, oldest acceptance first, plus their stacking
+ * capacity so the app can show "1 of 2" and decide whether to surface new offers.
+ */
+export async function listActiveTripsDelivery(deliveryPartnerId) {
+  if (!deliveryPartnerId) {
+    throw new ValidationError('Delivery partner ID required');
+  }
+
+  const [orders, capacity] = await Promise.all([
+    activeTripQuery(buildActiveTripFilter(deliveryPartnerId)),
+    getRiderCapacity(deliveryPartnerId),
+  ]);
+
+  return {
+    activeOrders: await decorateTripsWithTransactions(orders),
+    capacity,
+  };
 }
 
 export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
   const { page, limit, skip } = buildPaginationOptions(query);
-  const partnerCapacity = await getPartnerCashCapacity(deliveryPartnerId);
+  const [partnerCapacity, orderCapacity] = await Promise.all([
+    getPartnerCashCapacity(deliveryPartnerId),
+    getRiderCapacity(deliveryPartnerId),
+  ]);
   const cashLimit = {
     blocked: !partnerCapacity.hasCapacity,
     message: !partnerCapacity.hasCapacity
@@ -571,7 +615,13 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
     orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up'] },
   };
 
-  const filter = partnerCapacity.hasCapacity
+  // Two independent gates, both of which collapse the list to "my own orders only":
+  //   - cash in hand is at its limit, or
+  //   - the rider already holds the maximum number of stacked orders.
+  // The rider must always still see the orders they are carrying, which is why the fallback is
+  // activeOwnOrderFilter rather than an empty result.
+  const canTakeNewWork = partnerCapacity.hasCapacity && orderCapacity.canAcceptMore;
+  const filter = canTakeNewWork
     ? {
       $or: [
         {
@@ -646,7 +696,77 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
   return {
     ...buildPaginatedResult({ docs: enriched, total, page, limit }),
     cashLimit,
+    orderCapacity,
   };
+}
+
+/**
+ * Undo an accept this rider just won, putting the order straight back into the dispatch pool.
+ *
+ * Only reachable from the stacking-capacity reconcile below, which runs before any of the
+ * post-accept side effects (settlement snapshot, Firebase tracking, restaurant/customer
+ * notifications), so nothing downstream has to be unwound. The earning fields are restored to
+ * the values the order carried before the accept, because acceptOrderDelivery rewrites them
+ * from the accepting rider's employment type - leaving a salary rider's ₹0 payout behind would
+ * silently zero out the next rider's earning.
+ */
+async function releaseAcceptedOrderClaim(orderMongoId, partnerId, previous = {}) {
+  try {
+    await FoodOrder.updateOne(
+      {
+        _id: orderMongoId,
+        'dispatch.deliveryPartnerId': partnerId,
+        'dispatch.status': 'accepted',
+      },
+      {
+        $set: {
+          'dispatch.status': 'unassigned',
+          'dispatch.deliveryPartnerId': null,
+          riderEarning: Number(previous.riderEarning) || 0,
+          platformProfit: Number(previous.platformProfit) || 0,
+          ...(previous.settlementBreakdown
+            ? { settlementBreakdown: previous.settlementBreakdown }
+            : {}),
+        },
+        $unset: { 'dispatch.acceptedAt': '' },
+        $push: {
+          statusHistory: {
+            byRole: 'SYSTEM',
+            byId: partnerId,
+            from: 'accepted',
+            to: 'dispatchable',
+            note: 'Accept rolled back: rider was already at their concurrent-order limit',
+            at: new Date(),
+          },
+        },
+      },
+    );
+    // Put the order back on the hunt immediately so the rollback costs the customer nothing.
+    void dispatchService
+      .tryAutoAssign(String(orderMongoId))
+      .catch((err) => logger.warn(`Re-dispatch after capacity rollback failed: ${err?.message || err}`));
+  } catch (err) {
+    logger.error(
+      `Failed to roll back over-capacity accept for ${orderMongoId}: ${err?.message || err}`,
+    );
+  }
+}
+
+/**
+ * Post-claim stacking guard.
+ *
+ * Two accepts for two *different* orders can both clear the pre-accept check and both claim.
+ * Re-reading here - with both claims visible - gives every racer the same picture, and the
+ * deterministic oldest-acceptance-first ordering means only the surplus claims roll themselves
+ * back. Mirrors reconcileRestaurantLimitAfterInsert on the customer side.
+ */
+async function reconcileStackingLimitAfterClaim(orderMongoId, partnerId, previous) {
+  // Must span Food AND Quick Commerce, exactly like the limit itself: a rider already holding a
+  // QC job could otherwise still win two food claims and end up one over.
+  if (!(await claimExceedsStackingLimit(orderMongoId, partnerId))) return;
+
+  await releaseAcceptedOrderClaim(orderMongoId, partnerId, previous);
+  throw new ValidationError(CAPACITY_REACHED_MESSAGE);
 }
 
 export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
@@ -670,6 +790,12 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
     (entry) => String(entry?.partnerId || '') === String(deliveryPartnerId),
   );
   const canBypassCashLimit = Boolean(offeredEntry?.allowOverLimit);
+
+  // Order stacking limit. Checked here so a stale offer card or a replayed socket event cannot
+  // hand a rider a third order; re-checked after the atomic claim below to close the race where
+  // two accepts for two different orders both pass this point. The order being accepted is
+  // excluded so re-accepting one the rider already holds stays idempotent.
+  await assertRiderHasFreeSlot(deliveryPartnerId, { excludeOrderId: existingOrder._id });
 
   const partnerCapacity = await getPartnerCashCapacity(deliveryPartnerId);
   const hasAmountCapacity = Number(partnerCapacity.availableCashLimit || 0) >= orderAmount;
@@ -856,6 +982,14 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
 
     throw new ValidationError('Order is no longer available to accept');
   }
+
+  // Claim won. Before any post-accept side effect runs, make sure this claim did not push the
+  // rider past their stacking limit in a race with a second simultaneous accept.
+  await reconcileStackingLimitAfterClaim(order._id, partnerId, {
+    riderEarning: baseRiderEarning,
+    platformProfit: basePlatformProfit,
+    settlementBreakdown: existingBreakdown,
+  });
 
   const responseOrder = sanitizeOrderForExternal(order);
 

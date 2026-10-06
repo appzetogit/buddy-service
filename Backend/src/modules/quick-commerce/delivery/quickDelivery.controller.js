@@ -15,6 +15,10 @@ import {
   emitQuickOrderUpdate,
 } from '../services/quickDispatch.service.js';
 import { syncSellerOrderFromDelivery } from '../services/quickOrder.service.js';
+import {
+  CAPACITY_REACHED_MESSAGE,
+  getRiderCapacity,
+} from '../../food/orders/services/rider-capacity.service.js';
 import { sendResponse, sendError } from '../../../utils/response.js';
 import { logger } from '../../../utils/logger.js';
 
@@ -48,6 +52,16 @@ export const listAvailableQuickOrders = async (req, res) => {
     const partnerId = await resolvePartnerId(req);
     if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
 
+    // A rider at their stacking limit gets no offer cards - matches the Food available list,
+    // and keeps the app from showing an offer that accept would reject anyway.
+    const capacity = await getRiderCapacity(partnerId);
+    if (!capacity.canAcceptMore) {
+      return sendResponse(res, 200, 'Available quick commerce orders', {
+        orders: [],
+        orderCapacity: capacity,
+      });
+    }
+
     const orders = await QuickOrder.find({
       orderStatus: { $in: ['placed', 'confirmed', 'preparing', 'ready_for_pickup'] },
       'dispatch.acceptedAt': { $exists: false },
@@ -63,6 +77,7 @@ export const listAvailableQuickOrders = async (req, res) => {
 
     return sendResponse(res, 200, 'Available quick commerce orders', {
       orders: orders.map(buildQuickOfferPayload),
+      orderCapacity: capacity,
     });
   } catch (error) {
     logger.error(`[QuickDelivery] listAvailable failed: ${error.message}`);
@@ -132,6 +147,9 @@ export const acceptQuickOrderController = async (req, res) => {
 
     const result = await acceptQuickOrder(req.params.orderId, partnerId);
     if (!result.ok) {
+      if (result.reason === 'AT_CAPACITY') {
+        return sendError(res, 409, result.message || CAPACITY_REACHED_MESSAGE);
+      }
       const message = result.reason === 'ALREADY_TAKEN'
         ? 'This order has already been taken by another rider'
         : 'Unable to accept this order';
