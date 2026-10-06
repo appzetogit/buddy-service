@@ -45,3 +45,39 @@ export const authRateLimiter = rateLimit({
     }
 });
 
+
+const phoneOrIpKey = (req) => {
+    const phone = String(req.body?.phone || '').replace(/\D/g, '').slice(-10);
+    return phone ? `phone:${phone}` : `ip:${req.ip}`;
+};
+
+/** Caps OTP sends per phone number, so rotating IPs cannot inflate SMS spend. */
+export const otpRequestRateLimiter = rateLimit({
+    windowMs: config.otpRateWindow * 1000,
+    max: config.nodeEnv === 'development' ? Math.max(config.otpRateLimit, 50) : config.otpRateLimit,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: phoneOrIpKey,
+    message: { success: false, message: 'Too many OTP requests for this number. Please try again later.' }
+});
+
+/** Caps failed OTP verifications per phone number; successful attempts are not counted. */
+export const otpVerifyRateLimiter = rateLimit({
+    windowMs: authWindowMs,
+    max: config.nodeEnv === 'development' ? Math.max(config.authRateLimitMax, 100) : config.authRateLimitMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    keyGenerator: phoneOrIpKey,
+    message: { success: false, message: 'Too many failed attempts. Please request a new code.' }
+});
+
+/** Stricter limit for the Google Maps distance proxy. */
+export const mapsRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: config.nodeEnv === 'development' ? 300 : Number(process.env.MAPS_RATE_LIMIT_MAX || 60),
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.ip,
+    message: { success: false, message: 'Too many map distance requests. Please try again later.' }
+});

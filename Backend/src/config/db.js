@@ -7,6 +7,17 @@ import { logger } from '../utils/logger.js';
 dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 
+/** Throws if Mongoose isn't connected (readyState !== 1). Used by money-critical paths. */
+export const assertMongoConnected = () => {
+    const state = mongoose.connection.readyState;
+    if (state !== 1) {
+        const error = new Error(`MongoDB not connected (readyState=${state})`);
+        error.code = 'MONGO_NOT_CONNECTED';
+        throw error;
+    }
+    return mongoose.connection;
+};
+
 export const connectDB = async () => {
     try {
         const poolSize = Number(process.env.MONGO_MAX_POOL_SIZE || 10);

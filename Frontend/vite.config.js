@@ -20,6 +20,12 @@ export default defineConfig({
       { find: '@food/api', replacement: servicesApi },
       { find: '@food', replacement: foodSrc },
       { find: '@delivery', replacement: path.resolve(__dirname, './src/modules/DeliveryV2') },
+      // Quick Commerce admin module support (ported from Blaze) — scoped additions only,
+      // the Food aliases above are untouched.
+      { find: '@core', replacement: path.resolve(__dirname, './src/core') },
+      { find: '@shared', replacement: path.resolve(__dirname, './src/shared') },
+      { find: '@common', replacement: path.resolve(__dirname, './src/modules/common') },
+      { find: '@quickCommerce', replacement: path.resolve(__dirname, './src/modules/quickCommerce') },
       { find: '@', replacement: path.resolve(__dirname, './src') },
     ],
     dedupe: ['react', 'react-dom', 'react-router-dom'],
