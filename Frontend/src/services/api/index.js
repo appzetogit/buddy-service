@@ -2153,6 +2153,23 @@ export const deliveryAPI = {
           params: { limit: 50, page: 1, ...params },
           contextModule: "delivery",
         })
+        // One rider, both verticals: show open Quick Commerce offers in the same list.
+        // Food's own list is never dropped — QC is appended, and a QC failure is ignored.
+        .then(async (res) => {
+          try {
+            const qcRes = await apiClient.get("/quick-commerce/delivery/orders/available", {
+              contextModule: "delivery",
+            });
+            const quickOrders = qcRes?.data?.data?.orders || [];
+            if (quickOrders.length && res?.data?.data) {
+              const foodOrders = res.data.data.orders || [];
+              res.data.data.orders = [...quickOrders, ...foodOrders];
+            }
+          } catch {
+            // Quick Commerce is optional for a rider.
+          }
+          return res;
+        })
         .then((res) => {
           cache.set(key, { at: Date.now(), res });
           return res;
@@ -2212,8 +2229,31 @@ export const deliveryAPI = {
       return p;
     };
   })(),
-  /** GET /food/delivery/current - fallback for some UI hooks */
-  getCurrentDelivery: () => apiClient.get("/food/delivery/orders/current", { contextModule: "delivery" }),
+  /**
+   * GET /food/delivery/current - fallback for some UI hooks.
+   *
+   * A rider runs one trip at a time and the same account serves both verticals, so when Food
+   * reports no active trip we check Quick Commerce before answering "idle". Food's own answer
+   * is never modified — if a food trip exists it is returned untouched.
+   */
+  getCurrentDelivery: async () => {
+    const foodRes = await apiClient.get("/food/delivery/orders/current", { contextModule: "delivery" });
+    const data = foodRes?.data?.data;
+    const foodTrip = data && Object.prototype.hasOwnProperty.call(data, "activeOrder") ? data.activeOrder : data;
+    if (foodTrip && (foodTrip._id || foodTrip.orderId || foodTrip.order_id)) return foodRes;
+
+    try {
+      const qcRes = await apiClient.get("/quick-commerce/delivery/orders/current", {
+        contextModule: "delivery",
+      });
+      const quickTrip = (qcRes?.data?.data?.orders || [])[0];
+      if (!quickTrip) return foodRes;
+      return { ...qcRes, data: { ...qcRes.data, data: { activeOrder: quickTrip } } };
+    } catch {
+      // Quick Commerce is optional for a rider; never let it break the food trip sync.
+      return foodRes;
+    }
+  },
   acceptOrder: (orderId, body = {}) =>
     apiClient.patch(
       `/food/delivery/orders/${String(orderId)}/accept`,
@@ -2834,6 +2874,20 @@ export const orderAPI = {
 
       const p = apiClient
         .get(`/food/orders/${key}`, { contextModule: "user" })
+        // Quick Commerce orders live in their own collection, so a food lookup cannot find
+        // them. Only on failure do we try QC, which leaves the food path untouched. The QC
+        // detail endpoint answers { success, result }, reshaped here to the { data: { order } }
+        // the tracking screen reads.
+        .catch(async (err) => {
+          const status = err?.response?.status;
+          if (status !== 404 && status !== 400) throw err;
+          const qcRes = await apiClient.get(`/quick-commerce/orders/${key}`, {
+            contextModule: "user",
+          });
+          const quickOrder = qcRes?.data?.result || qcRes?.data?.data;
+          if (!quickOrder) throw err;
+          return { ...qcRes, data: { success: true, data: { order: quickOrder } } };
+        })
         .then((res) => {
           cache.set(key, { at: Date.now(), res });
           return res;

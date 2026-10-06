@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminAPI } from "@food/api";
+import { useAdminBadgeStore } from "@food/store/adminBadgeStore";
 
 const STORAGE_KEY = "admin_notifications_dismissed_v1";
 const UPDATE_EVENT = "adminNotificationsUpdated";
@@ -26,6 +27,12 @@ const saveDismissedIds = (ids) => {
 export const dispatchAdminNotificationsUpdated = () => {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(UPDATE_EVENT));
+};
+
+/** Used by the Quick Commerce admin pages to refresh the shared admin bell/badge after an action. */
+export const refreshAdminAlerts = () => {
+  dispatchAdminNotificationsUpdated();
+  useAdminBadgeStore.getState().fetchBadges(true);
 };
 
 const toDateValue = (value) => {
