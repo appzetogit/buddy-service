@@ -38,12 +38,12 @@ import {
 
 const buildSteps = (services = [], resubmitServices = null) => {
   const steps = [];
-  const needsFoodVehicle = services.includes("food") || services.includes("quickCommerce");
+  const needsFoodVehicle = services.includes("food");
 
   if (!resubmitServices) {
     steps.push({ key: "services", label: "Services", Icon: CheckCircle2 });
   }
-  if (needsFoodVehicle && (!resubmitServices || resubmitServices.some((s) => s === "food" || s === "quickCommerce"))) {
+  if (needsFoodVehicle && (!resubmitServices || resubmitServices.some((s) => s === "food"))) {
     steps.push({ key: "vehicle_food", label: "Delivery", Icon: Bike });
   }
   if (!resubmitServices) {
@@ -60,11 +60,11 @@ const buildSteps = (services = [], resubmitServices = null) => {
 const STEP_META = {
   services: {
     title: "What do you want to drive for?",
-    subtitle: "Pick one or more services. Food and Quick Commerce share the same delivery profile.",
+    subtitle: "Your food delivery profile.",
   },
   vehicle_food: {
     title: "Delivery vehicle",
-    subtitle: "Used for Food and Quick Commerce deliveries.",
+    subtitle: "Used for food deliveries.",
   },
   basics: {
     title: "Tell us about yourself",
@@ -518,25 +518,25 @@ export default function OnboardingWizard() {
               {current.key === "services" && (
                 <>
                   <ServiceToggle
-                    checked={state.onboardingServices.includes("food") || state.onboardingServices.includes("quickCommerce")}
+                    checked={state.onboardingServices.includes("food")}
                     onChange={(checked) => {
                       markTouched("onboardingServices");
                       setState((s) => ({
                         ...s,
                         onboardingServices: checked
-                          ? Array.from(new Set([...s.onboardingServices, "food", "quickCommerce"]))
-                          : s.onboardingServices.filter((x) => x !== "food" && x !== "quickCommerce"),
+                          ? Array.from(new Set([...s.onboardingServices, "food"]))
+                          : s.onboardingServices.filter((x) => x !== "food"),
                       }));
                     }}
                     Icon={Bike}
-                    title="Food & Quick Delivery"
-                    subtitle="Deliver restaurant and quick-commerce orders"
+                    title="Food Delivery"
+                    subtitle="Deliver restaurant orders"
                   />
                   {showErr("onboardingServices") ? (
                     <p className="text-[11px] font-semibold text-red-400">{showErr("onboardingServices")}</p>
                   ) : null}
                   <div className="rounded-2xl bg-white shadow-sm border border-gray-200 p-3 text-[11px] text-gray-400 leading-relaxed">
-                    You'll receive food and quick-commerce delivery requests when online.
+                    You'll receive food delivery requests when online.
                   </div>
                 </>
               )}
