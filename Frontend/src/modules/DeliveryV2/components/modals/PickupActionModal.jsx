@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { openCamera } from "@food/utils/imageUploadUtils";
 import { Share2, Users, PhoneCall } from 'lucide-react';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
+import { formatKm } from '@/modules/DeliveryV2/utils/geo';
 import {
   getCurrentRiderId,
   resolveCoDriver,
@@ -304,7 +305,7 @@ export const PickupActionModal = ({
                     <span className="text-green-600">Reached Store √</span>
                   ) : (
                     <span className="text-orange-500">
-                      {(distanceToTarget / 1000).toFixed(1)} km • {eta || '--'} min to Store
+                      {formatKm(distanceToTarget)} km • {eta || '--'} min to Store
                     </span>
                   )}
                 </p>

@@ -105,6 +105,8 @@ import {
   toPartnerId,
 } from './order-lifecycle.policy.js';
 import { assertRiderHasFreeSlot } from './rider-capacity.service.js';
+import { ensureRestaurantCoordinates } from './restaurant-geo.service.js';
+import { extractLatLng } from '../../../../core/location/location.schema.js';
 
 async function clearUserCartAfterOrder(userId) {
   if (!userId) return;
@@ -4205,9 +4207,31 @@ export async function shareOrderDelivery(orderId, deliveryPartnerId) {
     if (io) {
       // `order` is unpopulated here; without the restaurant the offer card is blank.
       const restaurant = await FoodRestaurant.findById(order.restaurantId)
-        .select('restaurantName name address phone location addressLine1')
+        .select('restaurantName name address phone location addressLine1 addressLine2 area city state pincode landmark')
         .lean();
-      const payload = buildDeliverySocketPayload(order, restaurant);
+
+      // This invite is broadcast to the whole rider room, so it cannot carry a per-rider
+      // `pickupDistanceKm` the way a dispatch offer does - each rider works the distance out
+      // from their own GPS. That only works if the payload actually carries the restaurant's
+      // coordinates, so heal them here too rather than shipping a card that reads "?? KM".
+      let restaurantForPayload = restaurant;
+      if (restaurant && !extractLatLng(restaurant.location)) {
+        const geo = await ensureRestaurantCoordinates(restaurant);
+        if (geo) {
+          restaurantForPayload = {
+            ...restaurant,
+            location: {
+              ...(restaurant.location || {}),
+              type: 'Point',
+              coordinates: [geo.lng, geo.lat],
+              latitude: geo.lat,
+              longitude: geo.lng,
+            },
+          };
+        }
+      }
+
+      const payload = buildDeliverySocketPayload(order, restaurantForPayload);
       io.to('all_delivery').emit('shareable_order_available', {
         ...payload,
         sharedFrom: deliveryPartnerId,

@@ -1,4 +1,82 @@
 /**
+ * Pull { lat, lng } out of any location shape the backend sends.
+ *
+ * A location reaches the rider app as GeoJSON (`coordinates: [lng, lat]`), as a flat
+ * `{ latitude, longitude }` mirror, or as `{ lat, lng }` - and the mirror is simply absent on
+ * plenty of records. Reading only one shape is why an offer card could show no distance, so
+ * every distance calculation goes through this.
+ *
+ * Mirrors extractLatLng() in Backend core/location/location.schema.js.
+ *
+ * @returns {{lat: number, lng: number} | null}
+ */
+export const extractLatLng = (locationLike) => {
+  if (!locationLike || typeof locationLike !== 'object') return null;
+
+  if (Array.isArray(locationLike.coordinates) && locationLike.coordinates.length >= 2) {
+    const lng = Number(locationLike.coordinates[0]);
+    const lat = Number(locationLike.coordinates[1]);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  }
+
+  const lat = Number(locationLike.latitude ?? locationLike.lat);
+  const lng = Number(locationLike.longitude ?? locationLike.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+
+  return null;
+};
+
+/**
+ * Where the rider has to go to collect this order.
+ *
+ * For a multi-restaurant order that is the next stop still to be collected (server-assigned
+ * visit order), otherwise the single restaurant. Falls back through every field an offer
+ * payload, a synced trip or a socket event may carry it in.
+ *
+ * @returns {{lat: number, lng: number} | null}
+ */
+export const resolvePickupLatLng = (order) => {
+  if (!order) return null;
+
+  const pickups = Array.isArray(order.pickups) ? order.pickups : [];
+  if (pickups.length > 0) {
+    const remaining = pickups
+      .filter(
+        (p) =>
+          !p?.permanentlyDropped &&
+          !['picked_up', 'ready_for_handover', 'cancelled'].includes(String(p?.status || '')),
+      )
+      .sort((a, b) => (Number(a?.sequence) || 0) - (Number(b?.sequence) || 0));
+
+    for (const stop of remaining) {
+      const point = extractLatLng(stop?.location) || extractLatLng(stop);
+      if (point) return point;
+    }
+  }
+
+  return (
+    extractLatLng(order.restaurantLocation) ||
+    extractLatLng(order.restaurant_location) ||
+    extractLatLng(order.restaurantId?.location) ||
+    extractLatLng(order.restaurantId) ||
+    extractLatLng({ lat: order.restaurant_lat ?? order.restaurantLat, lng: order.restaurant_lng ?? order.restaurantLng })
+  );
+};
+
+/**
+ * Formats metres as "1.2" km, or `fallback` when the distance is unknown.
+ *
+ * null / undefined / '' mean "not known yet", NOT zero: Number(null) is 0, which would render
+ * "0.0 km" and tell the rider they had arrived when the app simply has no fix.
+ */
+export const formatKm = (meters, fallback = '--') => {
+  if (meters === null || meters === undefined || meters === '') return fallback;
+  const n = Number(meters);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return (n / 1000).toFixed(1);
+};
+
+/**
  * Haversine formula to calculate the distance between two points in meters.
  * @param {number} lat1 
  * @param {number} lon1 

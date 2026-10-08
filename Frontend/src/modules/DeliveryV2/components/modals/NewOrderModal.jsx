@@ -3,7 +3,11 @@ import { motion } from 'framer-motion';
 import { MapPin, Clock, ChefHat, ChevronDown, AlertTriangle } from 'lucide-react';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
-import { getHaversineDistance } from '@/modules/DeliveryV2/utils/geo';
+import {
+  getHaversineDistance,
+  extractLatLng,
+  resolvePickupLatLng,
+} from '@/modules/DeliveryV2/utils/geo';
 
 function resolvePickupAddress(pickup, fallback = '') {
   const parts = [
@@ -102,14 +106,18 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize, riderProf
       };
     }
 
-    const rest = order.restaurantLocation || order.restaurantId?.location || {};
-    const resLat = parseFloat(order.restaurant_lat || order.restaurantLat || rest.latitude || rest.lat);
-    const resLng = parseFloat(order.restaurant_lng || order.restaurantLng || rest.longitude || rest.lng);
+    // A shared ("Find new driver") invite is broadcast to the whole rider room, so unlike a
+    // dispatch offer it carries no per-rider `pickupDistanceKm` - this rider has to work it out
+    // from their own GPS. resolvePickupLatLng handles GeoJSON, the flat lat/lng mirror and
+    // multi-restaurant pickups alike; reading only `latitude`/`lat` used to miss restaurants
+    // stored as GeoJSON and left the card showing "??".
+    const pickupPoint = resolvePickupLatLng(order);
+    const riderPoint = extractLatLng(riderLocation);
 
-    if (riderLocation && !isNaN(resLat) && !isNaN(resLng)) {
+    if (riderPoint && pickupPoint) {
       const distM = getHaversineDistance(
-        riderLocation.lat, riderLocation.lng,
-        resLat, resLng,
+        riderPoint.lat, riderPoint.lng,
+        pickupPoint.lat, pickupPoint.lng,
       );
       const km = distM / 1000;
       const mins = Math.ceil(distM / 416) + (order.prepTime || 5);
@@ -120,7 +128,7 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize, riderProf
       };
     }
 
-    return { distanceKm: '??', etaMins: order.prepTime || 15 };
+    return { distanceKm: null, etaMins: order.prepTime || 15 };
   }, [order, riderLocation]);
 
   if (!order) return null;
@@ -377,7 +385,9 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize, riderProf
                 <MapPin className="w-5 h-5 text-[#5D6D5D] shrink-0" />
                 <div className="flex flex-col min-w-0">
                   <span className="text-[10px] text-[#5D6D5D] font-bold uppercase tracking-widest">Distance</span>
-                  <span className="text-sm font-bold text-[#0A1F0A] truncate">{distanceKm} KM</span>
+                  <span className="text-sm font-bold text-[#0A1F0A] truncate">
+                    {distanceKm != null ? `${distanceKm} KM` : 'Locating…'}
+                  </span>
                 </div>
               </div>
             </div>

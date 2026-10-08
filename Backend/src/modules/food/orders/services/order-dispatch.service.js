@@ -22,6 +22,7 @@ import {
 } from './order.helpers.js';
 import { fetchRoadDistancesKm } from '../utils/googleMaps.js';
 import { filterPartnersByOrderCapacity } from './rider-capacity.service.js';
+import { ensureRestaurantCoordinates } from './restaurant-geo.service.js';
 
 /**
  * Candidate ordering: live riders first, then nearest.
@@ -478,16 +479,46 @@ export async function tryAutoAssign(orderId, options = {}) {
     };
 
     const restaurant = order.restaurantId || {};
-    let pickupCoordinates = [0, 0];
-    if (Array.isArray(restaurant.location?.coordinates)) {
+    let pickupCoordinates = null;
+    if (Array.isArray(restaurant.location?.coordinates) && restaurant.location.coordinates.length >= 2) {
       pickupCoordinates = restaurant.location.coordinates;
     } else if (restaurant.location?.longitude != null && restaurant.location?.latitude != null) {
       pickupCoordinates = [Number(restaurant.location.longitude), Number(restaurant.location.latitude)];
+    } else {
+      // No coordinates stored: the model drops `location` outright when an address could not be
+      // geocoded. Backfill it now (cached, persisted, once per restaurant) rather than ranking
+      // riders from [0, 0) - Null Island put every rider thousands of km away, which collapsed
+      // dispatch to the "any online partner" fallback and shipped an offer with no distance.
+      const geo = await ensureRestaurantCoordinates(restaurant._id || restaurant);
+      if (geo) pickupCoordinates = [geo.lng, geo.lat];
     }
+
+    // The populated `order.restaurantId` was read before any backfill, so the offer payload
+    // would still ship without a pickup point on the very dispatch that healed it. Build the
+    // payload from a plain copy carrying the resolved point instead of mutating the populated
+    // Mongoose document.
+    const restaurantForPayload = pickupCoordinates
+      ? {
+        ...(restaurant?.toObject ? restaurant.toObject() : restaurant),
+        location: {
+          ...(restaurant?.location?.toObject ? restaurant.location.toObject() : (restaurant?.location || {})),
+          type: 'Point',
+          coordinates: pickupCoordinates,
+          latitude: pickupCoordinates[1],
+          longitude: pickupCoordinates[0],
+        },
+      }
+      : restaurant;
+
     const pickupTarget = {
+      // `_id` matters: without `location` below, listNearbyOnlineDeliveryPartners falls back to
+      // looking the restaurant up by id, and it reads `_id` (not `entityId`) to do so.
+      _id: restaurant._id || restaurant,
       entityId: restaurant._id || restaurant,
       entityName: restaurant.restaurantName || restaurant.name || 'Food Restaurant',
-      location: { type: 'Point', coordinates: pickupCoordinates },
+      // Omit `location` entirely when still unknown: listNearbyOnlineDeliveryPartners then takes
+      // its documented no-coordinates path instead of measuring from Null Island.
+      ...(pickupCoordinates ? { location: { type: 'Point', coordinates: pickupCoordinates } } : {}),
     };
 
     const { partners } = await listNearbyOnlineDeliveryPartners(pickupTarget, searchOptions);
@@ -529,7 +560,7 @@ export async function tryAutoAssign(orderId, options = {}) {
       }
 
       if (partners.length > 0) {
-        const payload = buildDeliverySocketPayload(order, order.restaurantId);
+        const payload = buildDeliverySocketPayload(order, restaurantForPayload);
         // Re-broadcast to the already-offered pool. Through publish() so it is durable and so
         // it works from the BullMQ worker, where getIO() is null.
         const distanceByPartner = new Map(
@@ -560,7 +591,7 @@ export async function tryAutoAssign(orderId, options = {}) {
       return order;
     }
 
-    const payload = buildDeliverySocketPayload(order, order.restaurantId);
+    const payload = buildDeliverySocketPayload(order, restaurantForPayload);
 
     const phase1Batch = eligible.slice(0, Math.min(3, eligible.length));
 

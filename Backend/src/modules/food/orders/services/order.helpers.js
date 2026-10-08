@@ -260,6 +260,7 @@ export async function publish(type, basePayload = {}, recipients = [], options =
 // Canonical implementation lives in core/location/haversine.util.js.
 // Import for local use, then re-export for existing importers.
 import { haversineKm } from '../../../../core/location/haversine.util.js';
+import { extractLatLng } from '../../../../core/location/location.schema.js';
 export { haversineKm };
 
 /**
@@ -1855,6 +1856,7 @@ export function buildDeliverySocketPayload(orderDoc, restaurantDoc = null) {
   const order = orderDoc?.toObject ? orderDoc.toObject() : orderDoc || {};
   const restaurant = restaurantDoc || order?.restaurantId || null;
   const restaurantLocation = restaurant?.location || {};
+  const restaurantGeo = extractLatLng(restaurantLocation);
   const deliveryAddress = order?.deliveryAddress || {};
   const customerAddressParts = [
     deliveryAddress.street,
@@ -1888,8 +1890,16 @@ export function buildDeliverySocketPayload(orderDoc, restaurantDoc = null) {
       "",
     restaurantPhone: restaurant?.phone || "",
     restaurantLocation: {
-      latitude: restaurantLocation?.latitude,
-      longitude: restaurantLocation?.longitude,
+      // A restaurant's location is canonically GeoJSON (`coordinates: [lng, lat]`); the flat
+      // `latitude`/`longitude` mirror is optional and is simply absent on plenty of records.
+      // Reading the mirror alone shipped `undefined` coordinates to the rider app, which is why
+      // an offer card could show no distance at all. extractLatLng() accepts every shape, and
+      // the raw coordinates go along too for clients that prefer GeoJSON.
+      latitude: restaurantGeo?.lat ?? restaurantLocation?.latitude,
+      longitude: restaurantGeo?.lng ?? restaurantLocation?.longitude,
+      coordinates: Array.isArray(restaurantLocation?.coordinates)
+        ? restaurantLocation.coordinates
+        : (restaurantGeo ? [restaurantGeo.lng, restaurantGeo.lat] : undefined),
       address:
         restaurantLocation?.address ||
         restaurantLocation?.formattedAddress ||

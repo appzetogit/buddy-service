@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { calculateDistance } from '@/modules/DeliveryV2/hooks/proximity.utils';
+import { extractLatLng, resolvePickupLatLng } from '@/modules/DeliveryV2/utils/geo';
 
 /**
  * useProximityCheck - Professional hook for dynamic range monitoring.
@@ -39,22 +40,27 @@ export const useProximityCheck = () => {
             ? head
             : remaining.find((p) => p.status === 'ready') || head;
 
-        if (pendingPickup && pendingPickup.location) {
-          const loc = pendingPickup.location;
-          return {
-            lat: loc.coordinates?.[1] ?? loc.latitude ?? loc.lat,
-            lng: loc.coordinates?.[0] ?? loc.longitude ?? loc.lng,
-          };
-        }
+        const pendingPoint =
+          extractLatLng(pendingPickup?.location) || extractLatLng(pendingPickup);
+        if (pendingPoint) return pendingPoint;
       }
-      return activeOrder.restaurantLocation || activeOrder.restaurant_location;
+      // Single restaurant, or a multi-restaurant order whose next stop carries no usable
+      // coordinates. resolvePickupLatLng also reads `restaurantId.location`, so a trip whose
+      // flattened `restaurantLocation` could not be derived still yields a target instead of
+      // leaving the rider with no distance at all.
+      return resolvePickupLatLng(activeOrder);
     }
-    
+
     // If heading to drop or arrived at drop, target is customer
     if (['PICKED_UP', 'REACHED_DROP'].includes(tripStatus)) {
-      return activeOrder.customerLocation || activeOrder.customer_location;
+      return (
+        extractLatLng(activeOrder.customerLocation) ||
+        extractLatLng(activeOrder.customer_location) ||
+        extractLatLng(activeOrder.deliveryAddress?.location) ||
+        extractLatLng(activeOrder.deliveryAddress)
+      );
     }
-    
+
     return null;
   }, [activeOrder, tripStatus]);
 
@@ -67,14 +73,19 @@ export const useProximityCheck = () => {
 
   // Calculate real-time distance
   const distanceToTarget = useMemo(() => {
-    if (!riderLocation || !targetLocation) return Infinity;
-    
-    return calculateDistance(
-      riderLocation.lat,
-      riderLocation.lng,
+    const rider = extractLatLng(riderLocation);
+    if (!rider || !targetLocation) return Infinity;
+
+    const distance = calculateDistance(
+      rider.lat,
+      rider.lng,
       targetLocation.lat,
-      targetLocation.lng
+      targetLocation.lng,
     );
+    // calculateDistance returns NaN for any non-finite input. NaN compares false against every
+    // threshold, so it would silently read as "out of range" forever; Infinity is the value the
+    // rest of the app already treats as "unknown".
+    return Number.isFinite(distance) ? distance : Infinity;
   }, [riderLocation, targetLocation]);
 
   // Calculate real-time duration (in seconds)

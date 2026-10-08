@@ -36,7 +36,14 @@ import {
   Contact, Package, Loader2
 } from 'lucide-react';
 
-import { getHaversineDistance, calculateETA, calculateHeading } from '@/modules/DeliveryV2/utils/geo';
+import {
+  getHaversineDistance,
+  calculateETA,
+  calculateHeading,
+  extractLatLng,
+  resolvePickupLatLng,
+  formatKm,
+} from '@/modules/DeliveryV2/utils/geo';
 import { useCompanyName } from "@food/hooks/useCompanyName";
 import { useNavigate } from 'react-router-dom';
 import useNotificationInbox from "@food/hooks/useNotificationInbox";
@@ -565,19 +572,30 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       ? getLoc(serverData.pickups.find(p => !['picked_up', 'cancelled'].includes(p.status)), ['latitude', 'lat'], ['longitude', 'lng'])
       : null;
 
+    // resolvePickupLatLng / extractLatLng last: they understand every location shape the
+    // backend sends (GeoJSON, the flat latitude/longitude mirror, {lat,lng}) and read through
+    // restaurantId.location and pickups[]. Without them a payload whose location is GeoJSON-only
+    // resolved to null here, and the flattened null then OVERWROTE the perfectly good
+    // `restaurantLocation` the payload already carried — which is why a trip could show no
+    // distance at all.
     const finalResLoc = resLoc ||
       getLoc(serverData.restaurantId, ['latitude', 'lat'], ['longitude', 'lng']) ||
-      getLoc(serverData, ['restaurant_lat', 'restaurantLat', 'latitude'], ['restaurant_lng', 'restaurantLng', 'longitude']);
+      getLoc(serverData, ['restaurant_lat', 'restaurantLat', 'latitude'], ['restaurant_lng', 'restaurantLng', 'longitude']) ||
+      resolvePickupLatLng(serverData);
 
     const cusLoc = getLoc(serverData.deliveryAddress, ['latitude', 'lat'], ['longitude', 'lng']) ||
-      getLoc(serverData, ['customer_lat', 'customerLat', 'latitude'], ['customer_lng', 'customerLng', 'longitude']);
+      getLoc(serverData, ['customer_lat', 'customerLat', 'latitude'], ['customer_lng', 'customerLng', 'longitude']) ||
+      extractLatLng(serverData.customerLocation) ||
+      extractLatLng(serverData.deliveryAddress?.location) ||
+      extractLatLng(serverData.deliveryAddress);
 
     return {
       ...serverData,
       _id: serverData._id,
       orderId: serverData.orderId || serverData.order_id || serverData._id,
-      restaurantLocation: finalResLoc,
-      customerLocation: cusLoc
+      // Never replace a usable location with null: keep whatever the payload already had.
+      restaurantLocation: finalResLoc || serverData.restaurantLocation || null,
+      customerLocation: cusLoc || serverData.customerLocation || null,
     };
   }, []);
 
@@ -1752,7 +1770,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                             <div>
                               <h3 className="text-[#1A2517] text-lg font-black uppercase">Handover Drop</h3>
                               <p className={`text-[9px] font-black uppercase tracking-[0.2em] mt-0.5 ${isWithinRange ? 'text-[#ACC8A2]' : 'text-orange-500'}`}>
-                                {isWithinRange ? 'Ready - Swipe to Arrive √' : `${(distanceToTarget / 1000).toFixed(1)} km • ${eta || '--'} min Arrival`}
+                                {isWithinRange
+                                  ? 'Ready - Swipe to Arrive √'
+                                  : `${formatKm(distanceToTarget)} km • ${eta || '--'} min Arrival`}
                               </p>
                             </div>
                           </div>
