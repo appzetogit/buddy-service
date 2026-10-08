@@ -148,5 +148,35 @@ assert.equal(
   'locally held orders win over a stale server count',
 );
 
+
+// --- order_claimed matching: offer card id vs accept-time claim id ----------------------
+// Regression test for the bug where another rider's offer popup never closed when someone
+// else accepted. buildDeliverySocketPayload (the offer card payload) sets `orderId` to the
+// human-readable order number (order.order_id), while the backend's 'order_claimed' broadcast
+// on accept always sends the Mongo _id as `orderId`. A naive `incomingOrder.orderId ||
+// incomingOrder._id` picks the human number first and it never equals the Mongo id, so the
+// card stayed up forever. orderAliasesOf must surface BOTH so a membership check catches it.
+{
+  const offerCard = {
+    // No top-level _id on an offer payload - only these two.
+    orderMongoId: 'mongo000000000000000001',
+    orderId: 'FO-10234', // human-readable order number, NOT the Mongo id
+  };
+  const claimedOrderId = 'mongo000000000000000001'; // backend always sends the Mongo id here
+
+  const aliases = orderAliasesOf(offerCard);
+  assert.ok(
+    aliases.includes(claimedOrderId),
+    'the offer card must be recognised as the claimed order via its Mongo id alias',
+  );
+  // The bug, demonstrated: the old priority-pick comparison would have missed this.
+  const buggyPick = offerCard.orderId || offerCard._id || offerCard.orderMongoId;
+  assert.notEqual(
+    String(buggyPick),
+    claimedOrderId,
+    'sanity check: the old orderId-first comparison really did not match',
+  );
+}
+
 reset();
 console.log('useDeliveryStore: all assertions passed');

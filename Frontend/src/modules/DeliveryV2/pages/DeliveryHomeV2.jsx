@@ -939,16 +939,27 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   // When another delivery partner claims the incoming order (via socket 'order_claimed'),
   // dismiss the NewOrderModal and inform this delivery boy.
+  //
+  // BUG THIS FIXES: the offer card's own id (`incomingOrder.orderId`) is the human-readable
+  // order number (buildDeliverySocketPayload sets `orderId: order.order_id || ...`), while the
+  // backend's `order_claimed` broadcast always carries the Mongo `_id` in both `orderId` and
+  // `orderMongoId` (order-delivery.service.js). Picking `.orderId` first compared a human order
+  // number against a Mongo id — they never matched, so every other rider's popup stayed up after
+  // one of them accepted. orderAliasesOf checks every id shape the order could be known by, the
+  // same helper the stacking logic above already relies on for exactly this reason.
   useEffect(() => {
     if (!claimedOrderId) return;
-    const incomingId = incomingOrder?.orderId || incomingOrder?._id || incomingOrder?.orderMongoId;
-    if (incomingId && String(incomingId) === String(claimedOrderId)) {
+    const incomingIds = orderAliasesOf(incomingOrder);
+    if (incomingIds.includes(String(claimedOrderId))) {
       toast.info('Order was taken by another delivery partner.', { duration: 4000 });
       setIncomingOrder(null);
       clearNewOrder();
     }
     clearClaimedOrderId();
-  }, [claimedOrderId]);
+    // clearNewOrder/clearClaimedOrderId are plain closures from the hook (not memoized) —
+    // deliberately left out of deps so this effect only re-runs on the two values it actually
+    // reacts to, matching every other effect in this file that calls them.
+  }, [claimedOrderId, incomingOrder]);
 
   // Handle Shared Orders (splitting orders). Joining one takes a stacking slot like any accept.
   useEffect(() => {
