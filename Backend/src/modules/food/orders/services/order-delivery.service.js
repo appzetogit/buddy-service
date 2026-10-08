@@ -1123,6 +1123,30 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
 
       }
 
+      // The socket only reaches open apps. A rider whose app is backgrounded or
+      // closed is showing the native offer card, which only an `order_taken`
+      // push dismisses — so tell every other rider this was offered to.
+      const otherOffered = [...new Set(
+        (order.dispatch?.offeredTo || [])
+          .map((o) => String(o?.partnerId || ''))
+          .filter((id) => id && id !== String(deliveryPartnerId)),
+      )];
+      if (otherOffered.length > 0) {
+        void notifyOwnersSafely(
+          otherOffered.map((ownerId) => ({ ownerType: 'DELIVERY_PARTNER', ownerId })),
+          {
+            title: 'Order taken',
+            body: 'Another delivery partner accepted this order.',
+            dataOnly: true,
+            data: {
+              type: 'order_taken',
+              orderId: order._id.toString(),
+              orderMongoId: order._id.toString(),
+            },
+          },
+        ).catch((err) => logger.warn(`order_taken push failed for ${order._id}: ${err.message}`));
+      }
+
       await notifyOwnerSafely(
         { ownerType: 'USER', ownerId: order.userId },
         {
