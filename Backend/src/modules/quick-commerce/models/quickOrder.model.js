@@ -42,6 +42,7 @@ const pickupPointSchema = new mongoose.Schema(
         sourceId: { type: String, required: true, trim: true },
         sourceName: { type: String, default: '', trim: true },
         address: { type: String, default: '', trim: true },
+        phone: { type: String, default: '', trim: true },
         location: {
             type: geoPointSchema,
             default: undefined
@@ -143,7 +144,9 @@ const pricingSchema = new mongoose.Schema(
         },
         quickFinanceVersion: { type: String, default: '' },
         total: { type: Number, required: true, min: 0 },
-        currency: { type: String, default: 'INR' }
+        currency: { type: String, default: 'INR' },
+        /** How the delivery fee and the rider payout were built (speed option, split / multi-store surcharges). */
+        deliveryFeeBreakdown: { type: mongoose.Schema.Types.Mixed, default: undefined }
     },
     { _id: false }
 );
@@ -227,10 +230,33 @@ const dispatchSchema = new mongoose.Schema(
         offeredTo: [{
             partnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner' },
             at: { type: Date, default: Date.now },
-            action: { type: String, enum: ['offered', 'rejected', 'timeout'], default: 'offered' }
+            action: { type: String, enum: ['offered', 'rejected', 'timeout'], default: 'offered' },
+            attemptNumber: { type: Number, default: null },
+            radiusKm: { type: Number, default: null }
         }],
         /** Seconds the DP offer modal should count down (Food Quick uses shorter window). */
         offerTimeoutSec: { type: Number, default: null, min: 10, max: 180 },
+        /** Number of rider hunts run so far; drives the radius/phase ladder and the no-rider cancel. */
+        dispatchAttempt: { type: Number, default: 0, min: 0 },
+        /** Set once the admin "no rider for a long time" alert has fired. */
+        crisisAlertedAt: { type: Date, default: null },
+        /** Throttle for the "store has not accepted yet" reminder. */
+        sellerAckResendAt: { type: Date, default: null },
+        sellerAckAlertedAt: { type: Date, default: null },
+        /** Second-rider (shared order) state, same meaning as Food. */
+        isShared: { type: Boolean, default: false },
+        sharedPartnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner', default: null },
+        shareOpenedAt: { type: Date, default: null },
+        /** Admin assign / reassign audit trail. */
+        assignmentHistory: [{
+            at: { type: Date, default: Date.now },
+            action: { type: String, enum: ['assigned', 'reassigned', 'second_assigned'] },
+            fromPartnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner', default: null },
+            toPartnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner', default: null },
+            byRole: { type: String, default: 'ADMIN' },
+            byId: { type: mongoose.Schema.Types.ObjectId, default: null },
+            note: { type: String, default: '' }
+        }],
     },
     { _id: false }
 );
@@ -257,7 +283,9 @@ const deliveryStateSchema = new mongoose.Schema(
         reachedDropAt: { type: Date, default: null },
         pickedUpAt: { type: Date, default: null },
         deliveredAt: { type: Date, default: null },
-        billImageUrl: { type: String, default: '' }
+        billImageUrl: { type: String, default: '' },
+        /** Primary rider confirmed the earnings split with the second rider. */
+        isSplitConfirmed: { type: Boolean, default: false }
     },
     { _id: false }
 );
@@ -297,6 +325,71 @@ const deliveryVerificationSchema = new mongoose.Schema(
             required: { type: Boolean, default: false },
             verified: { type: Boolean, default: false }
         }
+    },
+    { _id: false }
+);
+
+/**
+ * Live state of each store stop on a multi-store order (same shape as Food's pickup rows so the
+ * rider app's multi-stop screens work unchanged). `restaurantId` holds the seller id.
+ */
+const pickupStopSchema = new mongoose.Schema(
+    {
+        restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Seller', required: true },
+        restaurantName: { type: String, default: '' },
+        address: { type: String, default: '' },
+        phone: { type: String, default: '' },
+        status: {
+            type: String,
+            enum: ['pending', 'accepted', 'preparing', 'ready', 'picked_up', 'cancelled'],
+            default: 'pending'
+        },
+        location: { type: geoPointSchema, default: undefined },
+        items: [String],
+        /** Visit order (0-based). The stop nearest the customer is last. */
+        sequence: { type: Number, default: 0 },
+        prepMinutes: { type: Number, default: 0, min: 0 },
+        readyAt: { type: Date, default: null },
+        permanentlyDropped: { type: Boolean, default: false },
+        pickedAt: { type: Date, default: null },
+        droppedAt: { type: Date, default: null },
+        billImageUrl: { type: String, default: null },
+    },
+    { _id: false }
+);
+
+/**
+ * One rider's share of a two-rider (shared) order - same shape as Food's delivery leg so the rider
+ * app, which already understands legs, works unchanged. Each leg has its own handover OTP.
+ */
+const deliveryLegSchema = new mongoose.Schema(
+    {
+        legIndex: { type: Number, required: true },
+        role: { type: String, enum: ['primary', 'secondary'], required: true },
+        partnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner', default: null },
+        status: {
+            type: String,
+            enum: ['assigned', 'en_route_to_pickup', 'at_pickup', 'picked_up', 'at_drop', 'delivered', 'cancelled'],
+            default: 'assigned'
+        },
+        /** Stop-level split (several stores): the stores this leg collects from. */
+        restaurantIds: [{ type: mongoose.Schema.Types.ObjectId }],
+        /** Item-level split (one store): which order.items lines, and how many units, this leg carries. */
+        itemSplits: [
+            {
+                itemIndex: { type: Number, required: true },
+                quantity: { type: Number, required: true, min: 1 },
+                _id: false,
+            },
+        ],
+        otp: { type: String, default: '' },
+        otpVerified: { type: Boolean, default: false },
+        earning: { type: Number, default: 0, min: 0 },
+        assignedAt: { type: Date, default: Date.now },
+        reachedPickupAt: { type: Date, default: null },
+        pickedAt: { type: Date, default: null },
+        reachedDropAt: { type: Date, default: null },
+        deliveredAt: { type: Date, default: null },
     },
     { _id: false }
 );
@@ -353,6 +446,8 @@ const orderSchema = new mongoose.Schema(
             type: [pickupPointSchema],
             default: []
         },
+        /** Per-store stop state; only filled for multi-store orders. */
+        pickups: { type: [pickupStopSchema], default: [] },
         deliveryAddress: {
             type: deliveryAddressSchema,
             required() {
@@ -489,11 +584,42 @@ const orderSchema = new mongoose.Schema(
         sendCutlery: { type: Boolean, default: true },
         deliveryFleet: { type: String, default: 'standard', trim: true },
         scheduledAt: { type: Date, default: null },
+        /** Delivery speed picked at checkout (admin-defined options). */
+        deliveryOption: { type: String, default: '', trim: true },
+        deliverySpeedOptionId: { type: String, default: '', trim: true },
+        deliveryTime: { type: String, default: '', trim: true },
+        estimatedTime: { type: Number, default: null, min: 1 },
+        /** True once a second rider joined and the order runs as two independent legs. */
+        /** Money returned for a store that dropped out of a multi-store order. */
+        partialRefunds: [
+            {
+                amount: { type: Number, min: 0 },
+                reason: { type: String, default: '' },
+                sellerId: { type: String, default: '' },
+                method: { type: String, default: '' },
+                refundId: { type: String, default: '' },
+                at: { type: Date, default: Date.now },
+                _id: false,
+            },
+        ],
+        isDualLeg: { type: Boolean, default: false },
+        splitMode: { type: String, enum: ['none', 'stop', 'item'], default: 'none' },
+        legs: { type: [deliveryLegSchema], default: [] },
+        isSplitOrder: { type: Boolean, default: false },
+        isMultiSeller: { type: Boolean, default: false },
         /** When scheduled → placed (restaurant activation). Additive; missing on legacy docs. */
         activatedAt: { type: Date, default: null },
         /** BullMQ job id for NOTIFY_SCHEDULED_ORDER (cancel / dedupe). */
         scheduleNotifyJobId: { type: String, default: null, trim: true },
         riderEarning: { type: Number, default: 0, min: 0 },
+        /** Second rider's share when the order is shared (riderEarning then holds the primary's share). */
+        sharedRiderEarning: { type: Number, default: 0, min: 0 },
+        /** Last delay reported by the rider or the store; shown to the customer. */
+        delayContext: {
+            reason: { type: String, default: '', trim: true },
+            reportedBy: { type: String, default: '' },
+            reportedAt: { type: Date, default: null }
+        },
         // QC admin coupons may push platform profit negative until later fees recover.
         platformProfit: { type: Number, default: 0 },
         /** After delivery/capture, money snapshot must not be rewritten — use refund/ledger paths. */
@@ -527,6 +653,11 @@ orderSchema.index({ 'dispatch.status': 1, orderStatus: 1 });
 orderSchema.index({ 'payment.status': 1, createdAt: -1 });
 orderSchema.index({ 'payment.method': 1, createdAt: -1 });
 orderSchema.index({ orderStatus: 1, scheduledAt: 1 });
+
+// Food's lifecycle helpers (pickup progress, legs) read `isMultiRestaurant`; for QC that is a multi-store order.
+orderSchema.virtual('isMultiRestaurant').get(function isMultiRestaurant() {
+    return Boolean(this.isMultiSeller);
+});
 orderSchema.index({ deliveryMode: 1, createdAt: -1 });
 orderSchema.index({ restaurantId: 1, deliveryMode: 1, createdAt: -1 });
 
@@ -548,6 +679,7 @@ const LOCKED_MONEY_PATHS = [
     'pricing.appliedCoupon',
     'pricing.referralDiscount',
     'riderEarning',
+    'sharedRiderEarning',
     'platformProfit',
     'payment.method',
     'payment.amountDue',

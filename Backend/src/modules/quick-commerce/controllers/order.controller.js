@@ -43,6 +43,25 @@ import {
 } from '../utils/stock.helpers.js';
 import { processQuickOrderRefund } from '../services/quickRefund.service.js';
 import { dispatchQuickOrder } from '../services/quickDispatch.service.js';
+import { getPendingLegHandoverOtps } from '../../food/orders/services/order-lifecycle.policy.js';
+import { getQuickDeliverySettings } from '../services/quickDeliverySettings.service.js';
+import {
+  assertMultiSellerOrderAllowed,
+  buildQuickPickupStops,
+  planMultiSellerRoute,
+} from '../services/quickMultiSeller.service.js';
+import { QuickCheckoutSession } from '../models/quickCheckoutSession.model.js';
+import {
+  cancelQuickCheckoutSession,
+  claimQuickCheckoutForOrderCreate,
+  createQuickCheckoutSession,
+  findQuickCheckoutByRazorpayOrderId,
+  getQuickCheckoutForOwner,
+  markQuickCheckoutCompleted,
+  refundFailedQuickCheckout,
+  verifyQuickCheckoutPayment,
+} from '../services/quickCheckout.service.js';
+import { releaseRidersForCancelledQuickOrder } from '../services/quickOrderFlows.service.js';
 import { deductWalletBalance, refundWalletBalance } from '../../food/user/services/userWallet.service.js';
 import {
     getGlobalPaymentSettings,
@@ -405,7 +424,16 @@ const emitQuickOrderStatusUpdate = (order, message = '') => {
   }
 };
 
-export const placeOrder = async (req, res) => {
+export const placeOrder = (req, res) => placeOrderCore(req, res, {});
+
+/**
+ * Place a Quick Commerce order.
+ *
+ * Online payments are pay-then-place (like Food): the first call only validates, prices and opens a
+ * checkout session + Razorpay order. The order itself is created by `finalizeQuickCheckout` once the
+ * payment is verified, which calls this again with `verifiedPrepaid`.
+ */
+export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) {
   try {
     const idQuery = resolveId(req);
 
@@ -516,24 +544,34 @@ export const placeOrder = async (req, res) => {
       ),
     ];
     if (orderSellerIds.length > 1) {
-      return res.status(400).json({
-        success: false,
-        code: 'MULTI_SELLER_NOT_ALLOWED',
-        message: 'Quick Commerce orders support only one seller per order.',
-      });
-    }
-
-    if (orderSellerIds.length === 1) {
-      const orderSeller = await Seller.findById(orderSellerIds[0])
-        .select('shopInfo.openingHours')
-        .lean();
-      const openingHours = orderSeller?.shopInfo?.openingHours || '';
-      if (!isStoreCurrentlyOpen(openingHours)) {
+      try {
+        // Only passes when an admin enabled multi-store orders and the stores are near each other.
+        await assertMultiSellerOrderAllowed(orderSellerIds);
+      } catch (multiErr) {
         return res.status(400).json({
           success: false,
-          code: 'SHOP_CLOSED',
-          message: buildShopClosedMessage(openingHours),
+          code: multiErr.code || 'MULTI_SELLER_NOT_ALLOWED',
+          message: multiErr.message,
         });
+      }
+    }
+
+    if (orderSellerIds.length >= 1) {
+      const orderSellers = await Seller.find({ _id: { $in: orderSellerIds } })
+        .select('shopName name shopInfo.openingHours')
+        .lean();
+      for (const orderSeller of orderSellers) {
+        const openingHours = orderSeller?.shopInfo?.openingHours || '';
+        if (!isStoreCurrentlyOpen(openingHours)) {
+          return res.status(400).json({
+            success: false,
+            code: 'SHOP_CLOSED',
+            message:
+              orderSellerIds.length > 1
+                ? `${orderSeller.shopName || orderSeller.name || 'A store'}: ${buildShopClosedMessage(openingHours)}`
+                : buildShopClosedMessage(openingHours),
+          });
+        }
       }
     }
 
@@ -563,6 +601,13 @@ export const placeOrder = async (req, res) => {
       userId: idQuery.userId || null,
       sessionId: quickSessionId || idQuery.sessionId || null,
     });
+    if (orderSellerIds.length > 1 && couponSource === 'restaurant') {
+      return res.status(400).json({
+        success: false,
+        code: 'STORE_COUPON_SINGLE_STORE_ONLY',
+        message: 'Store coupons can only be used when ordering from a single store.',
+      });
+    }
     let deliveryAddress = normalizeDeliveryAddress(req.body?.address);
     if (!deliveryAddress) {
       return res.status(400).json({
@@ -628,12 +673,20 @@ export const placeOrder = async (req, res) => {
       });
     }
 
-    const distanceResult = await roadDistanceDetails(
-      sellerCoords.lat,
-      sellerCoords.lng,
-      deliveryCoords.lat,
-      deliveryCoords.lng,
-    );
+    let multiRoute = null;
+    let distanceResult;
+    if (orderSellerIds.length > 1) {
+      // Rider covers store -> store -> customer; price the whole trip.
+      multiRoute = await planMultiSellerRoute(orderSellerIds, deliveryCoords);
+      distanceResult = { distanceKm: multiRoute.totalKm, estimated: multiRoute.estimated };
+    } else {
+      distanceResult = await roadDistanceDetails(
+        sellerCoords.lat,
+        sellerCoords.lng,
+        deliveryCoords.lat,
+        deliveryCoords.lng,
+      );
+    }
 
     if (!Number.isFinite(distanceResult?.distanceKm) || distanceResult.distanceKm < 0) {
       return res.status(400).json({
@@ -651,13 +704,17 @@ export const placeOrder = async (req, res) => {
       0,
     );
 
-    const { pricing } = await calculateQuickPricing({
+    const { pricing, deliveryMeta } = await calculateQuickPricing({
       subtotal,
       discount,
       products,
       distanceKm,
       couponType,
       packagingFee,
+      deliverySpeedOptionId: req.body?.deliverySpeedOptionId,
+      deliveryOption: req.body?.deliveryOption,
+      sellerCount: orderSellerIds.length || 1,
+      interSellerKm: multiRoute?.interSellerKm || 0,
       items: items.map((item) => ({
         productId: item.productId,
         price: item.price,
@@ -685,11 +742,12 @@ export const placeOrder = async (req, res) => {
     const orderNumber = `QC${Date.now().toString().slice(-8)}`;
     const paymentModeRaw = String(req.body?.paymentMode || 'COD').toUpperCase();
     const isOnlinePayment = paymentModeRaw === 'ONLINE';
+    const isPrepaidVerified = Boolean(verifiedPrepaid);
     const isWalletPayment = paymentModeRaw === 'WALLET';
     const paymentMode = isOnlinePayment ? 'razorpay' : isWalletPayment ? 'wallet' : 'cash';
     const sellerPaymentMode = isOnlinePayment || isWalletPayment ? 'online' : 'cash';
     // Online orders reach sellers only after Razorpay payment is verified.
-    const shouldFanOutSellerOrders = !isOnlinePayment;
+    const shouldFanOutSellerOrders = !isOnlinePayment || isPrepaidVerified;
 
     if (isWalletPayment && !idQuery.userId) {
       return res.status(400).json({
@@ -721,6 +779,12 @@ export const placeOrder = async (req, res) => {
       }
     }
 
+    // Cash on Delivery follows Food: off unless an admin enables it in Quick Commerce delivery settings.
+    const quickDeliverySettings = await getQuickDeliverySettings();
+    if (paymentMode === 'cash' && !quickDeliverySettings.codEnabled) {
+      throw new ValidationError('Cash on Delivery is no longer available. Please pay online or with wallet.');
+    }
+
     if (paymentMode === 'cash') {
       const cashLimitSettings = await getDeliveryCashLimitSettings();
       const codOrderLimit = Number(cashLimitSettings?.deliveryCashLimit || 0);
@@ -732,7 +796,9 @@ export const placeOrder = async (req, res) => {
     }
 
     // Calculate rider earning using actual distance
-    const riderEarning = await getQuickRiderEarning(distanceKm);
+    const riderEarning = Number.isFinite(Number(deliveryMeta?.riderFee))
+      ? Number(deliveryMeta.riderFee)
+      : await getQuickRiderEarning(distanceKm);
 
     const sellerBuckets = new Map();
     // @deprecated multi-seller bucketing — validated to single seller above; kept for SellerOrder fan-out.
@@ -801,6 +867,53 @@ export const placeOrder = async (req, res) => {
     };
 
     const headerRatesByProduct = await resolveHeaderRatesByProduct(products);
+    // Scheduled order (same rule as Food): a slot in the future parks the order as `scheduled`;
+    // the watchdog activates it 30 minutes before the slot and only then hunts for a rider.
+    let scheduledAt = null;
+    if (req.body?.scheduledAt) {
+      const parsed = new Date(req.body.scheduledAt);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new ValidationError('Invalid scheduled time');
+      }
+      if (parsed.getTime() > Date.now() + 60 * 1000) {
+        if (!quickDeliverySettings.scheduleEnabled) {
+          throw new ValidationError('Scheduled orders are not available right now');
+        }
+        if (parsed.getTime() < Date.now() + quickDeliverySettings.scheduleMinAheadMinutes * 60 * 1000) {
+          throw new ValidationError(
+            `Please pick a time at least ${quickDeliverySettings.scheduleMinAheadMinutes} minutes from now`,
+          );
+        }
+        if (parsed.getTime() > Date.now() + quickDeliverySettings.scheduleMaxDays * 24 * 60 * 60 * 1000) {
+          throw new ValidationError(`Orders can be scheduled up to ${quickDeliverySettings.scheduleMaxDays} days ahead`);
+        }
+        scheduledAt = parsed;
+      }
+    }
+    const isScheduledOrder = Boolean(scheduledAt);
+
+    if (isPrepaidVerified && Math.round(total * 100) !== Math.round(Number(verifiedPrepaid.expectedAmount) * 100)) {
+      throw new ValidationError('Order total changed after payment. Contact support for a refund.');
+    }
+
+    // Online payment: nothing is created yet. Open a checkout session; the order is placed after payment.
+    if (isOnlinePayment && !isPrepaidVerified) {
+      const checkout = await createQuickCheckoutSession({
+        idQuery,
+        requestBody: { ...(req.body || {}), paymentMode: 'ONLINE' },
+        amountDue: total,
+      });
+      return res.status(201).json({
+        success: true,
+        requiresPayment: true,
+        checkoutId: checkout.checkoutId,
+        amount: total,
+        razorpay: checkout.razorpay,
+        expiresAt: checkout.expiresAt,
+        result: null,
+      });
+    }
+
     const order = await QuickOrder.create({
       orderType: 'quick',
       orderId: orderNumber,
@@ -846,10 +959,27 @@ export const placeOrder = async (req, res) => {
       timeSlot: req.body?.timeSlot || 'now',
       payment: {
         method: paymentMode,
-        status: isOnlinePayment ? 'created' : isWalletPayment ? 'paid' : 'cod_pending',
+        status: isOnlinePayment ? (isPrepaidVerified ? 'paid' : 'created') : isWalletPayment ? 'paid' : 'cod_pending',
         amountDue: Math.max(0, total),  // total already includes platformFee
+        ...(isPrepaidVerified
+          ? {
+              razorpay: {
+                orderId: verifiedPrepaid.razorpayOrderId,
+                paymentId: verifiedPrepaid.razorpayPaymentId,
+                signature: verifiedPrepaid.razorpaySignature,
+              },
+            }
+          : {}),
       },
-      orderStatus: 'placed',
+      orderStatus: isScheduledOrder ? 'scheduled' : 'placed',
+      scheduledAt,
+      deliveryOption: deliveryMeta?.speedOption?.name || '',
+      deliverySpeedOptionId: deliveryMeta?.speedOption?.id || '',
+      deliveryTime: deliveryMeta?.speedOption?.time || '',
+      estimatedTime: deliveryMeta?.speedOption?.estimatedTime || null,
+      isSplitOrder: Boolean(deliveryMeta?.isSplitOrder),
+      isMultiSeller: Boolean(deliveryMeta?.isMultiSeller),
+      ...(multiRoute ? { pickups: buildQuickPickupStops(multiRoute.stops, items) } : {}),
       riderEarning: riderEarning || 0,
       platformProfit: allocateQuickCouponEarnings({
         couponSource,
@@ -862,13 +992,13 @@ export const placeOrder = async (req, res) => {
         {
           byRole: 'SYSTEM',
           from: '',
-          to: 'placed',
-          note: 'Quick commerce order placed',
+          to: isScheduledOrder ? 'scheduled' : 'placed',
+          note: isScheduledOrder ? 'Scheduled quick commerce order placed' : 'Quick commerce order placed',
         },
       ],
     });
 
-    if (couponCode && couponSource === 'restaurant' && !isOnlinePayment) {
+    if (couponCode && couponSource === 'restaurant' && (!isOnlinePayment || isPrepaidVerified)) {
       sellerCouponForUsage = await SellerCoupon.findOne({
         sellerId: firstProduct?.sellerId ? new mongoose.Types.ObjectId(String(firstProduct.sellerId)) : null,
         code: String(couponCode).trim().toUpperCase(),
@@ -896,7 +1026,7 @@ export const placeOrder = async (req, res) => {
       }
     }
 
-    if (couponCode && couponSource === 'admin' && !isOnlinePayment) {
+    if (couponCode && couponSource === 'admin' && (!isOnlinePayment || isPrepaidVerified)) {
       adminCouponForUsage = await findAdminQuickCouponByCode(couponCode);
       if (adminCouponForUsage && !isQuickCouponCurrentlyValid(adminCouponForUsage)) {
         adminCouponForUsage = null;
@@ -919,7 +1049,7 @@ export const placeOrder = async (req, res) => {
 
     let razorpayPayload = null;
 
-    if (paymentMode === "razorpay" && isRazorpayConfigured()) {
+    if (paymentMode === "razorpay" && isRazorpayConfigured() && !isPrepaidVerified) {
       const amountPaise = Math.round(total * 100);
       if (amountPaise >= 100) {
         try {
@@ -967,7 +1097,7 @@ export const placeOrder = async (req, res) => {
 
     let stockAdjusted = false;
     try {
-      if (!isOnlinePayment) {
+      if (!isOnlinePayment || isPrepaidVerified) {
         await decrementQuickOrderItemsStock(items);
         stockAdjusted = true;
       }
@@ -1169,7 +1299,8 @@ export const placeOrder = async (req, res) => {
     emitQuickOrderStatusUpdate(order, 'Quick order placed successfully.');
 
     // Rider first: the seller order is created by quickDispatch once a rider accepts.
-    if (shouldFanOutSellerOrders) {
+    // A scheduled order waits for its slot (see activateDueScheduledQuickOrders).
+    if (shouldFanOutSellerOrders && !isScheduledOrder) {
       void dispatchQuickOrder(order._id).catch((error) => {
         logger.error(`Quick dispatch failed for ${order.orderId}: ${error?.message || error}`);
       });
@@ -1222,7 +1353,159 @@ export const placeOrder = async (req, res) => {
       message: error?.message || 'Failed to place quick order',
     });
   }
+}
+
+/**
+ * Create the order for a paid checkout session. Shared by the customer verify call and the Razorpay
+ * webhook; the session claim makes sure only one of them does it.
+ */
+export async function finalizeQuickCheckout(claimedSession) {
+  const body = { ...(claimedSession.requestBody || {}), paymentMode: 'ONLINE' };
+  const idQuery = claimedSession.userId
+    ? { userId: String(claimedSession.userId) }
+    : { sessionId: String(claimedSession.sessionId || '') };
+
+  // The place-order core reads an Express request; replay the original one for the paying customer.
+  const syntheticReq = {
+    body,
+    query: {},
+    headers: claimedSession.sessionId ? { 'x-quick-session': claimedSession.sessionId } : {},
+    user: idQuery.userId ? { userId: idQuery.userId } : undefined,
+  };
+  const captured = { statusCode: 200, body: null };
+  const capture = {
+    status(code) {
+      captured.statusCode = code;
+      return capture;
+    },
+    json(payload) {
+      captured.body = payload;
+      return capture;
+    },
+  };
+
+  await placeOrderCore(syntheticReq, capture, {
+    verifiedPrepaid: {
+      razorpayOrderId: claimedSession.razorpay?.orderId,
+      razorpayPaymentId: claimedSession.razorpay?.paymentId,
+      razorpaySignature: claimedSession.razorpay?.signature || 'webhook',
+      expectedAmount: claimedSession.amountDue,
+    },
+  });
+
+  if (captured.statusCode !== 201 || !captured.body?.success || !captured.body?.result) {
+    const reason = captured.body?.message || captured.body?.error || 'Order could not be created';
+    await refundFailedQuickCheckout(claimedSession, reason);
+    throw new ValidationError(
+      `${reason}. Your payment is being refunded automatically.`,
+    );
+  }
+
+  const order = await QuickOrder.findOne({
+    $or: [{ orderId: captured.body.result.orderId }, { orderId: captured.body.result.orderNumber }],
+  });
+  await markQuickCheckoutCompleted(claimedSession, order?._id);
+
+  if (order) {
+    try {
+      await foodTransactionService.updateTransactionStatus(order._id, 'captured', {
+        status: 'captured',
+        razorpayPaymentId: claimedSession.razorpay?.paymentId,
+        razorpaySignature: claimedSession.razorpay?.signature,
+        note: 'Payment verified before order create',
+        recordedByRole: 'USER',
+        ...(order.userId ? { recordedById: order.userId } : {}),
+      });
+    } catch (txnErr) {
+      logger.warn(`Quick checkout transaction sync failed for ${order.orderId}: ${txnErr?.message || txnErr}`);
+    }
+  }
+  return { order, result: captured.body.result };
+}
+
+/** Customer returns from Razorpay: verify the payment, then the order is created. */
+export const verifyQuickCheckout = async (req, res) => {
+  try {
+    const idQuery = resolveId(req);
+    if (!idQuery) {
+      return res.status(400).json({ success: false, message: 'sessionId or userId is required' });
+    }
+    const session = await getQuickCheckoutForOwner(req.body?.checkoutId, idQuery);
+    const razorpayOrderId = String(req.body?.razorpay_order_id || req.body?.razorpayOrderId || '').trim();
+    const razorpayPaymentId = String(req.body?.razorpay_payment_id || req.body?.razorpayPaymentId || '').trim();
+    const razorpaySignature = String(req.body?.razorpay_signature || req.body?.razorpaySignature || '').trim();
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+      return res.status(400).json({ success: false, message: 'Invalid payment verification payload' });
+    }
+
+    const { alreadyCompleted } = await verifyQuickCheckoutPayment(session, {
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
+    });
+    if (alreadyCompleted && session.quickOrderId) {
+      const existing = await QuickOrder.findById(session.quickOrderId);
+      if (existing) return res.json({ success: true, result: normalizeOrderSummary(existing) });
+    }
+
+    const claimed = await claimQuickCheckoutForOrderCreate(session._id, { razorpayPaymentId, razorpaySignature });
+    if (!claimed) {
+      const fresh = await getQuickCheckoutForOwner(session._id, idQuery);
+      if (fresh.quickOrderId) {
+        const existing = await QuickOrder.findById(fresh.quickOrderId);
+        if (existing) return res.json({ success: true, result: normalizeOrderSummary(existing) });
+      }
+      return res.status(409).json({ success: false, message: 'Your order is being created. Please check My Orders in a moment.' });
+    }
+
+    const { result } = await finalizeQuickCheckout(claimed);
+    return res.json({ success: true, message: 'Payment verified successfully', result });
+  } catch (error) {
+    const status = Number(error?.statusCode) === 404 ? 404 : error?.name === 'ValidationError' ? 400 : 500;
+    if (status === 500) logger.error(`Quick verifyQuickCheckout failed: ${error?.message || error}`);
+    return res.status(status).json({ success: false, message: error?.message || 'Payment verification failed' });
+  }
 };
+
+export const cancelQuickCheckout = async (req, res) => {
+  try {
+    const idQuery = resolveId(req);
+    if (!idQuery) {
+      return res.status(400).json({ success: false, message: 'sessionId or userId is required' });
+    }
+    const session = await cancelQuickCheckoutSession(req.body?.checkoutId, idQuery);
+    return res.json({ success: true, status: session.status });
+  } catch (error) {
+    const status = error?.name === 'NotFoundError' ? 404 : error?.name === 'ValidationError' ? 400 : 500;
+    return res.status(status).json({ success: false, message: error?.message || 'Failed to cancel checkout' });
+  }
+};
+
+/** Webhook path: payment captured but the customer never came back to confirm. Idempotent. */
+export async function finalizeQuickCheckoutFromWebhook(rzOrderId, rzPaymentId) {
+  const session = await findQuickCheckoutByRazorpayOrderId(rzOrderId);
+  if (!session) return null;
+  if (session.status === 'completed' && session.quickOrderId) return QuickOrder.findById(session.quickOrderId);
+
+  if (new Date(session.expiresAt).getTime() <= Date.now() && session.status === 'pending_payment') {
+    session.razorpay.paymentId = rzPaymentId;
+    await refundFailedQuickCheckout(session, 'Payment arrived after the checkout expired');
+    return null;
+  }
+
+  const claimed = await claimQuickCheckoutForOrderCreate(session._id, { razorpayPaymentId: rzPaymentId });
+  if (!claimed) {
+    const fresh = await QuickCheckoutSession.findById(session._id);
+    return fresh?.quickOrderId ? QuickOrder.findById(fresh.quickOrderId) : null;
+  }
+  try {
+    const { order } = await finalizeQuickCheckout(claimed);
+    return order;
+  } catch (err) {
+    logger.error(`Quick checkout webhook finalize failed for ${claimed._id}: ${err.message}`);
+    return null;
+  }
+}
 
 export const verifyPayment = async (req, res) => {
   try {
@@ -1624,6 +1907,7 @@ export const getOrderById = async (req, res) => {
         returnSummary: returnAttachment.returnSummary,
         handoverOtp:
           dropOtp.required && !dropOtp.verified && handoverOtp ? handoverOtp : '',
+        legOtps: order.isDualLeg ? getPendingLegHandoverOtps(order) : [],
       }),
     });
   } catch (error) {
@@ -1676,6 +1960,7 @@ export const cancelOrder = async (req, res) => {
       'cancelled_by_user',
       'cancelled_by_restaurant',
       'cancelled_by_admin',
+      'cancelled_by_system',
     ]);
     const nonCancellableWorkflowStatuses = new Set(['OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED']);
     const nonCancellableDeliveryPhases = new Set([
@@ -1806,6 +2091,17 @@ export const cancelOrder = async (req, res) => {
         },
       },
     );
+
+    // Let the assigned rider(s) go and close any unanswered offer cards (Food does the same).
+    try {
+      await releaseRidersForCancelledQuickOrder(claimedOrder, {
+        message: `Order #${claimedOrder.orderId} was cancelled by the customer.`,
+      });
+    } catch (releaseErr) {
+      logger.warn(
+        `Quick cancelOrder rider release failed for ${claimedOrder.orderId}: ${releaseErr?.message || releaseErr}`,
+      );
+    }
 
     const cancellationMessage =
       refundResult?.message || 'Quick order cancelled successfully.';

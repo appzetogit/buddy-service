@@ -1,4 +1,5 @@
 import express from "express";
+import { getPublicQuickDeliveryOptionsController } from "../controllers/quickDeliverySettings.controller.js";
 import { getPublicFaqs } from "../controllers/faq.controller.js";
 import { upload } from "../../../middleware/upload.js";
 import {
@@ -34,6 +35,8 @@ import {
   placeOrder,
   verifyPayment,
   submitOrderRatingsController,
+  verifyQuickCheckout,
+  cancelQuickCheckout,
 } from "../controllers/order.controller.js";
 import {
   cancelReturnRequestController,
@@ -216,7 +219,10 @@ router.put("/cart/update", optionalAuth, updateCartItem);
 router.delete("/cart/remove/:productId", optionalAuth, removeCartItem);
 router.delete("/cart/clear", optionalAuth, clearCart);
 
+router.get("/delivery-options", getPublicQuickDeliveryOptionsController);
 router.post("/orders", optionalAuth, placeOrder);
+router.post("/checkout/verify-payment", optionalAuth, verifyQuickCheckout);
+router.post("/checkout/cancel", optionalAuth, cancelQuickCheckout);
 router.get("/orders", optionalAuth, getMyOrders);
 router.get("/orders/:orderId", optionalAuth, getOrderById);
 router.post("/orders/:orderId/verify-payment", optionalAuth, verifyPayment);

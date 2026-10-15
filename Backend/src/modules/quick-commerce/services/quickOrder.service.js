@@ -16,6 +16,7 @@ import {
 } from '../../food/orders/services/order.helpers.js';
 import { scorePointsByRoadDistance } from '../../../services/roadDistance.service.js';
 import { dispatchQuickOrder } from './quickDispatch.service.js';
+import { dropSellerFromQuickOrder, releaseRidersForCancelledQuickOrder } from './quickOrderFlows.service.js';
 import * as foodTransactionService from '../../food/orders/services/foodTransaction.service.js';
 import { ValidationError, NotFoundError } from '../../../core/auth/errors.js';
 import { emitQuickCommerceStatusUpdate } from './quickStatusRealtime.service.js';
@@ -36,6 +37,25 @@ const SELLER_TO_PARENT_STATUS_MAP = {
   out_for_delivery: "picked_up",
   delivered: "delivered",
   cancelled: "cancelled_by_restaurant",
+};
+
+/** Seller leg status -> the store stop's state on a multi-store order. */
+const SELLER_TO_PICKUP_STATUS_MAP = {
+  pending: 'pending',
+  confirmed: 'accepted',
+  packed: 'preparing',
+  ready_for_pickup: 'ready',
+};
+
+/** Overall order status from the live store stops: ready only when every store is ready. */
+const aggregateFromPickups = (order) => {
+  const active = (order.pickups || []).filter(
+    (p) => !p.permanentlyDropped && String(p.status || '') !== 'cancelled',
+  );
+  const statuses = active.map((p) => String(p.status || ''));
+  if (statuses.length && statuses.every((st) => ['ready', 'picked_up'].includes(st))) return 'ready_for_pickup';
+  if (statuses.some((st) => ['preparing', 'ready'].includes(st))) return 'preparing';
+  return 'confirmed';
 };
 
 /**
@@ -143,7 +163,40 @@ export const updateSellerOrderStatus = async (sellerOrderId, sellerId, nextStatu
 
   // 2. Sync Parent Order
   if (parentOrder) {
-    const parentNextStatus = SELLER_TO_PARENT_STATUS_MAP[nextStatus];
+    const isMultiStore = Boolean(parentOrder.isMultiSeller) && (parentOrder.pickups || []).length > 1;
+
+    // One store of a multi-store order backs out: the others carry on (partial refund), unless it was the last.
+    if (isMultiStore && nextStatus === 'cancelled') {
+      const dropped = await dropSellerFromQuickOrder(parentOrder, sellerId, sellerOrder, reason);
+      if (!dropped.fullyCancelled) {
+        pushStatusHistory(parentOrder, {
+          byRole: 'SELLER',
+          byId: sellerId,
+          from: parentOrder.orderStatus,
+          to: parentOrder.orderStatus,
+          note: `Store removed from the order${reason ? `: ${reason}` : ''}`,
+        });
+        const aggregate = aggregateFromPickups(parentOrder);
+        if (isStatusAdvance(parentOrder.orderStatus, aggregate)) parentOrder.orderStatus = aggregate;
+        await parentOrder.save();
+        void emitQuickCommerceStatusUpdate(parentOrder, {
+          message: 'One store could not fulfil its part of the order. The rest continues.',
+          sellerId,
+        });
+        return sellerOrder;
+      }
+    }
+
+    let parentNextStatus = SELLER_TO_PARENT_STATUS_MAP[nextStatus];
+    if (isMultiStore && SELLER_TO_PICKUP_STATUS_MAP[nextStatus]) {
+      const stop = parentOrder.pickups.find((p) => String(p.restaurantId) === String(sellerId));
+      if (stop && !stop.permanentlyDropped) {
+        stop.status = SELLER_TO_PICKUP_STATUS_MAP[nextStatus];
+        if (stop.status === 'ready') stop.readyAt = stop.readyAt || new Date();
+        parentOrder.markModified('pickups');
+      }
+      parentNextStatus = aggregateFromPickups(parentOrder);
+    }
     const fromStatus = parentOrder.orderStatus;
 
     if (parentNextStatus) {
@@ -173,6 +226,10 @@ export const updateSellerOrderStatus = async (sellerOrderId, sellerId, nextStatu
       // If cancelled -> handle refund and stock restore
       if (nextStatus === 'cancelled') {
         const refundResult = await handleSellerOrderCancellation(parentOrder, reason);
+        // The store backed out: free the rider and close any unanswered offer cards.
+        await releaseRidersForCancelledQuickOrder(parentOrder, {
+          message: `Order #${parentOrder.orderId} was cancelled by the store.`,
+        }).catch((err) => logger.warn(`[QuickDispatch] rider release after seller cancel failed: ${err.message}`));
         void emitQuickCommerceStatusUpdate(parentOrder, {
           message: refundResult?.message || 'Order cancelled by the store.',
           sellerId,

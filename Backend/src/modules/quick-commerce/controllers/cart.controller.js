@@ -18,6 +18,7 @@ import {
   resolveProductSellerId,
   SELLER_MISMATCH_CODE,
 } from '../utils/singleSeller.helpers.js';
+import { assertSellerCanJoinCart } from '../services/quickMultiSeller.service.js';
 
 import { publicProductVisibilityFilter } from '../utils/productVisibility.helpers.js';
 import { buildQuickCheckoutPreview } from '../services/checkoutPreview.service.js';
@@ -432,7 +433,8 @@ export const addToCart = async (req, res) => {
       : [];
     const existingSellerIds = collectSellerIdsFromProducts(existingProducts);
     try {
-      assertNoSellerMismatch(existingSellerIds, resolveProductSellerId(product));
+      // One store per cart unless an admin enabled multi-store orders (then count + distance rules apply).
+      await assertSellerCanJoinCart(existingSellerIds, resolveProductSellerId(product));
     } catch (error) {
       return res.status(400).json({
         success: false,
@@ -618,6 +620,8 @@ export const previewCheckout = async (req, res) => {
       longitude: req.body?.longitude ?? req.body?.lng ?? req.query?.longitude ?? req.query?.lng,
       couponCode: req.body?.couponCode || req.query?.couponCode || null,
       couponSource: req.body?.couponSource || req.body?.source || null,
+      deliverySpeedOptionId: req.body?.deliverySpeedOptionId || req.query?.deliverySpeedOptionId || '',
+      deliveryOption: req.body?.deliveryOption || req.query?.deliveryOption || '',
     });
 
     return res.json({ success: true, result });

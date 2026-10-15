@@ -6,7 +6,11 @@ const ONLINE_METHODS = new Set(['razorpay', 'razorpay_qr', 'online']);
 
 const getRefundableAmount = (order) => {
   const total = Number(order?.pricing?.total ?? order?.total ?? 0);
-  return Number.isFinite(total) ? Math.max(0, total) : 0;
+  // A store that dropped out of a multi-store order was already refunded its part.
+  const alreadyRefunded = (Array.isArray(order?.partialRefunds) ? order.partialRefunds : [])
+    .filter((row) => ['wallet', 'gateway'].includes(String(row?.method || '')))
+    .reduce((sum, row) => sum + Number(row?.amount || 0), 0);
+  return Number.isFinite(total) ? Math.max(0, total - alreadyRefunded) : 0;
 };
 
 const isPaidPrepaidOrder = (order) => {

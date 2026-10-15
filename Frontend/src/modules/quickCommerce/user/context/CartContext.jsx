@@ -176,6 +176,22 @@ const getCartSellerIds = (cartItems = []) => {
   );
 };
 
+// Admin setting (Delivery & Dispatch > Several stores in one order). Off unless an admin turns it on.
+let multiStoreRules = { enabled: false, maxSellers: 2 };
+
+const loadMultiStoreRules = () =>
+  customerApi
+    .getDeliveryOptions()
+    .then((res) => {
+      const rules = res?.data?.data?.multiSeller;
+      if (rules) {
+        multiStoreRules = { enabled: Boolean(rules.enabled), maxSellers: Number(rules.maxSellers) || 2 };
+      }
+    })
+    .catch(() => {
+      /* keep the one-store default */
+    });
+
 const checkSellerConflict = (cartItems, product) => {
   if (!Array.isArray(cartItems) || cartItems.length === 0) return null;
 
@@ -185,6 +201,8 @@ const checkSellerConflict = (cartItems, product) => {
   const cartSellerIds = getCartSellerIds(cartItems);
   if (cartSellerIds.size === 0) return null;
   if (cartSellerIds.has(productSellerId)) return null;
+  // Another store is fine when multi-store orders are on and there is room; the server checks distance.
+  if (multiStoreRules.enabled && cartSellerIds.size < multiStoreRules.maxSellers) return null;
 
   const cartItem =
     cartItems.find((item) => getQuickStoreId(item) && cartSellerIds.has(getQuickStoreId(item))) ||
@@ -342,6 +360,9 @@ const useStandaloneQuickCart = (isBridged = false) => {
   const { isAuthenticated } = useAuth();
   const { showToast } = useToast();
   const [cart, setCart] = useState(() => readStoredQuickCart());
+  useEffect(() => {
+    loadMultiStoreRules();
+  }, []);
   const [serverCartRevision, setServerCartRevision] = useState(0);
 
   const [loading, setLoading] = useState(Boolean(isAuthenticated));

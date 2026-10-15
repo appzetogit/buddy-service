@@ -141,7 +141,13 @@ export async function getQuickCommerceFinanceSummary() {
   const deliveryMarginExpr = {
     $subtract: [
       { $ifNull: ["$pricing.deliveryFee", 0] },
-      { $ifNull: ["$riderEarning", { $ifNull: ["$pricing.riderEarning", 0] }] },
+      {
+        $add: [
+          { $ifNull: ["$riderEarning", { $ifNull: ["$pricing.riderEarning", 0] }] },
+          // Shared (two-rider) orders pay the second rider out of the same delivery fee.
+          { $ifNull: ["$sharedRiderEarning", 0] },
+        ],
+      },
     ],
   };
   const adminEarningExpr = {

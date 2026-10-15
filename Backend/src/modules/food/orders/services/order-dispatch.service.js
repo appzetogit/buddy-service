@@ -1,3 +1,4 @@
+import { riderOrders } from '../../delivery/services/riderOrderSources.js';
 import mongoose from 'mongoose';
 import { FoodOrder, FoodSettings } from '../models/order.model.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
@@ -106,7 +107,8 @@ async function filterPartnersByCashLimit(partners = [], options = {}) {
   if (partnerIds.length === 0) return [];
 
   const [cashAgg, depositsAgg] = await Promise.all([
-    FoodOrder.aggregate([
+    // Cash a rider holds from Quick Commerce deliveries counts against the same limit.
+    riderOrders.aggregate([
       {
         $match: {
           'dispatch.deliveryPartnerId': { $in: partnerIds },

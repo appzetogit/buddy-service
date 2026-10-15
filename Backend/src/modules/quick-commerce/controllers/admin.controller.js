@@ -233,7 +233,7 @@ const parseVariants = (value = '[]') => {
   }
 };
 
-const QUICK_CANCELLED_STATUSES = ['cancelled', 'cancelled_by_user', 'cancelled_by_restaurant', 'cancelled_by_admin'];
+const QUICK_CANCELLED_STATUSES = ['cancelled', 'cancelled_by_user', 'cancelled_by_restaurant', 'cancelled_by_admin', 'cancelled_by_system'];
 const QUICK_DASHBOARD_CATEGORY_COLORS = ['#FF6B6B', '#4F46E5', '#10B981', '#F59E0B', '#8B5CF6', '#0EA5E9'];
 const QUICK_PROCESSING_WORKFLOW_STATUSES = ['SELLER_ACCEPTED', 'DELIVERY_SEARCH', 'DELIVERY_ASSIGNED', 'PICKUP_READY'];
 const QUICK_PROCESSING_ORDER_STATUSES = ['confirmed', 'packed'];
@@ -573,6 +573,7 @@ const legacyQuickStatusFromOrder = (order = {}) => {
   if (workflowStatus === 'SELLER_ACCEPTED' || workflowStatus === 'DELIVERY_SEARCH' || workflowStatus === 'DELIVERY_ASSIGNED' || workflowStatus === 'PICKUP_READY') {
     return 'confirmed';
   }
+  if (rawStatus === 'scheduled') return 'scheduled';
   if (rawStatus === 'out_for_delivery') return 'out_for_delivery';
   if (rawStatus === 'delivered') return 'delivered';
   if (rawStatus === 'confirmed' || rawStatus === 'packed') return rawStatus;
@@ -935,7 +936,17 @@ const buildQuickAdminOrderResponse = (order, sellerMap = {}, sellerOrderMap = {}
     dispatch: {
       status: order?.dispatch?.status || 'unassigned',
       deliveryPartnerId: deliveryBoy || order?.dispatch?.deliveryPartnerId || null,
+      acceptedAt: order?.dispatch?.acceptedAt || null,
+      assignedAt: order?.dispatch?.assignedAt || null,
+      isShared: Boolean(order?.dispatch?.isShared),
+      sharedPartnerId: order?.dispatch?.sharedPartnerId || null,
+      dispatchAttempt: Number(order?.dispatch?.dispatchAttempt || 0),
+      offeredCount: Array.isArray(order?.dispatch?.offeredTo) ? order.dispatch.offeredTo.length : 0,
+      assignmentHistory: Array.isArray(order?.dispatch?.assignmentHistory) ? order.dispatch.assignmentHistory : [],
     },
+    scheduledAt: order.scheduledAt || null,
+    delayContext: order.delayContext?.reason ? order.delayContext : null,
+    sharedRiderEarning: roundMoney(order.sharedRiderEarning || 0),
     seller: seller
       ? {
           _id: seller._id,
@@ -2382,16 +2393,24 @@ export const getAdminOrderById = async (req, res) => {
     returnsByOrderId.get(String(order.orderId || '')) || [],
   );
 
-  return res.json({
-    success: true,
-    result: buildQuickAdminOrderResponse(
-      order,
-      sellerMap,
-      sellerOrderMap,
-      deliveryPartner,
-      returnAttachment.returnSummary,
-    ),
-  });
+  const result = buildQuickAdminOrderResponse(
+    order,
+    sellerMap,
+    sellerOrderMap,
+    deliveryPartner,
+    returnAttachment.returnSummary,
+  );
+  const sharedPartnerId = order?.dispatch?.sharedPartnerId;
+  if (sharedPartnerId && mongoose.isValidObjectId(String(sharedPartnerId))) {
+    const sharedPartner = await FoodDeliveryPartner.findById(sharedPartnerId)
+      .select('_id name phone vehicleType vehicleNumber')
+      .lean();
+    result.sharedDeliveryBoy = sharedPartner
+      ? { _id: sharedPartner._id, name: sharedPartner.name || 'Delivery Partner', phone: sharedPartner.phone || '', vehicleType: sharedPartner.vehicleType || '', vehicleNumber: sharedPartner.vehicleNumber || '' }
+      : null;
+  }
+
+  return res.json({ success: true, result });
 };
 
 export const getAdminCustomers = async (req, res) => {

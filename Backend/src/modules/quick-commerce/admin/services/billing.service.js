@@ -3,6 +3,12 @@ import { ValidationError } from '../../../../core/auth/errors.js';
 import { QuickFeeSettings } from '../models/feeSettings.model.js';
 import { QuickCategory } from '../../models/category.model.js';
 import { calculateHeaderGstAmount } from './commission.service.js';
+import { getQuickDeliverySettings } from '../../services/quickDeliverySettings.service.js';
+import {
+  applyDeliverySurcharges,
+  resolveSpeedOption,
+  splitSpeedFeeShares,
+} from '../../../food/orders/services/order.helpers.js';
 
 const DEFAULT_QUICK_FEE_SETTINGS = {
   deliveryFee: 25,
@@ -225,8 +231,13 @@ export async function calculateQuickPricing({
   distanceKm = 0,
   packagingFee = 0,
   couponType = '',
+  deliverySpeedOptionId = '',
+  deliveryOption = '',
+  sellerCount = 1,
+  interSellerKm = 0,
 } = {}) {
   const feeSettings = await getActiveFeeSettings();
+  const deliverySettings = await getQuickDeliverySettings();
   const safeSubtotal = Number(subtotal || 0);
   const safeDiscount = Math.max(0, Number(discount || 0));
   const safePackagingFee = Number(packagingFee || 0);
@@ -234,20 +245,91 @@ export async function calculateQuickPricing({
 
   const handlingFee = await calculateHandlingFeeFromProducts(products);
 
-  let deliveryFee =
-    String(couponType || '').trim().toLowerCase() === 'free_delivery'
-      ? 0
-      : calculateCustomerDeliveryFee(feeSettings, distanceKm);
+  const freeByCoupon = String(couponType || '').trim().toLowerCase() === 'free_delivery';
+  let baseDeliveryFee = freeByCoupon ? 0 : calculateCustomerDeliveryFee(feeSettings, distanceKm);
 
   const freeDeliveryThreshold = Number(feeSettings.freeDeliveryThreshold || 0);
-  if (
-    deliveryFee > 0 &&
+  const freeByThreshold =
+    baseDeliveryFee > 0 &&
     Number.isFinite(freeDeliveryThreshold) &&
     freeDeliveryThreshold > 0 &&
-    safeSubtotal >= freeDeliveryThreshold
-  ) {
-    deliveryFee = 0;
+    safeSubtotal >= freeDeliveryThreshold;
+  if (freeByThreshold) baseDeliveryFee = 0;
+  const deliveryWaived = freeByCoupon || freeByThreshold;
+
+  // ---- Same delivery-fee layering as Food: base -> speed option -> multi-store / split surcharges ----
+  const totalItemCount = (Array.isArray(items) ? items : []).reduce(
+    (sum, item) => sum + (Number(item?.quantity) || 1),
+    0,
+  );
+  const isSplitOrder = Boolean(
+    deliverySettings.splitOrderEnabled &&
+      deliverySettings.splitOrderThreshold > 0 &&
+      totalItemCount >= deliverySettings.splitOrderThreshold,
+  );
+  const isMultiSeller = Number(sellerCount) > 1;
+
+  const speedOptions = (deliverySettings.deliverySpeedOptions || []).filter((o) => o && o.isEnabled !== false);
+  if (speedOptions.length > 0 && (deliverySpeedOptionId || deliveryOption)) {
+    const speedId = String(deliverySpeedOptionId || '').trim();
+    const speedName = String(deliveryOption || '').trim().toLowerCase();
+    const found = speedOptions.find(
+      (o) =>
+        (speedId && String(o.id) === speedId) ||
+        (speedName && String(o.name || '').trim().toLowerCase() === speedName),
+    );
+    if (!found) throw new ValidationError('Selected delivery speed is no longer available');
   }
+  const matchedSpeedOption = speedOptions.length
+    ? resolveSpeedOption({ deliverySpeedOptions: speedOptions }, deliverySpeedOptionId, deliveryOption)
+    : null;
+  const rawSpeedFee = matchedSpeedOption ? Number(matchedSpeedOption.feeModifier) || 0 : 0;
+
+  const multiCharge = isMultiSeller ? Math.max(0, Number(deliverySettings.multiOrderAdditionalCharge) || 0) : 0;
+  const splitExtraCustomer = isSplitOrder ? baseDeliveryFee : 0;
+  const customerSurcharge = multiCharge + splitExtraCustomer;
+  const baseCustomerDeliveryFee = Math.max(0, baseDeliveryFee + customerSurcharge);
+
+  const speedFeeModifier = deliveryWaived ? 0 : rawSpeedFee;
+  const speedShares = deliveryWaived
+    ? { speedShareAdmin: 0, speedShareDriver: 0, adminBearsNegative: false }
+    : splitSpeedFeeShares(speedFeeModifier, { driverShareAmount: matchedSpeedOption?.driverShareAmount });
+
+  let deliveryFee = deliveryWaived
+    ? baseCustomerDeliveryFee
+    : Math.max(0, baseCustomerDeliveryFee + speedFeeModifier);
+
+  const baseRiderFee = calculateRiderEarning(feeSettings, distanceKm);
+  const riderSurcharge = applyDeliverySurcharges(baseRiderFee, {
+    isMultiRestaurant: isMultiSeller,
+    isSplitOrder,
+    deliveryBoySettings: deliverySettings,
+  });
+  const riderFee = Number(
+    (riderSurcharge.fee + (deliveryWaived ? 0 : speedShares.speedShareDriver)).toFixed(2),
+  );
+
+  const deliveryFeeBreakdown = {
+    distanceKm,
+    interSellerKm: Number(interSellerKm) || 0,
+    isMultiSeller,
+    sellerCount: Number(sellerCount) || 1,
+    isSplitOrder,
+    totalItems: totalItemCount,
+    multiplier: isSplitOrder ? 2 : 1,
+    additionalCharge: customerSurcharge,
+    speedOptionId: matchedSpeedOption?.id || null,
+    speedFeeModifier,
+    speedSkippedBecauseFreeDelivery: deliveryWaived,
+    speedShareAdmin: speedShares.speedShareAdmin,
+    speedShareDriver: speedShares.speedShareDriver,
+    baseFee: baseDeliveryFee,
+    fee: deliveryFee,
+    deliveryBoyFee: baseRiderFee,
+    riderBaseFee: riderSurcharge.fee,
+    riderFee,
+    riderAdditionalCharge: riderSurcharge.surcharge,
+  };
 
   // GST % from Header Category only — apply on post-discount taxable item value
   const taxableSubtotal = Math.max(0, safeSubtotal - safeDiscount);
@@ -287,6 +369,13 @@ export async function calculateQuickPricing({
       discount: safeDiscount,
       total,
       currency: 'INR',
+      deliveryFeeBreakdown,
+    },
+    deliveryMeta: {
+      riderFee,
+      isSplitOrder,
+      isMultiSeller,
+      speedOption: matchedSpeedOption || null,
     },
     snapshots: {
       feeSettings,

@@ -84,6 +84,8 @@ import {
 import {
   assertMaxRestaurants,
   assertMultiOrderAllowed,
+  assertValidScheduledAt,
+  MIN_SCHEDULE_LEAD_MINUTES,
   assertCanCancel,
   assertCanShareSecondDriver,
   computeDroppedRestaurantRefundAmount,
@@ -195,6 +197,13 @@ export async function createOrder(userId, dto, options = {}) {
     || await FoodDeliveryBoySettings.findOne().sort({ createdAt: -1 }).lean();
   assertMultiOrderAllowed(deliveryBoySettingsEarly, restaurantIds.length);
 
+  const now = new Date();
+  // Validated once, here, and reused for both the availability check below and the order
+  // document further down - no second silent re-parse of dto.scheduledAt. Throws (rather than
+  // the old silent fall-back-to-instant behaviour) when the client sent a scheduledAt that is
+  // malformed, in the past, inside the activation job's lookahead, or absurdly far out.
+  const scheduledAtDate = assertValidScheduledAt(dto.scheduledAt, now);
+
   const restaurants = await FoodRestaurant.find({ _id: { $in: restaurantIds } })
     .select("status restaurantName zoneId location isAcceptingOrders name profileReviewStatus")
     .lean();
@@ -202,7 +211,11 @@ export async function createOrder(userId, dto, options = {}) {
   if (restaurants.length === 0) throw new ValidationError("Restaurants not found");
 
   const restaurantsWithTimings = await attachOutletTimingsToRestaurants(restaurants);
-  const now = new Date();
+  // A scheduled order must find the restaurant open AT THE SCHEDULED TIME, not right now -
+  // checking against `now` here was the actual gap: a same-day order for after closing time
+  // sailed through, and a perfectly valid tomorrow-evening order could be rejected because the
+  // restaurant merely happens to be closed at the moment the customer is checking out.
+  const availabilityReferenceTime = scheduledAtDate || now;
 
   for (const r of restaurantsWithTimings) {
     if (
@@ -213,10 +226,12 @@ export async function createOrder(userId, dto, options = {}) {
       throw new ValidationError(`Restaurant ${r.name || r.restaurantName} is not accepting orders`);
     }
 
-    const orderable = getRestaurantOrderableStatus(r, now);
+    const orderable = getRestaurantOrderableStatus(r, availabilityReferenceTime);
     if (!orderable.isOrderable) {
       throw new ValidationError(
-        `Restaurant ${r.name || r.restaurantName} is closed right now. Please try again during open hours.`,
+        scheduledAtDate
+          ? `Restaurant ${r.name || r.restaurantName} will be closed at your scheduled time. Please pick a different time within operating hours.`
+          : `Restaurant ${r.name || r.restaurantName} is closed right now. Please try again during open hours.`,
       );
     }
   }
@@ -649,7 +664,11 @@ export async function createOrder(userId, dto, options = {}) {
       qr: {},
     };
 
-  const isScheduledOrder = dto.scheduledAt && new Date(dto.scheduledAt) > new Date();
+  // scheduledAtDate was validated (and parsed) once, up front, by assertValidScheduledAt - a
+  // non-null value here has already cleared the lead-time window and the restaurant-hours
+  // check above, so it is always a genuine future scheduled slot, never re-derived from the
+  // raw, unvalidated dto.scheduledAt string again.
+  const isScheduledOrder = Boolean(scheduledAtDate);
 
   const order = new FoodOrder({
     userId: new mongoose.Types.ObjectId(userId),
@@ -671,7 +690,7 @@ export async function createOrder(userId, dto, options = {}) {
     restaurantNote: dto.restaurantNote || "",
     note: dto.note || "",
     sendCutlery: dto.sendCutlery !== false,
-    scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
+    scheduledAt: scheduledAtDate,
     riderEarning,
     platformProfit,
     deliveryFleet: dto.deliveryFleet || "standard",
@@ -4426,12 +4445,15 @@ export async function acceptSharedOrderDelivery(orderId, newPartnerId) {
 }
 
 /**
- * Background job to process scheduled orders that are due in 30 minutes or less.
+ * Background job to process scheduled orders that are due within MIN_SCHEDULE_LEAD_MINUTES.
  * Activated by server.js interval.
  */
 export async function processScheduledOrderAlerts() {
   const now = new Date();
-  const triggerWindow = new Date(now.getTime() + 30 * 60 * 1000); // 30 mins from now
+  // Same constant createOrder() enforces as the minimum lead time when a scheduled order is
+  // placed - see MIN_SCHEDULE_LEAD_MINUTES's doc comment in order-lifecycle.policy.js for why
+  // the two must never drift apart.
+  const triggerWindow = new Date(now.getTime() + MIN_SCHEDULE_LEAD_MINUTES * 60 * 1000);
 
   try {
     const scheduledOrders = await FoodOrder.find({

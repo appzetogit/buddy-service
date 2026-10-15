@@ -135,7 +135,11 @@ export async function getRiderActiveLoadMap(partnerIds = [], options = {}) {
   };
 
   const quickFilter = {
-    'dispatch.deliveryPartnerId': { $in: ids },
+    // The second rider of a shared QC order carries it too.
+    $or: [
+      { 'dispatch.deliveryPartnerId': { $in: ids } },
+      { 'dispatch.sharedPartnerId': { $in: ids } },
+    ],
     'dispatch.acceptedAt': { $exists: true, $ne: null },
     orderStatus: { $in: ACTIVE_QUICK_ORDER_STATUSES },
     ...(excludeId ? { _id: { $ne: excludeId } } : {}),
@@ -146,7 +150,7 @@ export async function getRiderActiveLoadMap(partnerIds = [], options = {}) {
       .select('dispatch.deliveryPartnerId dispatch.sharedPartnerId')
       .lean(),
     QuickOrder
-      ? QuickOrder.find(quickFilter).select('dispatch.deliveryPartnerId').lean()
+      ? QuickOrder.find(quickFilter).select('dispatch.deliveryPartnerId dispatch.sharedPartnerId').lean()
       : Promise.resolve([]),
   ]);
 
@@ -162,7 +166,9 @@ export async function getRiderActiveLoadMap(partnerIds = [], options = {}) {
 
   for (const row of quickRows || []) {
     const primary = String(row?.dispatch?.deliveryPartnerId || '');
+    const shared = String(row?.dispatch?.sharedPartnerId || '');
     if (primary && wanted.has(primary)) bump(primary);
+    if (shared && shared !== primary && wanted.has(shared)) bump(shared);
   }
 
   return loadByPartner;
@@ -198,7 +204,7 @@ export async function listRiderHeldOrders(partnerId, options = {}) {
       .lean(),
     QuickOrder
       ? QuickOrder.find({
-        'dispatch.deliveryPartnerId': id,
+        $or: [{ 'dispatch.deliveryPartnerId': id }, { 'dispatch.sharedPartnerId': id }],
         'dispatch.acceptedAt': { $exists: true, $ne: null },
         orderStatus: { $in: ACTIVE_QUICK_ORDER_STATUSES },
         ...(excludeId ? { _id: { $ne: excludeId } } : {}),

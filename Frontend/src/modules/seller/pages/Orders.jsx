@@ -32,6 +32,7 @@ import { MagicCard } from "@/components/ui/magic-card";
 import { BlurFade } from "@/components/ui/blur-fade";
 import ShimmerButton from "@/components/ui/shimmer-button";
 import { sellerApi } from "../services/sellerApi";
+import OrderDelayButton from "../components/OrderDelayButton";
 import { useToast } from "@shared/components/ui/Toast";
 import { getLegacyStatusFromOrder } from "@/shared/utils/orderStatus";
 import { Loader2 } from "lucide-react";
@@ -178,6 +179,7 @@ const OrderMobileCard = React.memo(({
               Resend Rider
             </button>
           )}
+          <OrderDelayButton order={order} />
         </div>
       </div>
       {/* Accept / Cancel actions for Pending orders on mobile */}
@@ -328,6 +330,7 @@ const OrderRow = React.memo(({
               Resend Rider
             </button>
           )}
+          <OrderDelayButton order={order} className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all text-[10px] font-black uppercase tracking-wider" />
           <button
             onClick={() => handleViewDetails(order)}
             className="p-1.5 hover:bg-white hover:text-red-500 rounded-lg transition-all text-slate-600 shadow-sm ring-1 ring-slate-100">

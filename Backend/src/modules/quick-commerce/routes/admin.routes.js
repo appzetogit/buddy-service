@@ -1,5 +1,15 @@
 import express from "express";
 import { upload } from "../../../middleware/upload.js";
+import {
+  getAdminQuickDeliverySettings,
+  updateAdminQuickDeliverySettings,
+} from "../controllers/quickDeliverySettings.controller.js";
+import {
+  assignAdminQuickRider,
+  assignAdminSecondQuickRider,
+  cancelAdminQuickOrder,
+  listAdminAssignableQuickRiders,
+} from "../controllers/adminOrderFlows.controller.js";
 
 import {
   approveAdminSellerRequest,
@@ -137,6 +147,11 @@ router.delete("/products/:productId", removeProduct);
 router.get("/orders", getAdminOrders);
 router.get("/orders/:orderId", getAdminOrderById);
 router.delete("/orders/:orderId", deleteAdminOrder);
+// Dispatch actions (mirror Food admin: cancel, assign / reassign rider, second rider)
+router.post("/orders/:orderId/cancel", cancelAdminQuickOrder);
+router.get("/orders/:orderId/assignable-riders", listAdminAssignableQuickRiders);
+router.post("/orders/:orderId/assign-rider", assignAdminQuickRider);
+router.post("/orders/:orderId/assign-second-rider", assignAdminSecondQuickRider);
 
 // Returns
 router.get("/returns", listAdminReturnsController);
@@ -207,6 +222,8 @@ router.delete("/notifications/broadcast/:id", notificationBroadcastController.de
 
 // Billing / fee settings
 router.get("/fee-settings", getFeeSettings);
+router.get("/delivery-settings", getAdminQuickDeliverySettings);
+router.put("/delivery-settings", updateAdminQuickDeliverySettings);
 router.put("/fee-settings", createOrUpdateFeeSettings);
 
 // Seller coupon requests + coupons

@@ -320,6 +320,7 @@ export const toQuickCustomerOrderDetail = ({
   returnEligibility = null,
   returnSummary = null,
   handoverOtp = '',
+  legOtps = [],
 } = {}) => {
   if (!order) return null;
 
@@ -421,6 +422,8 @@ export const toQuickCustomerOrderDetail = ({
     note: str(order.note),
     cancellationReason,
     cancelledBy: order.cancelledBy || null,
+    scheduledAt: order.scheduledAt || null,
+    delayContext: order.delayContext?.reason ? order.delayContext : null,
     statusHistory: mapStatusHistory(order.statusHistory),
     dispatch: mapDispatch(order.dispatch || {}, deliveryPartnerPayload),
     deliveryPartner: deliveryPartnerPayload,
@@ -437,6 +440,28 @@ export const toQuickCustomerOrderDetail = ({
     ...(dropOtp.required && !dropOtp.verified && handoverOtp
       ? { handoverOtp: String(handoverOtp) }
       : {}),
+    // Two riders on one order: the customer holds one code per rider.
+    isDualLeg: Boolean(order.isDualLeg),
+    splitMode: order.splitMode || 'none',
+    legs: (Array.isArray(order.legs) ? order.legs : []).map((leg) => {
+      const { otp, ...rest } = leg || {};
+      return { ...rest, hasOtp: Boolean(otp) };
+    }),
+    ...(Array.isArray(legOtps) && legOtps.length ? { legOtps } : {}),
+    deliveryOption: str(order.deliveryOption),
+    deliveryTime: str(order.deliveryTime),
+    estimatedTime: order.estimatedTime || null,
+    pickups: (Array.isArray(order.pickups) ? order.pickups : []).map((p) => ({
+      sellerId: p.restaurantId ? String(p.restaurantId) : '',
+      restaurantId: p.restaurantId ? String(p.restaurantId) : '',
+      name: p.restaurantName || '',
+      restaurantName: p.restaurantName || '',
+      status: p.status,
+      sequence: p.sequence,
+      permanentlyDropped: Boolean(p.permanentlyDropped),
+    })),
+    isMultiSeller: Boolean(order.isMultiSeller),
+    isMultiRestaurant: Boolean(order.isMultiSeller),
     seller: sellerPayload,
     restaurantName: sellerPayload?.shopName || sellerPayload?.name || '',
     storeName: sellerPayload?.shopName || sellerPayload?.name || '',

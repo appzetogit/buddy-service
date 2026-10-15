@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { FoodOrder } from '../../orders/models/order.model.js';
+import { riderOrders } from './riderOrderSources.js';
 import { FoodTransaction } from '../../orders/models/foodTransaction.model.js';
 import { FoodDeliveryWithdrawal } from '../models/foodDeliveryWithdrawal.model.js';
 import { FoodDeliveryCashDeposit } from '../models/foodDeliveryCashDeposit.model.js';
@@ -34,7 +34,7 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
 
     const [cashLimitSettings, ordersRes, cashCollectedRes, depositsRes, bonusRes, withdrawalsRes] = await Promise.all([
         getDeliveryCashLimitSettings(),
-        FoodOrder.aggregate([
+        riderOrders.aggregate([
             { 
                 $match: { 
                     $and: [
@@ -79,7 +79,7 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
                 } 
             }
         ]),
-        FoodOrder.aggregate([
+        riderOrders.aggregate([
             { 
                 $match: { 
                     $and: [
@@ -226,7 +226,7 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
 
     // Get transactions for UI (Orders, Bonuses, Withdrawals)
     const [ordersTx, withdrawalsList, depositList] = await Promise.all([
-        FoodOrder.find({ 
+        riderOrders.find({ 
             $or: [
                 { 'dispatch.deliveryPartnerId': partnerId },
                 { 'dispatch.sharedPartnerId': partnerId }

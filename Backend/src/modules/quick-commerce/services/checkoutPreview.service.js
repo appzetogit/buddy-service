@@ -190,6 +190,8 @@ export async function buildQuickCheckoutPreview({
   longitude = null,
   couponCode = null,
   couponSource = null,
+  deliverySpeedOptionId = '',
+  deliveryOption = '',
 } = {}) {
   if (!idQuery) {
     const err = new ValidationError('sessionId or userId is required');
@@ -223,6 +225,7 @@ export async function buildQuickCheckoutPreview({
 
   let discount = 0;
   let resolvedCouponCode = null;
+  let resolvedCouponSource = '';
   let couponType = '';
   let discountError = null;
   try {
@@ -236,6 +239,7 @@ export async function buildQuickCheckoutPreview({
     });
     discount = Number(discountResult.discount || 0);
     resolvedCouponCode = discountResult.couponCode || null;
+    resolvedCouponSource = discountResult.couponSource || '';
     couponType = discountResult.couponType || '';
   } catch (err) {
     // Preview should still return fees if coupon is invalid; surface soft error.
@@ -274,13 +278,39 @@ export async function buildQuickCheckoutPreview({
     }
   }
 
-  const { pricing } = await calculateQuickPricing({
+  const previewSellerIds = [...new Set(items.map((item) => (item.sellerId ? String(item.sellerId) : '')).filter(Boolean))];
+  const sellerCount = previewSellerIds.length || 1;
+  let interSellerKm = 0;
+  if (previewSellerIds.length > 1) {
+    // Price the whole store -> store -> customer trip, same as placeOrder.
+    try {
+      const { planMultiSellerRoute } = await import('./quickMultiSeller.service.js');
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        const route = await planMultiSellerRoute(previewSellerIds, { lat, lng });
+        distanceKm = route.totalKm;
+        distanceEstimated = route.estimated;
+        interSellerKm = route.interSellerKm;
+      }
+    } catch (routeErr) {
+      discountError = discountError || routeErr?.message || null;
+    }
+    if (resolvedCouponSource === 'restaurant') {
+      discount = 0;
+      resolvedCouponCode = null;
+      discountError = 'Store coupons can only be used when ordering from a single store.';
+    }
+  }
+  const { pricing, deliveryMeta } = await calculateQuickPricing({
     subtotal,
     discount,
     products,
     distanceKm,
     couponType,
     packagingFee,
+    deliverySpeedOptionId,
+    deliveryOption,
+    sellerCount,
+    interSellerKm,
     items: items.map((item) => ({
       productId: item.productId,
       price: item.price,
@@ -324,6 +354,9 @@ export async function buildQuickCheckoutPreview({
     couponType,
     currency: 'INR',
     source: 'server',
+    deliveryFeeBreakdown: pricing?.deliveryFeeBreakdown || null,
+    isSplitOrder: Boolean(deliveryMeta?.isSplitOrder),
+    isMultiSeller: Boolean(deliveryMeta?.isMultiSeller),
     ...(discountError ? { couponError: discountError } : {}),
   };
 }

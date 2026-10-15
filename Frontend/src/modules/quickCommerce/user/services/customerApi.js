@@ -92,6 +92,11 @@ export const customerApi = {
 
   getCart: (options = {}) =>
     quickGetWithDedupe("/quick-commerce/cart", {}, { ttl: 5 * 1000, ...options }),
+  // Online payment is pay-then-place: the order is created only after this verify succeeds.
+  verifyCheckout: (data = {}) =>
+    axiosInstance.post("/quick-commerce/checkout/verify-payment", data, withQuickSession()),
+  cancelCheckout: (checkoutId) =>
+    axiosInstance.post("/quick-commerce/checkout/cancel", { checkoutId }, withQuickSession()),
   previewCheckout: (data = {}) =>
     axiosInstance.post("/quick-commerce/checkout/preview", data, withQuickSession()),
   addToCart: (data) => {
@@ -178,6 +183,7 @@ export const customerApi = {
   validateCoupon: (data) => axiosInstance.post("/quick-commerce/coupons/apply", data, withQuickSession()),
   getOffers: () => quickGetWithDedupe("/quick-commerce/offers", {}),
   getBillingSettings: () => quickGetWithDedupe("/quick-commerce/billing/settings", {}),
+  getDeliveryOptions: () => quickGetWithDedupe("/quick-commerce/delivery-options", {}),
 
   getWalletBalance: (options = {}) =>
     quickGetWithDedupe("/quick-commerce/wallet/balance", {}, { ttl: 15 * 1000, ...options }),

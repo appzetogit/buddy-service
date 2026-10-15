@@ -4505,3 +4505,32 @@ export {
   validateProductPricing,
 };
 
+/** Store tells the customer the order will be late (same as Food's restaurant delay report). */
+export const reportSellerOrderDelayController = async (req, res) => {
+  try {
+    const sellerId = sellerScope(req);
+    const reason = str(req.body?.reason);
+    if (!reason) return sendError(res, 400, "A delay reason is required");
+
+    const rawId = str(req.params.orderId);
+    const sellerOrder = await SellerOrder.findOne({
+      sellerId,
+      $or: [
+        ...(mongoose.isValidObjectId(rawId) ? [{ _id: rawId }] : []),
+        { orderId: rawId },
+      ],
+    }).select("parentOrderId orderId").lean();
+    if (!sellerOrder) return sendError(res, 404, "Order not found");
+
+    const { reportQuickOrderDelay } = await import("../services/quickOrderFlows.service.js");
+    const parent = sellerOrder.parentOrderId
+      ? String(sellerOrder.parentOrderId)
+      : String(sellerOrder.orderId);
+    await reportQuickOrderDelay(parent, sellerId, "SELLER", reason);
+    return sendResponse(res, 200, "Delay reported to customer", {});
+  } catch (error) {
+    const name = error?.name || "";
+    const status = /Validation/.test(name) ? 400 : /Forbidden/.test(name) ? 403 : /NotFound/.test(name) ? 404 : 500;
+    return sendError(res, status, status === 500 ? "Failed to report delay" : error.message);
+  }
+};

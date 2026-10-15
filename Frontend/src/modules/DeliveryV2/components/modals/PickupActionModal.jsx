@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
 import { uploadAPI, deliveryAPI, adminAPI } from '@food/api';
+import { quickDeliveryAPI, isQuickDeliveryOrder } from '@quickCommerce/delivery/quickDeliveryApi';
 import { toast } from 'sonner';
 import { openCamera } from "@food/utils/imageUploadUtils";
 import { Share2, Users, PhoneCall } from 'lucide-react';
@@ -122,7 +123,7 @@ export const PickupActionModal = ({
 
   const handleReportDelay = async (reason) => {
     try {
-      await deliveryAPI.reportDelay(order._id || order.orderId, reason);
+      await (isQuickDeliveryOrder(order) ? quickDeliveryAPI : deliveryAPI).reportDelay(order._id || order.orderId, reason);
       toast.success("Delay reported to customer");
       setShowDelayPicker(false);
     } catch (err) {
@@ -188,7 +189,7 @@ export const PickupActionModal = ({
   const handleFindNewDriver = async () => {
     try {
       setIsSharing(true);
-      const res = await deliveryAPI.shareOrder(order._id || order.orderId);
+      const res = await (isQuickDeliveryOrder(order) ? quickDeliveryAPI : deliveryAPI).shareOrder(order._id || order.orderId);
       if (res?.data?.success) {
         toast.success("Looking for another driver…");
         const { activeOrder, setActiveOrder } = useDeliveryStore.getState();

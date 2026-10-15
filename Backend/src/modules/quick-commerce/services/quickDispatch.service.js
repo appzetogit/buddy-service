@@ -20,12 +20,13 @@ import {
   getRiderCapacity,
 } from '../../food/orders/services/rider-capacity.service.js';
 import { getIO, rooms } from '../../../config/socket.js';
+import { getQuickDeliverySettings } from './quickDeliverySettings.service.js';
+import { getNextPickup } from '../../food/orders/services/order-lifecycle.policy.js';
 import { logger } from '../../../utils/logger.js';
 
-/** Offer window before the order is re-offered to the next riders. */
+/** Default offer window; the live value comes from the admin delivery settings. */
 export const QUICK_OFFER_TIMEOUT_MS = 60 * 1000;
-/** Give up (and let admin/user cancel) after this many hunting rounds. */
-const MAX_QUICK_DISPATCH_ATTEMPTS = 10;
+const PRIORITY_STATUSES = ['confirmed', 'preparing', 'ready_for_pickup'];
 const DISPATCH_LOCK_TTL_MS = 2 * 60 * 1000;
 
 /** Statuses where a rider may still be hunted for. */
@@ -38,6 +39,20 @@ const toId = (value) => {
 
 /** Seller shop acts as the pickup, mirroring the restaurant on a Food order. */
 const resolveQuickPickup = (order) => {
+  // Several stores: the rider card and the rider search follow the stop the rider is due at next.
+  const stops = Array.isArray(order?.pickups) ? order.pickups : [];
+  if (stops.length > 1) {
+    const next = getNextPickup(order) || stops[0];
+    const [lng, lat] = Array.isArray(next?.location?.coordinates) ? next.location.coordinates : [undefined, undefined];
+    return {
+      sellerId: next?.restaurantId ? String(next.restaurantId) : '',
+      name: next?.restaurantName || 'Store',
+      address: next?.address || '',
+      phone: next?.phone || '',
+      latitude: Number.isFinite(Number(lat)) ? Number(lat) : undefined,
+      longitude: Number.isFinite(Number(lng)) ? Number(lng) : undefined,
+    };
+  }
   const point = (order?.pickupPoints || []).find((p) => p?.location?.coordinates?.length === 2)
     || (order?.pickupPoints || [])[0]
     || null;
@@ -99,10 +114,37 @@ export const buildQuickOfferPayload = (orderDoc) => {
     userPhone: address.phone || '',
     note: order?.note || '',
     riderEarning,
+    sharedRiderEarning: Number(order?.sharedRiderEarning || 0),
     earnings: riderEarning,
     deliveryBoyFee: riderEarning,
     deliveryFee: order?.pricing?.deliveryFee || 0,
     dispatch: order?.dispatch,
+    isMultiRestaurant: Boolean(order?.isMultiSeller),
+    pickups: (Array.isArray(order?.pickups) ? order.pickups : []).map((p) => {
+      const [lng, lat] = Array.isArray(p?.location?.coordinates) ? p.location.coordinates : [undefined, undefined];
+      return {
+        restaurantId: p?.restaurantId ? String(p.restaurantId) : '',
+        restaurantName: p?.restaurantName || 'Store',
+        address: p?.address || '',
+        phone: p?.phone || '',
+        status: p?.status,
+        sequence: p?.sequence,
+        items: p?.items || [],
+        permanentlyDropped: Boolean(p?.permanentlyDropped),
+        pickedAt: p?.pickedAt || null,
+        location: { coordinates: p?.location?.coordinates, latitude: lat, longitude: lng },
+      };
+    }),
+    isDualLeg: Boolean(order?.isDualLeg),
+    splitMode: order?.splitMode || 'none',
+    // Handover codes never go to a rider's screen: the customer reads them out at the door.
+    legs: (Array.isArray(order?.legs) ? order.legs : []).map((leg) => {
+      const { otp, ...rest } = leg || {};
+      return { ...rest, hasOtp: Boolean(otp) };
+    }),
+    deliveryState: order?.deliveryState,
+    delayContext: order?.delayContext,
+    scheduledAt: order?.scheduledAt,
     createdAt: order?.createdAt,
   };
 };
@@ -120,9 +162,11 @@ const emitToRiders = (partnerIds, event, payloadFor) => {
  * `offeredTo` history stop two runs from double-offering the same order.
  */
 export async function dispatchQuickOrder(orderId, options = {}) {
-  const attempt = Number(options.attempt || 1);
+  const requestedAttempt = Number(options.attempt || 1);
+  const settings = await getQuickDeliverySettings();
+  const offerTimeoutMs = settings.offerTimeoutSec * 1000;
   const staleLockBefore = new Date(Date.now() - DISPATCH_LOCK_TTL_MS);
-  const staleOfferBefore = new Date(Date.now() - QUICK_OFFER_TIMEOUT_MS);
+  const staleOfferBefore = new Date(Date.now() - offerTimeoutMs);
 
   if (!mongoose.Types.ObjectId.isValid(String(orderId))) return null;
 
@@ -137,6 +181,8 @@ export async function dispatchQuickOrder(orderId, options = {}) {
             { 'dispatch.status': { $in: ['unassigned', 'rejected'] } },
             // A stale offer round: nobody took it inside the window.
             { 'dispatch.status': 'offered', 'dispatch.assignedAt': { $lt: staleOfferBefore } },
+            // Admin handed it to a rider who never accepted: go back to hunting.
+            { 'dispatch.status': 'assigned', 'dispatch.assignedAt': { $lt: staleOfferBefore } },
           ],
         },
         {
@@ -154,7 +200,12 @@ export async function dispatchQuickOrder(orderId, options = {}) {
 
   if (!order) return null;
 
+  // The hunt counter lives on the order, so every re-offer (reject, timeout, watchdog) moves the
+  // order one step further up the radius/phase ladder instead of restarting at the nearest 15 km.
+  const attempt = Math.max(requestedAttempt, Number(order.dispatch?.dispatchAttempt || 0) + 1);
+
   try {
+    await QuickOrder.updateOne({ _id: order._id }, { $set: { 'dispatch.dispatchAttempt': attempt } });
     const pickup = resolveQuickPickup(order);
     if (!Number.isFinite(pickup.latitude) || !Number.isFinite(pickup.longitude)) {
       logger.warn(`[QuickDispatch] Order ${order._id} has no seller coordinates; cannot hunt riders.`);
@@ -165,11 +216,23 @@ export async function dispatchQuickOrder(orderId, options = {}) {
     const isCashOrder = paymentMethod === 'cash' || paymentMethod === 'cod';
     const requiredAmount = isCashOrder ? Number(order.pricing?.total || 0) : 0;
 
-    // Same widening ladder as Food: start tight, open up when nobody bites.
+    // Same widening ladder as Food: start tight, open up when nobody bites. An order whose shop
+    // is already working on it (admin reassign) skips straight to the widest net.
     let maxKm = 15;
-    if (attempt === 2) maxKm = 25;
+    if (PRIORITY_STATUSES.includes(order.orderStatus)) maxKm = 60;
+    else if (attempt === 2) maxKm = 25;
     else if (attempt === 3) maxKm = 40;
     else if (attempt >= 4) maxKm = 60;
+
+    if (attempt >= settings.adminAlertFromAttempt && !order.dispatch?.crisisAlertedAt) {
+      logger.error(`[CRITICAL] Quick order ${order._id} unassigned after ${attempt} rounds. Alerting admin.`);
+      void notifyOwnersSafely([{ ownerType: 'ADMIN', ownerId: 'GLOBAL' }], {
+        title: 'Unassigned Quick Order!',
+        body: `Quick order #${order.orderId || order._id} still has no rider.`,
+        data: { type: 'admin_alert_unassigned', orderId: String(order._id), orderKind: 'quick' },
+      }).catch(() => {});
+      await QuickOrder.updateOne({ _id: order._id }, { $set: { 'dispatch.crisisAlertedAt': new Date() } });
+    }
 
     const pickupTarget = {
       _id: pickup.sellerId,
@@ -189,13 +252,25 @@ export async function dispatchQuickOrder(orderId, options = {}) {
 
     const alreadyOffered = new Set((order.dispatch?.offeredTo || []).map((o) => String(o.partnerId)));
     const fresh = partners.filter((p) => !alreadyOffered.has(String(p.partnerId)));
-    // After a few rounds re-offer to everyone again rather than starving the order.
-    const offerBatch = fresh.length > 0 ? fresh.slice(0, 5) : partners.slice(0, 10);
 
-    if (offerBatch.length === 0) {
-      logger.info(`[QuickDispatch] No riders available for order ${order._id} within ${maxKm}km (attempt ${attempt}).`);
-      return order;
+    // Nobody new left to ask: out of budget -> cancel + refund; otherwise re-broadcast to everyone
+    // in range and let the watchdog come back for the next round.
+    if (fresh.length === 0) {
+      if (attempt >= settings.maxDispatchAttempts) {
+        const { cancelQuickOrderNoDriverFound } = await import('./quickOrderFlows.service.js');
+        await cancelQuickOrderNoDriverFound(order._id);
+        return order;
+      }
+      if (partners.length === 0) {
+        logger.info(`[QuickDispatch] No riders available for order ${order._id} within ${maxKm}km (attempt ${attempt}).`);
+        await QuickOrder.updateOne({ _id: order._id }, { $set: { 'dispatch.status': 'unassigned' } });
+        return order;
+      }
     }
+
+    // Phase 1: the 3 nearest not-yet-asked riders. Phase 2 (round 3+): everyone eligible.
+    const eligible = fresh.length > 0 ? fresh : partners;
+    const offerBatch = attempt >= settings.broadcastFromAttempt ? eligible : eligible.slice(0, 3);
 
     const payload = buildQuickOfferPayload(order);
     const distanceByPartner = new Map(offerBatch.map((p) => [String(p.partnerId), p.distanceKm]));
@@ -212,7 +287,7 @@ export async function dispatchQuickOrder(orderId, options = {}) {
       partnerIds.map((partnerId) => ({ ownerType: 'DELIVERY_PARTNER', ownerId: partnerId })),
       {
         title: 'New Quick Commerce order!',
-        body: `You have 60 seconds to accept order #${order.orderId || order._id}.`,
+        body: `You have ${settings.offerTimeoutSec} seconds to accept order #${order.orderId || order._id}.`,
         ring: true,
         sendToAllDevices: true,
         data: { ...buildOfferPushData(payload), orderId: String(order._id), orderKind: 'quick' },
@@ -226,11 +301,17 @@ export async function dispatchQuickOrder(orderId, options = {}) {
           'dispatch.status': 'offered',
           'dispatch.deliveryPartnerId': null,
           'dispatch.assignedAt': new Date(),
-          'dispatch.offerTimeoutSec': Math.round(QUICK_OFFER_TIMEOUT_MS / 1000),
+          'dispatch.offerTimeoutSec': settings.offerTimeoutSec,
         },
         $push: {
           'dispatch.offeredTo': {
-            $each: partnerIds.map((partnerId) => ({ partnerId, at: new Date(), action: 'offered' })),
+            $each: partnerIds.map((partnerId) => ({
+              partnerId,
+              at: new Date(),
+              action: 'offered',
+              attemptNumber: attempt,
+              radiusKm: maxKm,
+            })),
           },
         },
       },
@@ -307,36 +388,50 @@ export async function acceptQuickOrder(orderId, partnerId) {
   // status could in theory move between this read and the claim, which on the rare rollback
   // path costs us a slightly stale status and nothing else.
   const preClaim = await QuickOrder.findById(orderId)
-    .select('orderStatus deliveryState.currentPhase')
+    .select('+deliveryOtp orderStatus deliveryState.currentPhase')
     .lean();
+
+  // A fresh order is still 'placed'; one an admin re-assigned mid-flight keeps the progress the
+  // shop has already made, and keeps the handover code the customer already holds.
+  const freshOrder = !preClaim || ['placed', 'created', 'scheduled'].includes(preClaim.orderStatus);
+  const partnerObjectId = new mongoose.Types.ObjectId(String(partnerId));
 
   const claimed = await QuickOrder.findOneAndUpdate(
     {
       _id: new mongoose.Types.ObjectId(String(orderId)),
       orderStatus: { $in: DISPATCHABLE_STATUSES },
       'dispatch.acceptedAt': { $exists: false },
+      // Open to whoever was offered it, or reserved for the rider an admin picked.
       $or: [
         { 'dispatch.deliveryPartnerId': null },
         { 'dispatch.deliveryPartnerId': { $exists: false } },
+        { 'dispatch.deliveryPartnerId': partnerObjectId },
       ],
     },
     {
       $set: {
         'dispatch.status': 'accepted',
-        'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(String(partnerId)),
+        'dispatch.deliveryPartnerId': partnerObjectId,
         'dispatch.acceptedAt': new Date(),
         'dispatch.assignedAt': new Date(),
         'deliveryState.currentPhase': 'en_route_to_pickup',
-        orderStatus: 'confirmed',
+        ...(freshOrder ? { orderStatus: 'confirmed' } : {}),
         // Handover code the customer reads out at the door; the rider verifies it to finish.
-        deliveryOtp: String(Math.floor(1000 + Math.random() * 9000)),
+        ...(preClaim?.deliveryOtp
+          ? {}
+          : {
+              deliveryOtp: String(Math.floor(1000 + Math.random() * 9000)),
+              // Without this the customer app never shows the code the rider asks for at the door.
+              'deliveryVerification.dropOtp.required': true,
+              'deliveryVerification.dropOtp.verified': false,
+            }),
       },
       $push: {
         statusHistory: {
           byRole: 'DELIVERY_PARTNER',
-          from: 'placed',
-          to: 'confirmed',
-          note: 'Rider accepted; order sent to seller',
+          from: preClaim?.orderStatus || 'placed',
+          to: freshOrder ? 'confirmed' : preClaim.orderStatus,
+          note: freshOrder ? 'Rider accepted; order sent to seller' : 'Rider accepted the reassigned order',
           at: new Date(),
         },
       },
@@ -362,11 +457,33 @@ export async function acceptQuickOrder(orderId, partnerId) {
     .map((o) => String(o.partnerId))
     .filter((id) => id && id !== String(partnerId));
   emitToRiders(losers, 'order_taken', () => ({ orderMongoId: String(claimed._id), orderKind: 'quick' }));
+  // The rider app closes its offer card on `order_claimed` (what Food emits), so send that too.
+  emitToRiders(losers, 'order_claimed', () => ({
+    orderId: String(claimed._id),
+    orderMongoId: String(claimed._id),
+    orderKind: 'quick',
+  }));
+  if (losers.length) {
+    void notifyOwnersSafely(
+      losers.map((ownerId) => ({ ownerType: 'DELIVERY_PARTNER', ownerId })),
+      {
+        title: 'Order taken',
+        body: 'Another delivery partner accepted this order.',
+        dataOnly: true,
+        data: { type: 'order_taken', orderId: String(claimed._id), orderMongoId: String(claimed._id), orderKind: 'quick' },
+      },
+    ).catch((err) => logger.warn(`[QuickDispatch] order_taken push failed: ${err.message}`));
+  }
 
-  // Seller learns about the order only now.
+  // Seller learns about the order only now. A re-accept after an admin reassign must not re-create
+  // (and so reset) a seller leg the shop has already started working on.
   try {
-    const { fanOutQuickSellerOrdersForParent } = await import('./quickSellerOrderFanout.service.js');
-    await fanOutQuickSellerOrdersForParent(claimed);
+    const { SellerOrder } = await import('../seller/models/sellerOrder.model.js');
+    const alreadyFannedOut = await SellerOrder.exists({ parentOrderId: claimed._id });
+    if (!alreadyFannedOut) {
+      const { fanOutQuickSellerOrdersForParent } = await import('./quickSellerOrderFanout.service.js');
+      await fanOutQuickSellerOrdersForParent(claimed);
+    }
   } catch (err) {
     logger.error(`[QuickDispatch] seller fan-out failed for ${claimed._id}: ${err.message}`);
   }
@@ -375,21 +492,38 @@ export async function acceptQuickOrder(orderId, partnerId) {
   return { ok: true, order: claimed };
 }
 
-/** Rider declined (or let the card expire): remember it and hunt again straight away. */
+/**
+ * Rider declined: remember it. The next hunt round starts straight away only once every rider
+ * in the current round has answered; otherwise the others still have their window.
+ */
 export async function rejectQuickOrder(orderId, partnerId) {
   if (!mongoose.Types.ObjectId.isValid(String(orderId))) return { ok: false };
 
-  await QuickOrder.updateOne(
+  const order = await QuickOrder.findOneAndUpdate(
     { _id: new mongoose.Types.ObjectId(String(orderId)), 'dispatch.acceptedAt': { $exists: false } },
-    {
-      $set: { 'dispatch.status': 'unassigned' },
-      $push: { 'dispatch.offeredTo': { partnerId, at: new Date(), action: 'rejected' } },
-    },
-  );
+    { $push: { 'dispatch.offeredTo': { partnerId, at: new Date(), action: 'rejected' } } },
+    { new: true },
+  ).select('dispatch');
+  if (!order) return { ok: true };
 
-  void dispatchQuickOrder(orderId, { attempt: 2 }).catch((err) =>
-    logger.warn(`[QuickDispatch] re-dispatch after reject failed: ${err.message}`),
-  );
+  // An order an admin reserved for this rider goes back to the open hunt when they decline it.
+  const reservedForRider = String(order.dispatch?.deliveryPartnerId || '') === String(partnerId);
+  const entries = order.dispatch?.offeredTo || [];
+  const round = Number(order.dispatch?.dispatchAttempt || 0);
+  const offeredThisRound = entries.filter((o) => o.action === 'offered' && Number(o.attemptNumber || 0) === round);
+  const rejectedIds = new Set(entries.filter((o) => o.action === 'rejected').map((o) => String(o.partnerId)));
+  const everyoneAnswered =
+    offeredThisRound.length === 0 || offeredThisRound.every((o) => rejectedIds.has(String(o.partnerId)));
+
+  if (reservedForRider || everyoneAnswered) {
+    await QuickOrder.updateOne(
+      { _id: order._id, 'dispatch.acceptedAt': { $exists: false } },
+      { $set: { 'dispatch.status': 'unassigned', 'dispatch.deliveryPartnerId': null } },
+    );
+    void dispatchQuickOrder(orderId).catch((err) =>
+      logger.warn(`[QuickDispatch] re-dispatch after reject failed: ${err.message}`),
+    );
+  }
   return { ok: true };
 }
 
@@ -422,31 +556,42 @@ export async function emitQuickOrderUpdate(order, event = 'order_update', option
 }
 
 /**
- * Watchdog: re-offer QC orders whose offer window lapsed with nobody accepting. BullMQ is
- * optional in this deployment, so the interval in server.js is what actually keeps hunting.
+ * Watchdog (runs on the server.js interval; BullMQ is optional in this deployment):
+ *  1. re-offer orders whose offer window lapsed with nobody accepting
+ *  2. remind / auto-cancel when a rider accepted but the store never responded
+ *  3. cancel + refund orders that have hunted for a rider for too long
  */
 export async function recoverStuckQuickOrders() {
-  const staleOfferBefore = new Date(Date.now() - QUICK_OFFER_TIMEOUT_MS);
+  const settings = await getQuickDeliverySettings();
+  const staleOfferBefore = new Date(Date.now() - settings.offerTimeoutSec * 1000);
   const stuck = await QuickOrder.find({
     orderStatus: { $in: DISPATCHABLE_STATUSES },
     'dispatch.acceptedAt': { $exists: false },
     $or: [
       { 'dispatch.status': { $in: ['unassigned', 'rejected'] } },
-      { 'dispatch.status': 'offered', 'dispatch.assignedAt': { $lt: staleOfferBefore } },
+      { 'dispatch.status': { $in: ['offered', 'assigned'] }, 'dispatch.assignedAt': { $lt: staleOfferBefore } },
     ],
   })
-    .select('_id dispatch.offeredTo')
+    .select('_id dispatch.dispatchAttempt')
     .limit(25)
     .lean();
 
   for (const order of stuck) {
-    const rounds = (order.dispatch?.offeredTo || []).length;
-    if (rounds > MAX_QUICK_DISPATCH_ATTEMPTS * 5) continue;
-    await dispatchQuickOrder(order._id, { attempt: Math.min(4, Math.floor(rounds / 5) + 1) }).catch((err) =>
+    // dispatchQuickOrder derives the round from the order's own counter.
+    await dispatchQuickOrder(order._id).catch((err) =>
       logger.warn(`[QuickDispatch] watchdog re-offer failed for ${order._id}: ${err.message}`),
     );
   }
   if (stuck.length) logger.info(`[QuickDispatch] watchdog re-offered ${stuck.length} order(s).`);
+
+  try {
+    const flows = await import('./quickOrderFlows.service.js');
+    await flows.sweepQuickSellerAcknowledgements();
+    await flows.sweepQuickNoRiderTimeouts();
+    await flows.activateDueScheduledQuickOrders();
+  } catch (err) {
+    logger.warn(`[QuickDispatch] lifecycle sweep failed: ${err.message}`);
+  }
 }
 
 /** Seller for an accepted order (used by the rider pickup screens). */

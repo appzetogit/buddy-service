@@ -44,8 +44,15 @@ export const quickDeliveryAPI = {
     return apiClient.patch(`${base(orderId)}/complete`, payload, opts);
   },
 
-  /** Quick Commerce has no shared/second-rider leg; kept so callers can stay uniform. */
-  acceptSharedOrder: (orderId) => quickDeliveryAPI.acceptOrder(orderId),
+  /** Primary rider asks for a second rider ("Find new driver"). */
+  shareOrder: (orderId) => apiClient.post(`${base(orderId)}/share`, {}, opts),
+
+  /** Join an open second-rider slot. */
+  acceptSharedOrder: (orderId) => apiClient.post(`${base(orderId)}/accept-share`, {}, opts),
+
+  confirmSplit: (orderId) => apiClient.patch(`${base(orderId)}/confirm-split`, {}, opts),
+
+  reportDelay: (orderId, reason) => apiClient.post(`${base(orderId)}/delay`, { reason }, opts),
 };
 
 /** True when an order came from the Quick Commerce pipeline rather than Food. */

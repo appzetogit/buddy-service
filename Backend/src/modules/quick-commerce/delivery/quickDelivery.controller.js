@@ -12,9 +12,20 @@ import {
   acceptQuickOrder,
   rejectQuickOrder,
   buildQuickOfferPayload,
-  emitQuickOrderUpdate,
 } from '../services/quickDispatch.service.js';
-import { syncSellerOrderFromDelivery } from '../services/quickOrder.service.js';
+import {
+  completeDelivery,
+  confirmPickup,
+  reachedDrop,
+  reachedPickup,
+  verifyDropOtp,
+} from '../services/quickRiderFlow.service.js';
+import {
+  acceptSharedQuickOrder,
+  confirmQuickSplit,
+  reportQuickOrderDelay,
+  shareQuickOrder,
+} from '../services/quickOrderFlows.service.js';
 import {
   CAPACITY_REACHED_MESSAGE,
   getRiderCapacity,
@@ -38,12 +49,10 @@ const resolvePartnerId = async (req) => {
   return byIdentity ? String(byIdentity._id) : null;
 };
 
-const loadOrderForPartner = async (orderId, partnerId) => {
-  if (!mongoose.Types.ObjectId.isValid(String(orderId))) return null;
-  return QuickOrder.findOne({
-    _id: orderId,
-    'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(String(partnerId)),
-  });
+/** Primary rider or the second rider of a shared order. */
+const riderOnOrder = (partnerId) => {
+  const id = new mongoose.Types.ObjectId(String(partnerId));
+  return { $or: [{ 'dispatch.deliveryPartnerId': id }, { 'dispatch.sharedPartnerId': id }] };
 };
 
 /** Offers currently on this rider's screen. */
@@ -65,10 +74,17 @@ export const listAvailableQuickOrders = async (req, res) => {
     const orders = await QuickOrder.find({
       orderStatus: { $in: ['placed', 'confirmed', 'preparing', 'ready_for_pickup'] },
       'dispatch.acceptedAt': { $exists: false },
-      'dispatch.offeredTo.partnerId': new mongoose.Types.ObjectId(partnerId),
       $or: [
-        { 'dispatch.deliveryPartnerId': null },
-        { 'dispatch.deliveryPartnerId': { $exists: false } },
+        // Offered to me and still open...
+        {
+          'dispatch.offeredTo.partnerId': new mongoose.Types.ObjectId(partnerId),
+          $or: [
+            { 'dispatch.deliveryPartnerId': null },
+            { 'dispatch.deliveryPartnerId': { $exists: false } },
+          ],
+        },
+        // ...or an admin handed it to me and I have not answered yet.
+        { 'dispatch.status': 'assigned', 'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(partnerId) },
       ],
     })
       .sort({ createdAt: -1 })
@@ -92,7 +108,7 @@ export const listCurrentQuickOrders = async (req, res) => {
     if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
 
     const orders = await QuickOrder.find({
-      'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(partnerId),
+      ...riderOnOrder(partnerId),
       orderStatus: { $in: ACTIVE_STATUSES },
     })
       .sort({ 'dispatch.acceptedAt': -1 })
@@ -115,7 +131,9 @@ export const getQuickOrderDetails = async (req, res) => {
     const order = await QuickOrder.findById(req.params.orderId).select('+deliveryOtp').lean();
     if (!order) return sendError(res, 404, 'Order not found');
 
-    const assigned = String(order?.dispatch?.deliveryPartnerId || '') === String(partnerId);
+    const assigned =
+      String(order?.dispatch?.deliveryPartnerId || '') === String(partnerId) ||
+      String(order?.dispatch?.sharedPartnerId || '') === String(partnerId);
     const offered = (order?.dispatch?.offeredTo || []).some(
       (o) => String(o.partnerId) === String(partnerId),
     );
@@ -174,143 +192,102 @@ export const rejectQuickOrderController = async (req, res) => {
   }
 };
 
-/** Phase-only updates (arrived at shop / at the customer's door). */
-const setPhase = (phase, deliveryStatus, message) => async (req, res) => {
+/** Wraps a rider-trip step: resolves the rider, runs it, maps domain errors to HTTP codes. */
+const riderStep = (label, message, run) => async (req, res) => {
   try {
     const partnerId = await resolvePartnerId(req);
     if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
-
-    const order = await loadOrderForPartner(req.params.orderId, partnerId);
-    if (!order) return sendError(res, 404, 'Order not found for this rider');
-
-    order.deliveryState = order.deliveryState || {};
-    order.deliveryState.currentPhase = phase;
-    order.deliveryState.status = deliveryStatus;
-    await order.save();
-    await emitQuickOrderUpdate(order, 'order_update');
-
-    return sendResponse(res, 200, message, { order: buildQuickOfferPayload(order) });
-  } catch (error) {
-    logger.error(`[QuickDelivery] phase ${phase} failed: ${error.message}`);
-    return sendError(res, 500, 'Failed to update order');
-  }
-};
-
-export const reachedPickupController = setPhase('at_pickup', 'reached_pickup', 'Marked as reached pickup');
-export const reachedDropController = setPhase('at_drop', 'reached_drop', 'Marked as reached drop');
-
-/** Rider collected the parcel from the seller. */
-export const confirmPickupController = async (req, res) => {
-  try {
-    const partnerId = await resolvePartnerId(req);
-    if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
-
-    const order = await loadOrderForPartner(req.params.orderId, partnerId);
-    if (!order) return sendError(res, 404, 'Order not found for this rider');
-    if (order.orderStatus === 'picked_up') {
-      return sendResponse(res, 200, 'Already picked up', { order: buildQuickOfferPayload(order) });
-    }
-
-    order.orderStatus = 'picked_up';
-    order.deliveryState = order.deliveryState || {};
-    order.deliveryState.currentPhase = 'en_route_to_delivery';
-    order.deliveryState.status = 'picked_up';
-    if (req.body?.billImageUrl) order.deliveryState.billImageUrl = String(req.body.billImageUrl);
-    order.statusHistory = order.statusHistory || [];
-    order.statusHistory.push({
-      byRole: 'DELIVERY_PARTNER',
-      from: 'confirmed',
-      to: 'picked_up',
-      note: 'Rider collected the order from the seller',
-      at: new Date(),
+    const result = await run(req, partnerId);
+    const order = result?.order || result;
+    return sendResponse(res, 200, result?.message || message, {
+      order: buildQuickOfferPayload(order),
+      ...(result?.waitingForPartner ? { waitingForPartner: true } : {}),
+      ...(result?.verified ? { verified: true } : {}),
     });
-    await order.save();
-
-    await syncSellerOrderFromDelivery(order._id, 'picked_up').catch((err) =>
-      logger.warn(`[QuickDelivery] seller sync (picked_up) failed: ${err.message}`),
-    );
-    await emitQuickOrderUpdate(order, 'order_update');
-
-    return sendResponse(res, 200, 'Pickup confirmed', { order: buildQuickOfferPayload(order) });
   } catch (error) {
-    logger.error(`[QuickDelivery] confirmPickup failed: ${error.message}`);
-    return sendError(res, 500, 'Failed to confirm pickup');
+    return sendFlowError(res, error, `Failed to ${label}`);
   }
 };
+
+export const reachedPickupController = riderStep('mark reached pickup', 'Marked as reached pickup', (req, partnerId) =>
+  reachedPickup(req.params.orderId, partnerId),
+);
+
+/** Rider collected the parcel from the store (one store at a time on multi-store orders). */
+export const confirmPickupController = riderStep('confirm pickup', 'Pickup confirmed', (req, partnerId) =>
+  confirmPickup(req.params.orderId, partnerId, { billImageUrl: req.body?.billImageUrl }),
+);
+
+export const reachedDropController = riderStep('mark reached drop', 'Marked as reached drop', (req, partnerId) =>
+  reachedDrop(req.params.orderId, partnerId),
+);
 
 /** Handover code check at the customer's door. */
-export const verifyDropOtpController = async (req, res) => {
+export const verifyDropOtpController = riderStep('verify handover code', 'Handover code verified', (req, partnerId) =>
+  verifyDropOtp(req.params.orderId, partnerId, req.body?.otp),
+);
+
+/** Delivered: closes the rider job and the seller order together (each leg on a shared order). */
+export const completeQuickOrderController = riderStep('complete order', 'Order delivered', async (req, partnerId) => {
+  const result = await completeDelivery(req.params.orderId, partnerId, { otp: req.body?.otp });
+  return {
+    ...result,
+    message: result.waitingForPartner ? 'Your delivery is done. Waiting for your partner to finish.' : 'Order delivered',
+  };
+});
+
+/** Maps the flow services' thrown errors to HTTP status codes. */
+const sendFlowError = (res, error, fallback) => {
+  const name = error?.name || error?.constructor?.name || '';
+  const status = /Validation/.test(name) ? 400 : /Forbidden/.test(name) ? 403 : /NotFound/.test(name) ? 404 : 500;
+  if (status === 500) logger.error(`[QuickDelivery] ${fallback}: ${error?.message}`);
+  return sendError(res, status, status === 500 ? fallback : error.message);
+};
+
+/** Primary rider asks for a second rider ("Find new driver"). */
+export const shareQuickOrderController = async (req, res) => {
   try {
     const partnerId = await resolvePartnerId(req);
     if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
-
-    const order = await QuickOrder.findOne({
-      _id: req.params.orderId,
-      'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(partnerId),
-    }).select('+deliveryOtp');
-    if (!order) return sendError(res, 404, 'Order not found for this rider');
-
-    const supplied = String(req.body?.otp || '').trim();
-    const expected = String(order.deliveryOtp || '').trim();
-    if (!expected) return sendError(res, 400, 'No handover code set for this order');
-    if (supplied !== expected) return sendError(res, 400, 'Incorrect handover code');
-
-    return sendResponse(res, 200, 'Handover code verified', { verified: true });
+    const order = await shareQuickOrder(req.params.orderId, partnerId);
+    return sendResponse(res, 200, 'Looking for another driver', { order: buildQuickOfferPayload(order) });
   } catch (error) {
-    logger.error(`[QuickDelivery] verifyDropOtp failed: ${error.message}`);
-    return sendError(res, 500, 'Failed to verify handover code');
+    return sendFlowError(res, error, 'Failed to find a new driver');
   }
 };
 
-/** Delivered: closes the rider job and the seller order together. */
-export const completeQuickOrderController = async (req, res) => {
+/** Another rider joins an open second-rider slot. */
+export const acceptSharedQuickOrderController = async (req, res) => {
   try {
     const partnerId = await resolvePartnerId(req);
     if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
-
-    const order = await QuickOrder.findOne({
-      _id: req.params.orderId,
-      'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(partnerId),
-    }).select('+deliveryOtp');
-    if (!order) return sendError(res, 404, 'Order not found for this rider');
-    if (order.orderStatus === 'delivered') {
-      return sendResponse(res, 200, 'Already delivered', { order: buildQuickOfferPayload(order) });
-    }
-
-    const expected = String(order.deliveryOtp || '').trim();
-    const supplied = String(req.body?.otp || '').trim();
-    if (expected && supplied && supplied !== expected) {
-      return sendError(res, 400, 'Incorrect handover code');
-    }
-
-    order.orderStatus = 'delivered';
-    order.deliveryState = order.deliveryState || {};
-    order.deliveryState.currentPhase = 'delivered';
-    order.deliveryState.status = 'delivered';
-    order.deliveredAt = new Date();
-    if (String(order.payment?.method || '').toLowerCase() === 'cash') {
-      order.payment.status = 'paid';
-    }
-    order.statusHistory = order.statusHistory || [];
-    order.statusHistory.push({
-      byRole: 'DELIVERY_PARTNER',
-      from: 'picked_up',
-      to: 'delivered',
-      note: 'Rider delivered the order',
-      at: new Date(),
-    });
-    // Handover code is single-use.
-    order.deliveryOtp = '';
-    await order.save();
-
-    await syncSellerOrderFromDelivery(order._id, 'delivered').catch((err) =>
-      logger.warn(`[QuickDelivery] seller sync (delivered) failed: ${err.message}`),
-    );
-    await emitQuickOrderUpdate(order, 'order_update');
-
-    return sendResponse(res, 200, 'Order delivered', { order: buildQuickOfferPayload(order) });
+    const order = await acceptSharedQuickOrder(req.params.orderId, partnerId);
+    return sendResponse(res, 200, 'Joined the delivery', { order: buildQuickOfferPayload(order) });
   } catch (error) {
-    logger.error(`[QuickDelivery] complete failed: ${error.message}`);
-    return sendError(res, 500, 'Failed to complete order');
+    return sendFlowError(res, error, 'Failed to join this order');
+  }
+};
+
+export const confirmQuickSplitController = async (req, res) => {
+  try {
+    const partnerId = await resolvePartnerId(req);
+    if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
+    const order = await confirmQuickSplit(req.params.orderId, partnerId);
+    return sendResponse(res, 200, 'Earnings split confirmed', { order: buildQuickOfferPayload(order) });
+  } catch (error) {
+    return sendFlowError(res, error, 'Failed to confirm split');
+  }
+};
+
+export const reportQuickDelayController = async (req, res) => {
+  try {
+    const partnerId = await resolvePartnerId(req);
+    if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
+    const reason = String(req.body?.reason || '').trim();
+    if (!reason) return sendError(res, 400, 'A delay reason is required');
+    const order = await reportQuickOrderDelay(req.params.orderId, partnerId, 'DELIVERY_PARTNER', reason);
+    return sendResponse(res, 200, 'Delay reported to customer', { order: buildQuickOfferPayload(order) });
+  } catch (error) {
+    return sendFlowError(res, error, 'Failed to report delay');
   }
 };

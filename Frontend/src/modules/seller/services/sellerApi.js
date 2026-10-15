@@ -121,6 +121,9 @@ export const sellerApi = {
       }),
     ),
 
+  reportOrderDelay: (orderId, reason) =>
+    call(axiosInstance.post(`/seller/orders/${String(orderId)}/delay`, { reason })),
+
   updateOrderStatus: (orderId, data = {}) =>
     call(
       axiosInstance.put(`/seller/orders/${String(orderId)}/status`, data),

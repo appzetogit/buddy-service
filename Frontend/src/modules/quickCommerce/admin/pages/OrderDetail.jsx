@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Card from '@shared/components/ui/Card';
 import Badge from '@shared/components/ui/Badge';
 import { adminApi } from '../services/adminApi';
+import OrderDispatchPanel from '../components/OrderDispatchPanel';
 import {
     AlertCircle,
     Box,
@@ -55,6 +56,7 @@ const getStatusStyles = (status) => {
     const normalizedStatus = String(status || 'pending').trim().toLowerCase();
     switch (normalizedStatus) {
         case 'pending': return 'bg-amber-100 text-amber-700 border-amber-200';
+        case 'scheduled': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
         case 'confirmed': return 'bg-blue-100 text-blue-700 border-blue-200';
         case 'packed': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
         case 'ready_for_pickup': return 'bg-blue-100 text-blue-700 border-blue-200';
@@ -80,6 +82,7 @@ const getNormalizedStatus = (order) =>
 const formatStatusLabel = (value) => {
     const status = String(value || '').trim().toLowerCase();
     if (!status) return 'Updated';
+    if (status === 'scheduled') return 'Scheduled';
     if (status === 'created' || status === 'placed') return 'Order Placed';
     if (status === 'confirmed' || status === 'seller_accepted' || status === 'accepted') return 'Confirmed';
     if (status === 'preparing' || status === 'packed' || status === 'processing') return 'Preparing / Packed';
@@ -786,6 +789,8 @@ export default function OrderDetail() {
                             </div>
                         </div>
                     </Card>
+
+                    <OrderDispatchPanel order={order} onChanged={fetchDetail} showToast={showToast} />
 
                     <Card className="border-none shadow-xl ring-1 ring-slate-100 bg-white rounded-2xl overflow-hidden text-left">
                         <div className="p-6 bg-red-600 text-white">

@@ -404,6 +404,13 @@ const CheckoutPage = () => {
   const storedCheckoutState = useMemo(() => readStoredCheckoutState(), []);
 
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(storedCheckoutState.selectedTimeSlot || "now");
+  // Scheduled delivery (same idea as Food's "Schedule it"): the order waits and goes live 30 min before the slot.
+  // Admin-controlled checkout options (COD, schedule rules, delivery speed) - see Delivery & Dispatch settings.
+  const [deliveryOptions, setDeliveryOptions] = useState(null);
+  const [selectedSpeedId, setSelectedSpeedId] = useState("");
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState("");
+  const [scheduledTime, setScheduledTime] = useState("");
   const [selectedPayment, setSelectedPayment] = useState(
     routerLocation.state?.selectedPayment || storedCheckoutState.selectedPayment || "cash",
   );
@@ -578,6 +585,36 @@ const CheckoutPage = () => {
     ? `Cash on Delivery available up to ₹${Math.round(Number(codOrderLimit))} only`
     : "";
 
+  useEffect(() => {
+    let mounted = true;
+    customerApi
+      .getDeliveryOptions()
+      .then((res) => {
+        if (!mounted) return;
+        const data = res?.data?.data || res?.data?.result || {};
+        setDeliveryOptions(data);
+        setSelectedSpeedId((prev) => prev || data.defaultSpeedOptionId || "");
+      })
+      .catch(() => {
+        /* options are optional; checkout falls back to standard delivery */
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const speedOptions = deliveryOptions?.speedOptions || [];
+  const selectedSpeedOption = speedOptions.find((option) => option.id === selectedSpeedId) || null;
+  const scheduleRules = deliveryOptions?.schedule || { enabled: true, minAheadMinutes: 20, maxDays: 7 };
+  const codAllowedByAdmin = deliveryOptions ? deliveryOptions.codEnabled === true : false;
+
+  // Cash on Delivery is off unless an admin enabled it; never leave a hidden method selected.
+  useEffect(() => {
+    if (deliveryOptions && deliveryOptions.codEnabled !== true && selectedPayment === "cash") {
+      setSelectedPayment(settings?.onlineEnabled === false ? "wallet" : "online");
+    }
+  }, [deliveryOptions, selectedPayment, settings?.onlineEnabled]);
+
   const paymentMethods = useMemo(() => [
     ...(settings?.onlineEnabled === false ? [] : [{
       id: "online", label: "Pay Online", icon: CreditCard, sublabel: "UPI / Cards / NetBanking",
@@ -589,10 +626,10 @@ const CheckoutPage = () => {
       sublabel: `Balance: ₹${Number(walletBalance || 0).toLocaleString("en-IN")}`,
       disabled: Number(walletBalance || 0) < Number(totalAmount || 0),
     }] : []),
-    ...(settings?.codEnabled === false || userProfile?.isCodAllowed === false || isCodBlockedByOrderValue ? [] : [{
+    ...(!codAllowedByAdmin || settings?.codEnabled === false || userProfile?.isCodAllowed === false || isCodBlockedByOrderValue ? [] : [{
       id: "cash", label: "Cash on Delivery", icon: Banknote, sublabel: "Pay after delivery",
     }]),
-  ], [settings?.onlineEnabled, settings?.codEnabled, userProfile?.isCodAllowed, isAuthenticated, walletBalance, totalAmount, isCodBlockedByOrderValue]);
+  ], [codAllowedByAdmin, settings?.onlineEnabled, settings?.codEnabled, userProfile?.isCodAllowed, isAuthenticated, walletBalance, totalAmount, isCodBlockedByOrderValue]);
 
   // â”€â”€ Memoized callbacks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -981,12 +1018,34 @@ const CheckoutPage = () => {
         )
         .filter((id) => id && id !== "quick-commerce"),
     );
+    const multiStore = deliveryOptions?.multiSeller;
     if (checkoutSellerIds.size > 1) {
-      showToast(
-        "Your cart contains items from multiple sellers. Keep items from one seller to checkout.",
-        "error",
-      );
-      return;
+      if (!multiStore?.enabled) {
+        showToast(
+          "Your cart contains items from multiple sellers. Keep items from one seller to checkout.",
+          "error",
+        );
+        return;
+      }
+      if (checkoutSellerIds.size > Number(multiStore.maxSellers || 2)) {
+        showToast(`You can order from at most ${multiStore.maxSellers} stores in one order.`, "error");
+        return;
+      }
+    }
+
+    let scheduledAtIso = null;
+    if (isScheduled) {
+      const slot = scheduledDate && scheduledTime ? new Date(`${scheduledDate}T${scheduledTime}:00`) : null;
+      if (!slot || Number.isNaN(slot.getTime())) {
+        showToast("Please choose a date and time for your scheduled order.", "error");
+        return;
+      }
+      const minAhead = Number(scheduleRules.minAheadMinutes || 20);
+      if (slot.getTime() < Date.now() + minAhead * 60 * 1000) {
+        showToast(`Please pick a time at least ${minAhead} minutes from now.`, "error");
+        return;
+      }
+      scheduledAtIso = slot.toISOString();
     }
 
     setIsPlacingOrder(true);
@@ -1009,6 +1068,8 @@ const CheckoutPage = () => {
         platformFee,
         deliveryFee,
         timeSlot: selectedTimeSlot,
+        ...(scheduledAtIso ? { scheduledAt: scheduledAtIso } : {}),
+        ...(selectedSpeedOption ? { deliverySpeedOptionId: selectedSpeedOption.id, deliveryOption: selectedSpeedOption.name } : {}),
       };
 
       let response;
@@ -1023,7 +1084,63 @@ const CheckoutPage = () => {
       }
 
       if (response.data.success) {
-        const order = response.data.result;
+        let order = response.data.result;
+        let paidInAdvance = null;
+
+        // Online payment is pay-then-place: pay first, the order is created once the payment verifies.
+        if (response.data.requiresPayment && response.data.checkoutId) {
+          const checkoutId = response.data.checkoutId;
+          const rz = response.data.razorpay || {};
+          let paymentResult;
+          try {
+            const rzpOptions = {
+              key: rz.key,
+              amount: rz.amount,
+              currency: rz.currency || "INR",
+              order_id: rz.orderId,
+              name: settings?.companyName || settings?.appName || "Blaze",
+              description: "Order Payment",
+              prefill: {
+                name: user?.name || currentAddress.name || "Customer",
+                contact: currentAddress.phone || "",
+              },
+            };
+            if (isFlutterWebView()) {
+              paymentResult = await handleFlutterRazorpayPayment(rzpOptions);
+            } else {
+              paymentResult = await new Promise((resolve, reject) => {
+                initRazorpayPayment({
+                  ...rzpOptions,
+                  handler: resolve,
+                  onError: reject,
+                  onClose: () => reject(new Error("Payment cancelled")),
+                });
+              });
+            }
+          } catch (payErr) {
+            // Nothing was created, so there is nothing to clean up except the open checkout.
+            customerApi.cancelCheckout(checkoutId).catch(() => {});
+            showToast(payErr?.message || "Payment cancelled", "error");
+            return;
+          }
+
+          let verifyRes;
+          try {
+            verifyRes = await customerApi.verifyCheckout({ checkoutId, ...paymentResult });
+          } catch (verifyErr) {
+            showToast(getCheckoutErrorMessage(verifyErr) || "Payment verification failed", "error");
+            navigate(getQuickOrdersPath());
+            return;
+          }
+          if (!verifyRes?.data?.success) {
+            showToast(verifyRes?.data?.message || "Payment verification failed", "error");
+            navigate(getQuickOrdersPath());
+            return;
+          }
+          order = verifyRes.data.result;
+          paidInAdvance = paymentResult;
+        }
+
         const placedOrderId = order?.orderId || order?.orderNumber || order?.id || order?._id || "";
         const prefetchedOrder = {
           ...order,
@@ -1088,7 +1205,21 @@ const CheckoutPage = () => {
           }, 400);
         };
 
-        if (response.data.razorpay) {
+        if (paidInAdvance) {
+          prefetchedOrder.payment = {
+            ...(prefetchedOrder.payment || {}),
+            method: prefetchedOrder.payment?.method || "razorpay",
+            status: "paid",
+            razorpay: {
+              ...(prefetchedOrder.payment?.razorpay || {}),
+              paymentId: paidInAdvance.razorpay_payment_id || "",
+              orderId: paidInAdvance.razorpay_order_id || "",
+            },
+          };
+          prefetchedOrder.paymentMethod = "razorpay";
+          prefetchedOrder.paymentStatus = "paid";
+          finishCheckout();
+        } else if (response.data.razorpay) {
           try {
             const rzpOptions = {
               key: response.data.razorpay.key,
@@ -1174,6 +1305,7 @@ const CheckoutPage = () => {
   }, [
     cart, buildAddressForOrder, getCheckoutCartItemsForSync, selectedPayment,
     discountAmount, gstAmount, platformFee, deliveryFee, cartTotal, selectedTimeSlot,
+    isScheduled, scheduledDate, scheduledTime, selectedSpeedOption, scheduleRules, deliveryOptions,
     syncVisibleCartToBackend, clearCart, showToast, navigate, getCheckoutErrorMessage,
     isAuthenticated, walletBalance, totalAmount, user, isCodBlockedByOrderValue, codBlockedMessage,
   ]);
@@ -1437,6 +1569,8 @@ const CheckoutPage = () => {
           couponSource: selectedCoupon?.isSellerCoupon
             ? 'seller'
             : (selectedCoupon?.couponSource || selectedCoupon?.source || null),
+          deliverySpeedOptionId: selectedSpeedOption?.id || undefined,
+          deliveryOption: selectedSpeedOption?.name || undefined,
         });
         if (cancelled) return;
         if (res?.data?.success && res.data.result) {
@@ -1506,6 +1640,7 @@ const CheckoutPage = () => {
     cartPreviewKey,
     cart.length,
     serverCartRevision,
+    selectedSpeedOption?.id,
     selectedCoupon?.code,
     selectedCoupon?.isSellerCoupon,
     selectedCoupon?.couponSource,
@@ -1655,11 +1790,73 @@ const CheckoutPage = () => {
                 <div className="h-9 w-9 rounded-full bg-rose-50 flex items-center justify-center flex-shrink-0">
                   <Clock size={18} className="text-rose-600" />
                 </div>
-                <div>
-                  <h3 className="font-semibold text-slate-800 text-[14px]">Delivery in 12-15 mins</h3>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-slate-800 text-[14px]">
+                    {isScheduled
+                      ? "Scheduled delivery"
+                      : selectedSpeedOption?.time
+                        ? `Delivery in ${selectedSpeedOption.time}`
+                        : "Delivery in 12-15 mins"}
+                  </h3>
                   <p className="text-[12px] font-medium text-slate-500 tabular-nums">Shipment of {cartCount} items</p>
                 </div>
+                {scheduleRules.enabled !== false ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsScheduled((prev) => !prev)}
+                    className="text-[12px] font-semibold text-rose-600"
+                  >
+                    {isScheduled ? "Cancel schedule" : "Schedule it"}
+                  </button>
+                ) : null}
               </div>
+              {speedOptions.length > 0 && !isScheduled ? (
+                <div className="mt-3 space-y-2">
+                  {speedOptions.map((option) => {
+                    const fee = Number(option.feeModifier || 0);
+                    const active = option.id === selectedSpeedId;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setSelectedSpeedId(option.id)}
+                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left ${active ? "border-rose-500 bg-rose-50" : "border-slate-200"}`}
+                      >
+                        <span>
+                          <span className="block text-[13px] font-semibold text-slate-800">
+                            {option.name}
+                            {option.badge ? <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{option.badge}</span> : null}
+                          </span>
+                          <span className="block text-[11px] text-slate-500">{option.time || option.description}</span>
+                        </span>
+                        <span className="text-[12px] font-semibold text-slate-700">
+                          {fee === 0 ? "Free" : fee > 0 ? `+₹${fee}` : `-₹${Math.abs(fee)}`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {isScheduled ? (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={scheduledDate}
+                    min={new Date().toISOString().slice(0, 10)}
+                    onChange={(event) => setScheduledDate(event.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-rose-400"
+                  />
+                  <input
+                    type="time"
+                    value={scheduledTime}
+                    onChange={(event) => setScheduledTime(event.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-rose-400"
+                  />
+                  <p className="col-span-2 text-[11px] font-medium text-slate-500">
+                    We start looking for a delivery partner about 30 minutes before your slot.
+                  </p>
+                </div>
+              ) : null}
             </motion.div>
 
             {/* Cart Items — memoized CartItem */}

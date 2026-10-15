@@ -32,6 +32,7 @@ import {
   requestSellerOtpController,
   requestSellerWithdrawalController,
   updateSellerOrderStatusController,
+  reportSellerOrderDelayController,
   updateSellerProductController,
   updateSellerProfileController,
   verifySellerOtpController,
@@ -147,6 +148,7 @@ router.put(
 
 router.get("/orders", ...sellerOnly, getSellerOrdersController);
 router.put("/orders/:orderId/status", ...sellerOnly, updateSellerOrderStatusController);
+router.post("/orders/:orderId/delay", ...sellerOnly, reportSellerOrderDelayController);
 router.post("/orders/:orderId/resend-dispatch", ...sellerOnly, resendSellerOrderDispatchController);
 
 router.get("/returns", ...sellerOnly, getSellerReturnsController);

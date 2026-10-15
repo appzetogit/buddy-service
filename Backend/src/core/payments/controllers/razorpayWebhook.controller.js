@@ -85,6 +85,19 @@ export const handleRazorpayWebhook = async (req, res) => {
                 }
                 logger.info(`Webhook [payment.captured]: Synced Order ${order.orderId} (Status=paid)`);
             } else {
+                // Quick Commerce pay-then-place: create the QuickOrder from its checkout session.
+                try {
+                    const { finalizeQuickCheckoutFromWebhook } = await import(
+                        '../../../modules/quick-commerce/controllers/order.controller.js'
+                    );
+                    const quickOrder = await finalizeQuickCheckoutFromWebhook(rzOrderId, rzPaymentId);
+                    if (quickOrder) {
+                        logger.info(`Webhook [payment.captured]: Created quick order ${quickOrder.orderId || quickOrder._id} from checkout`);
+                    }
+                } catch (quickErr) {
+                    logger.error(`Webhook quick checkout finalize error: ${quickErr.message}`);
+                }
+
                 // Pay-then-place: create FoodOrder from checkout session
                 try {
                     const created = await finalizeCheckoutFromWebhook(rzOrderId, rzPaymentId);
@@ -126,6 +139,14 @@ export const handleRazorpayWebhook = async (req, res) => {
                     if (session) {
                         logger.info(`Webhook [payment.failed]: Checkout ${session._id} marked failed — ${reason}`);
                     }
+
+                    const { QuickCheckoutSession } = await import(
+                        '../../../modules/quick-commerce/models/quickCheckoutSession.model.js'
+                    );
+                    await QuickCheckoutSession.findOneAndUpdate(
+                        { 'razorpay.orderId': rzOrderId, status: 'pending_payment' },
+                        { $set: { status: 'failed', failureReason: String(reason).slice(0, 300) } },
+                    );
                 } catch (sessionErr) {
                     logger.error(`Webhook payment.failed checkout update error: ${sessionErr.message}`);
                 }

@@ -12,6 +12,10 @@ import {
   reachedDropController,
   verifyDropOtpController,
   completeQuickOrderController,
+  shareQuickOrderController,
+  acceptSharedQuickOrderController,
+  confirmQuickSplitController,
+  reportQuickDelayController,
 } from './quickDelivery.controller.js';
 
 const router = express.Router();
@@ -29,5 +33,10 @@ router.patch('/orders/:orderId/confirm-pickup', ...riderOnly, confirmPickupContr
 router.patch('/orders/:orderId/reached-drop', ...riderOnly, reachedDropController);
 router.post('/orders/:orderId/verify-drop-otp', ...riderOnly, verifyDropOtpController);
 router.patch('/orders/:orderId/complete', ...riderOnly, completeQuickOrderController);
+// Second rider / split / delay (mirrors Food's /share, /accept-share, /confirm-split, /delay)
+router.post('/orders/:orderId/share', ...riderOnly, shareQuickOrderController);
+router.post('/orders/:orderId/accept-share', ...riderOnly, acceptSharedQuickOrderController);
+router.patch('/orders/:orderId/confirm-split', ...riderOnly, confirmQuickSplitController);
+router.post('/orders/:orderId/delay', ...riderOnly, reportQuickDelayController);
 
 export default router;

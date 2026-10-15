@@ -10,6 +10,21 @@ export const MAX_RESTAURANTS_PER_ORDER = 3;
 export const MAX_DRIVERS_PER_ORDER = 2;
 
 /**
+ * Scheduled-order window.
+ *
+ * MIN_SCHEDULE_LEAD_MINUTES mirrors the activation job's own lookahead
+ * (processScheduledOrderAlerts in order.service.js, server.js's 1-minute cron): that job
+ * activates any scheduled order within this many minutes of its scheduledAt. Requiring at
+ * least this much lead time at creation means a scheduled order spends a real amount of time
+ * as "scheduled" before the pipeline picks it up — anything less and it would just activate on
+ * the very next cron tick, which is functionally an instant order wearing a "scheduled" label.
+ * Both sides import this one constant so they can never drift apart.
+ */
+export const MIN_SCHEDULE_LEAD_MINUTES = 30;
+/** Don't let a cart's pricing/menu snapshot go stale against a slot a week+ out. */
+export const MAX_SCHEDULE_LEAD_DAYS = 7;
+
+/**
  * Canonical order-status adjacency map (the real state machine, not just monotonic rank).
  * `from → [allowed next]`. Terminal states have no outgoing edges. Used by `canOrderTransition`
  * to block bypassable jumps (e.g. ready_for_pickup → delivered, skipping pickup) that the older
@@ -98,6 +113,51 @@ export function assertMultiOrderAllowed(settings, restaurantCount) {
   if (settings && settings.multiOrderEnabled === false) {
     throw new ValidationError('Multi-restaurant orders are currently disabled');
   }
+}
+
+/**
+ * Validates an explicit `scheduledAt` the client sent with a new order.
+ *
+ * Previously the only check anywhere was `dto.scheduledAt && new Date(dto.scheduledAt) >
+ * new Date()`, used purely to DECIDE whether to treat the order as scheduled - a past or
+ * malformed value silently fell back to an instant order instead of being rejected, so a
+ * customer who explicitly picked "tomorrow 7pm" could end up with an order placed (and
+ * dispatched) as if they had asked for ASAP, with no error telling them why.
+ *
+ * This throws instead, enforces a sane lead-time window (see MIN/MAX constants above), and
+ * returns the parsed Date so callers do not have to re-parse `dto.scheduledAt` later -
+ * `scheduled: ['created', ...]` only ever moves to `created` for a value that passed here.
+ *
+ * @param {string|Date|null|undefined} scheduledAt
+ * @param {Date} [now]
+ * @returns {Date|null} parsed scheduled time, or null when none was given (ordinary instant order)
+ * @throws {ValidationError}
+ */
+export function assertValidScheduledAt(scheduledAt, now = new Date()) {
+  if (scheduledAt === undefined || scheduledAt === null || scheduledAt === '') {
+    return null;
+  }
+
+  const parsed = scheduledAt instanceof Date ? scheduledAt : new Date(scheduledAt);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new ValidationError('Scheduled time is invalid');
+  }
+
+  const minAllowed = new Date(now.getTime() + MIN_SCHEDULE_LEAD_MINUTES * 60 * 1000);
+  if (parsed < minAllowed) {
+    throw new ValidationError(
+      `Scheduled time must be at least ${MIN_SCHEDULE_LEAD_MINUTES} minutes from now`,
+    );
+  }
+
+  const maxAllowed = new Date(now.getTime() + MAX_SCHEDULE_LEAD_DAYS * 24 * 60 * 60 * 1000);
+  if (parsed > maxAllowed) {
+    throw new ValidationError(
+      `Scheduled time cannot be more than ${MAX_SCHEDULE_LEAD_DAYS} days from now`,
+    );
+  }
+
+  return parsed;
 }
 
 export function isActivePickup(pickup) {

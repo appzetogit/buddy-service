@@ -270,6 +270,15 @@ export const adminApi = {
 
   getOrders: (params) => axiosInstance.get('/quick-commerce/admin/orders', { params }),
   deleteOrder: (orderId) => axiosInstance.delete(`/quick-commerce/admin/orders/${orderId}`),
+  // Dispatch actions (same set Food's admin has)
+  cancelOrder: (orderId, reason = '') =>
+    axiosInstance.post(`/quick-commerce/admin/orders/${orderId}/cancel`, { reason }),
+  getAssignableRiders: (orderId) =>
+    axiosInstance.get(`/quick-commerce/admin/orders/${orderId}/assignable-riders`),
+  assignRider: (orderId, deliveryPartnerId) =>
+    axiosInstance.post(`/quick-commerce/admin/orders/${orderId}/assign-rider`, { deliveryPartnerId }),
+  assignSecondRider: (orderId, deliveryPartnerId) =>
+    axiosInstance.post(`/quick-commerce/admin/orders/${orderId}/assign-second-rider`, { deliveryPartnerId }),
   getZones: (params) => axiosInstance.get('/quick-commerce/admin/zones', { params }),
   getZoneById: (id) => axiosInstance.get(`/quick-commerce/admin/zones/${id}`),
   createZone: (body) => axiosInstance.post('/quick-commerce/admin/zones', body ?? {}),
@@ -285,6 +294,8 @@ export const adminApi = {
   getAdminWalletData: () => emptyResponse({}),
   getReports: () => emptyResponse([]),
   getFeeSettings: () => axiosInstance.get('/quick-commerce/admin/fee-settings'),
+  getDeliverySettings: () => axiosInstance.get('/quick-commerce/admin/delivery-settings'),
+  updateDeliverySettings: (body) => axiosInstance.put('/quick-commerce/admin/delivery-settings', body ?? {}),
   createOrUpdateFeeSettings: (body) =>
     axiosInstance.put('/quick-commerce/admin/fee-settings', body ?? {}),
   updateFeeSettings: (body) =>

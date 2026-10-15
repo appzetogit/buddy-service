@@ -6,7 +6,8 @@ import {
   Users, PhoneCall, Scale
 } from 'lucide-react';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
-import { deliveryAPI } from '@food/api';
+import { deliveryAPI as foodDeliveryAPI } from '@food/api';
+import { quickDeliveryAPI, isQuickDeliveryOrder } from '@quickCommerce/delivery/quickDeliveryApi';
 import { toast } from 'sonner';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
 import {
@@ -81,7 +82,11 @@ const OtpModal = ({ order, onVerified, onClose }) => {
     return () => clearTimeout(timer);
   }, [isAlreadyVerified]);
 
-  const orderId = order.orderId || order._id || 'ORD';
+  // Quick Commerce rider routes are keyed by the Mongo id; Food's accept the human order number.
+  const deliveryAPI = isQuickDeliveryOrder(order) ? quickDeliveryAPI : foodDeliveryAPI;
+  const orderId = isQuickDeliveryOrder(order)
+    ? (order._id || order.orderMongoId || order.orderId)
+    : (order.orderId || order._id || 'ORD');
 
   const handleOtpChange = (index, value) => {
     if (value && !/^\d+$/.test(value)) return;
@@ -209,6 +214,7 @@ const PaymentModal = ({ order, otpString, onComplete, onClose }) => {
     else toast.error('Partner phone number not available');
   };
 
+  const deliveryAPI = isQuickDeliveryOrder(order) ? quickDeliveryAPI : foodDeliveryAPI;
   const orderId = order._id || order.orderId || 'ORD';
   const amountToCollect = order.pricing?.total || order.amountToCollect || 0;
   const isSplitConfirmed = !!order.deliveryState?.isSplitConfirmed || isDualLeg;
@@ -245,7 +251,7 @@ const PaymentModal = ({ order, otpString, onComplete, onClose }) => {
 
   const checkPaymentSync = useCallback(async () => {
     try {
-      const res = await deliveryAPI.getPaymentStatus(orderId);
+      const res = await foodDeliveryAPI.getPaymentStatus(orderId);
       const data = res?.data?.data || res?.data || {};
       const status = String(data?.payment?.status || "").toLowerCase();
       if (['paid', 'captured', 'authorized'].includes(status)) {
@@ -272,7 +278,7 @@ const PaymentModal = ({ order, otpString, onComplete, onClose }) => {
   const generateQr = async () => {
     setIsGeneratingQr(true);
     try {
-      const res = await deliveryAPI.createCollectQr(orderId, {
+      const res = await foodDeliveryAPI.createCollectQr(orderId, {
         name: order.userName || 'Customer',
         phone: order.userPhone || ''
       });

@@ -3,7 +3,7 @@ import { FoodDeliveryPartner } from '../models/deliveryPartner.model.js';
 import { DeliverySupportTicket } from '../models/supportTicket.model.js';
 import { DeliveryBonusTransaction } from '../../admin/models/deliveryBonusTransaction.model.js';
 import { FoodEarningAddon } from '../../admin/models/earningAddon.model.js';
-import { FoodOrder } from '../../orders/models/order.model.js';
+import { riderOrders } from './riderOrderSources.js';
 import { ValidationError, ConflictError } from '../../../../core/auth/errors.js';
 import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service.js';
 import { saveActorLocation } from '../../../../core/location/location.service.js';
@@ -419,7 +419,7 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
     // Earnings paid to rider through completed deliveries
     // Also track cash collected from customers (COD total)
     const [earningsAgg, cashAgg, withdrawalAgg, bonusAgg] = await Promise.all([
-        FoodOrder.aggregate([
+        riderOrders.aggregate([
             {
                 $match: {
                     $and: [
@@ -463,7 +463,7 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
                 }
             }
         ]),
-        FoodOrder.aggregate([
+        riderOrders.aggregate([
             {
                 $match: {
                     $and: [
@@ -560,7 +560,7 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
 
     // Keep transactions list reasonably small (UI only needs recent data for charts)
     const [paymentTxList, bonusTxList] = await Promise.all([
-        FoodOrder.find({
+        riderOrders.find({
             $or: [
                 { 'dispatch.deliveryPartnerId': partnerId },
                 { 'dispatch.sharedPartnerId': partnerId }
@@ -670,8 +670,8 @@ export const getDeliveryPartnerEarnings = async (deliveryPartnerId, query = {}) 
     }
 
     const [totalOrders, agg] = await Promise.all([
-        FoodOrder.countDocuments(match),
-        FoodOrder.aggregate([
+        riderOrders.countDocuments(match),
+        riderOrders.aggregate([
             { $match: match },
             {
                 $group: {
@@ -895,8 +895,8 @@ export const getDeliveryPartnerTripHistory = async (deliveryPartnerId, query = {
     }
 
     const [total, orders] = await Promise.all([
-        FoodOrder.countDocuments(match),
-        FoodOrder.find(match)
+        riderOrders.countDocuments(match),
+        riderOrders.find(match)
             .populate({ path: 'restaurantId', select: 'restaurantName' })
             .sort({ 'deliveryState.deliveredAt': -1, createdAt: -1 })
             .skip(skip)
@@ -933,7 +933,7 @@ export const getDeliveryPocketDetails = async (deliveryPartnerId, query = {}) =>
 
     const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
 
-    const orders = await FoodOrder.find({
+    const orders = await riderOrders.find({
         $or: [
             { 'dispatch.deliveryPartnerId': partnerId },
             { 'dispatch.sharedPartnerId': partnerId }
@@ -1049,8 +1049,8 @@ export const getActiveEarningAddonsForPartner = async (deliveryPartnerId) => {
             }
 
             const [currentOrders, earningsAgg] = await Promise.all([
-                FoodOrder.countDocuments(baseMatch),
-                FoodOrder.aggregate([
+                riderOrders.countDocuments(baseMatch),
+                riderOrders.aggregate([
                     { $match: baseMatch },
                     {
                         $group: {
