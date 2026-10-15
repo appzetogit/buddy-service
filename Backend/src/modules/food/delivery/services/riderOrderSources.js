@@ -14,7 +14,46 @@ import { FoodOrder } from '../../orders/models/order.model.js';
 /** The QC model is registered by the quick-commerce module; resolve lazily to avoid import cycles. */
 const quickModel = () => mongoose.models.QuickOrder || null;
 
-const models = () => [FoodOrder, quickModel()].filter(Boolean);
+/**
+ * Taxi rides are a third source: a ride a rider completed earns them money and (when paid in cash)
+ * leaves cash in their hand exactly like an order does. Rides are not orders, so every query on
+ * them goes through one aggregation that first lays the ride's fields out in the order vocabulary
+ * the wallet / pocket / history code already queries (dispatch.deliveryPartnerId, orderStatus,
+ * riderEarning, amountToCollect, ...). Resolved lazily so a build without taxi is unaffected.
+ */
+const taxiModel = () => mongoose.models.TaxiRide || null;
+
+const TAXI_AS_ORDER = {
+  $addFields: {
+    'dispatch.deliveryPartnerId': '$driverId',
+    orderStatus: {
+      $switch: {
+        branches: [
+          { case: { $eq: ['$status', 'completed'] }, then: 'delivered' },
+          { case: { $eq: ['$status', 'cancelled'] }, then: 'cancelled' },
+          { case: { $eq: ['$liveStatus', 'arrived'] }, then: 'reached_drop' },
+          { case: { $eq: ['$liveStatus', 'started'] }, then: 'picked_up' },
+          { case: { $eq: ['$liveStatus', 'arriving'] }, then: 'reached_pickup' },
+          { case: { $eq: ['$liveStatus', 'accepted'] }, then: 'confirmed' },
+        ],
+        default: 'created',
+      },
+    },
+    'deliveryState.deliveredAt': '$completedAt',
+    riderEarning: { $ifNull: ['$driverEarnings', 0] },
+    amountToCollect: { $cond: [{ $eq: ['$paymentMethod', 'cash'] }, { $ifNull: ['$fare', 0] }, 0] },
+    'payment.method': { $ifNull: ['$paymentMethod', 'online'] },
+    'payment.amountDue': { $cond: [{ $eq: ['$paymentMethod', 'cash'] }, { $ifNull: ['$fare', 0] }, 0] },
+    'pricing.total': { $ifNull: ['$fare', 0] },
+    orderKind: 'taxi',
+    restaurantName: 'Taxi ride',
+    orderId: { $concat: ['R', { $toUpper: { $substrCP: [{ $toString: '$_id' }, 18, 6] } }] },
+  },
+};
+
+const isTaxiModel = (Model) => Model === taxiModel();
+
+const models = () => [FoodOrder, quickModel(), taxiModel()].filter(Boolean);
 
 const getPath = (obj, path) => String(path).split('.').reduce((acc, key) => (acc == null ? acc : acc[key]), obj);
 
@@ -83,6 +122,12 @@ class MergedFind {
     const want = this.limitN != null ? this.skipN + this.limitN : null;
     const perModel = await Promise.all(
       models().map(async (Model) => {
+        if (isTaxiModel(Model)) {
+          const stages = [TAXI_AS_ORDER, { $match: this.match }];
+          if (this.sortSpec) stages.push({ $sort: this.sortSpec });
+          if (want != null) stages.push({ $limit: want });
+          return Model.aggregate(stages);
+        }
         const isFood = Model === FoodOrder;
         let query = Model.find(this.match);
         if (this.sortSpec) query = query.sort(this.sortSpec);
@@ -112,12 +157,20 @@ class MergedFind {
 export const riderOrders = {
   /** Same pipeline on both collections; `$group` results are summed per `_id`. */
   async aggregate(pipeline) {
-    const sets = await Promise.all(models().map((Model) => Model.aggregate(pipeline)));
+    const sets = await Promise.all(
+      models().map((Model) => Model.aggregate(isTaxiModel(Model) ? [TAXI_AS_ORDER, ...pipeline] : pipeline)),
+    );
     return mergeGroups(sets);
   },
 
   async countDocuments(match) {
-    const counts = await Promise.all(models().map((Model) => Model.countDocuments(match)));
+    const counts = await Promise.all(
+      models().map(async (Model) => {
+        if (!isTaxiModel(Model)) return Model.countDocuments(match);
+        const [row] = await Model.aggregate([TAXI_AS_ORDER, { $match: match }, { $count: 'n' }]);
+        return row?.n || 0;
+      }),
+    );
     return counts.reduce((sum, n) => sum + n, 0);
   },
 

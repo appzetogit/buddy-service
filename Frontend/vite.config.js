@@ -26,6 +26,8 @@ export default defineConfig({
       { find: '@shared', replacement: path.resolve(__dirname, './src/shared') },
       { find: '@common', replacement: path.resolve(__dirname, './src/modules/common') },
       { find: '@quickCommerce', replacement: path.resolve(__dirname, './src/modules/quickCommerce') },
+      // Taxi module (ported rides + parcel for riders and admin).
+      { find: '@taxi', replacement: path.resolve(__dirname, './src/modules/taxi') },
       { find: '@', replacement: path.resolve(__dirname, './src') },
     ],
     dedupe: ['react', 'react-dom', 'react-router-dom'],

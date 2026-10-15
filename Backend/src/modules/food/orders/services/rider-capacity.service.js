@@ -101,6 +101,15 @@ export async function getMaxConcurrentOrders() {
 const getQuickOrderModel = () => mongoose.models?.QuickOrder || null;
 
 /**
+ * A rider on a taxi ride is busy for its whole length: it counts as a full load, so neither
+ * dispatcher offers them an order and the accept paths refuse one until the ride ends. Resolved
+ * from the registry like QC, so a build without taxi is unaffected.
+ */
+const getTaxiRideModel = () => mongoose.models?.TaxiRide || null;
+const TAXI_RIDE_ACTIVE_STATUSES = ['accepted', 'ongoing'];
+const TAXI_RIDE_LOAD = MAX_MAX_CONCURRENT_ORDERS;
+
+/**
  * Live accepted-job count per rider, across Food and Quick Commerce.
  *
  * @param {Array} partnerIds
@@ -145,12 +154,19 @@ export async function getRiderActiveLoadMap(partnerIds = [], options = {}) {
     ...(excludeId ? { _id: { $ne: excludeId } } : {}),
   };
 
-  const [foodRows, quickRows] = await Promise.all([
+  const TaxiRide = getTaxiRideModel();
+
+  const [foodRows, quickRows, taxiRows] = await Promise.all([
     FoodOrder.find(foodFilter)
       .select('dispatch.deliveryPartnerId dispatch.sharedPartnerId')
       .lean(),
     QuickOrder
       ? QuickOrder.find(quickFilter).select('dispatch.deliveryPartnerId dispatch.sharedPartnerId').lean()
+      : Promise.resolve([]),
+    TaxiRide
+      ? TaxiRide.find({ driverId: { $in: ids }, status: { $in: TAXI_RIDE_ACTIVE_STATUSES } })
+          .select('driverId')
+          .lean()
       : Promise.resolve([]),
   ]);
 
@@ -169,6 +185,13 @@ export async function getRiderActiveLoadMap(partnerIds = [], options = {}) {
     const shared = String(row?.dispatch?.sharedPartnerId || '');
     if (primary && wanted.has(primary)) bump(primary);
     if (shared && shared !== primary && wanted.has(shared)) bump(shared);
+  }
+
+  for (const row of taxiRows || []) {
+    const rider = String(row?.driverId || '');
+    if (rider && wanted.has(rider)) {
+      loadByPartner.set(rider, (loadByPartner.get(rider) || 0) + TAXI_RIDE_LOAD);
+    }
   }
 
   return loadByPartner;

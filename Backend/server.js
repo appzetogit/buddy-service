@@ -63,7 +63,21 @@ const startServer = async () => {
         const httpServer = http.createServer(app);
 
         // 3. Initialize Socket.IO with the HTTP server (Redis adapter when Redis enabled)
-        await initSocket(httpServer);
+        const platformIo = await initSocket(httpServer);
+
+        // Taxi (riders + admin). Isolated: if anything here fails, Food and Quick Commerce keep running.
+        try {
+            const { registerTaxiSocket } = await import('./src/modules/taxi/socket/index.js');
+            registerTaxiSocket(platformIo);
+            const { restoreScheduledDispatches, startDispatchRecoveryLoop } = await import('./src/modules/taxi/services/dispatchService.js');
+            await restoreScheduledDispatches();
+            startDispatchRecoveryLoop();
+            const { startSurgeEngineLoop } = await import('./src/modules/taxi/services/surgeService.js');
+            startSurgeEngineLoop();
+            logger.info('Taxi module ready (socket, dispatch recovery, surge engine)');
+        } catch (err) {
+            logger.error(`Taxi module failed to start (Food / Quick Commerce unaffected): ${err.message}`);
+        }
 
         if (config.redisEnabled) {
             await connectRedis();

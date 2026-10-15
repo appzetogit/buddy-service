@@ -110,7 +110,7 @@ const deliveryPartnerSchema = new mongoose.Schema(
          * both — partners (and app versions) from before the choice existed.
          */
         deliveryServices: {
-            type: [{ type: String, enum: ['food', 'quickCommerce'] }],
+            type: [{ type: String, enum: ['food', 'quickCommerce', 'taxi'] }],
             default: undefined,
         },
         /**

@@ -1,0 +1,681 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+.redigo-admin-root {
+  --admin-sidebar: #040E08;
+  --admin-accent: #16A34A;
+  --admin-bg: #F6F8FC;
+  --admin-card: #FFFFFF;
+  --admin-text: #0B1220;
+  --admin-text-secondary: #64748B;
+  --admin-border: #E5E7EB;
+
+  /* Inter, not Times New Roman. A serif across a data-dense admin panel is what
+     made this look unfinished; Inter is designed for UI at small sizes and its
+     tabular figures keep table columns aligned. Already imported above. */
+
+  /* Single type scale for the panel. Sizes are referenced below rather than
+     repeated, so a change here moves the whole panel consistently. */
+  --admin-text-page-title: 22px;
+  --admin-text-h1: 19px;
+  --admin-text-h2: 15px;
+  --admin-text-body: 13.5px;
+  --admin-text-table: 13px;
+  --admin-text-label: 12.5px;
+  --admin-text-small: 12px;
+  --admin-text-micro: 11px;
+  --admin-text-metric: 22px;
+
+  --admin-weight-heading: 600;
+  --admin-weight-medium: 500;
+
+  --admin-radius-card: 16px;
+  --admin-radius-control: 8px;
+
+  --font-heading: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Page content fade-up on load.
+     `backwards`, not `forwards`: forwards keeps the last keyframe applied for
+     good, and that keyframe has a transform. Any element with a transform
+     becomes the box that position:fixed children are placed against, so every
+     modal inside an admin page was positioned against the page instead of the
+     window - the Create Admin form opened half below the screen with its Save
+     button out of reach. The end frame is no movement and full opacity, which
+     is how the element looks without the animation anyway. */
+  animation: adminFadeUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) backwards !important;
+}
+
+@keyframes adminFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Global Font Apply within Admin Root */
+.redigo-admin-root,
+.redigo-admin-root * {
+  font-family: var(--font-body) !important;
+}
+
+/* Base size on the root only. This used to be `font-size: 16px !important` on
+   every descendant, which forced body copy, table cells, labels and captions to
+   one size and erased the hierarchy — every heading then had to fight it back
+   with another !important. Setting it once here lets the components' own
+   text-sm/text-xs sizing work as intended. */
+.redigo-admin-root {
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Numbers in tables and metrics line up column to column. */
+.redigo-admin-root table,
+.redigo-admin-root .admin-metric-value,
+.redigo-admin-root [class*='tabular'] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Inter needs slight negative tracking at display sizes or headings look loose. */
+.redigo-admin-root h1,
+.redigo-admin-root h2,
+.redigo-admin-root h3,
+.redigo-admin-root .admin-page-title {
+  letter-spacing: -0.02em;
+}
+
+/* 1. Page Title */
+.redigo-admin-root .admin-page-title {
+  font-family: var(--font-heading) !important;
+  font-size: 22px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em !important;
+  text-transform: none !important;
+  color: var(--admin-text) !important;
+}
+
+/* 2. Main Module Heading */
+.redigo-admin-root h1,
+.redigo-admin-root .admin-h1,
+.redigo-admin-root .admin-main-heading {
+  font-family: var(--font-heading) !important;
+  font-size: 19px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.03em !important;
+  text-transform: none !important;
+  line-height: 1.2 !important;
+  color: var(--admin-text) !important;
+}
+@media (max-width: 1024px) {
+  .redigo-admin-root h1,
+  .redigo-admin-root .admin-h1 {
+    font-size: 20px !important;
+  }
+}
+@media (max-width: 768px) {
+  .redigo-admin-root h1,
+  .redigo-admin-root .admin-h1 {
+    font-size: 20px !important;
+  }
+}
+
+/* 3. Section Heading - Accent Line Included */
+.redigo-admin-root h2,
+.redigo-admin-root .admin-h2,
+.redigo-admin-root h3,
+.redigo-admin-root .admin-h3,
+.redigo-admin-root h4,
+.redigo-admin-root h5,
+.redigo-admin-root h6,
+.redigo-admin-root .section-heading,
+.redigo-admin-root .chart-title {
+  position: relative !important;
+  padding-left: 12px !important;
+  font-family: var(--font-heading) !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em !important;
+  text-transform: none !important;
+  line-height: 1.25 !important;
+  color: var(--admin-text) !important;
+  margin-bottom: 0.5rem !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.redigo-admin-root h2::before,
+.redigo-admin-root .admin-h2::before,
+.redigo-admin-root h3::before,
+.redigo-admin-root .admin-h3::before,
+.redigo-admin-root h4::before,
+.redigo-admin-root h5::before,
+.redigo-admin-root h6::before,
+.redigo-admin-root .section-heading::before,
+.redigo-admin-root .chart-title::before {
+  content: '' !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 15% !important;
+  height: 70% !important;
+  width: 3.5px !important;
+  background-color: var(--admin-accent) !important;
+  border-radius: 9999px !important;
+}
+
+/* 4. Small Labels */
+.redigo-admin-root .card-label,
+.redigo-admin-root .metric-card-label,
+.redigo-admin-root .small-label {
+  font-family: var(--font-heading) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+}
+
+/* KPI Numbers */
+.redigo-admin-root .kpi-number,
+.redigo-admin-root .metric-card-value {
+  font-family: var(--font-heading) !important;
+  font-weight: 600 !important;
+  font-size: 22px !important;
+}
+
+/* Table Headers */
+.redigo-admin-root table th,
+.redigo-admin-root .admin-table th {
+  font-family: var(--font-heading) !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  color: var(--admin-text-secondary) !important;
+}
+
+/* Table Data */
+.redigo-admin-root table td,
+.redigo-admin-root .admin-table td {
+  font-family: var(--font-body) !important;
+  font-weight: 400 !important;
+  font-size: 13px !important;
+  color: var(--admin-text) !important;
+}
+
+/* Sidebar Menu */
+.redigo-admin-root aside a,
+.redigo-admin-root aside button {
+  font-family: var(--font-heading) !important;
+  font-weight: 500 !important;
+  font-size: 13.5px !important;
+  line-height: 1.35 !important;
+}
+.redigo-admin-root aside a.active,
+.redigo-admin-root aside button.active {
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
+}
+
+/* Sidebar Categories */
+.redigo-admin-root .sidebar-category-header,
+.redigo-admin-root aside .category-title {
+  font-family: var(--font-heading) !important;
+  font-weight: 500 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+}
+
+/* Buttons */
+.redigo-admin-root button,
+.redigo-admin-root .admin-btn-primary,
+.redigo-admin-root .admin-btn-secondary {
+  font-family: var(--font-heading) !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+}
+
+/* Form Labels */
+.redigo-admin-root label,
+.redigo-admin-root .admin-label {
+  font-family: var(--font-heading) !important;
+  font-weight: 600 !important;
+  font-size: 12.5px !important;
+  color: var(--admin-text) !important;
+}
+
+/* Form Values / Inputs */
+.redigo-admin-root input,
+.redigo-admin-root select,
+.redigo-admin-root textarea,
+.redigo-admin-root .admin-input {
+  font-family: var(--font-body) !important;
+  font-weight: 400 !important;
+  font-size: 13.5px !important;
+  color: var(--admin-text) !important;
+}
+
+/* Status Badges */
+.redigo-admin-root .admin-badge {
+  font-family: var(--font-heading) !important;
+  font-weight: 500 !important;
+  font-size: 11px !important;
+}
+
+/* Graph Axis Labels */
+.redigo-admin-root .chart-axis-label {
+  font-family: var(--font-body) !important;
+  font-weight: 500 !important;
+  font-size: 11px !important;
+}
+
+/* Notification Titles */
+.redigo-admin-root .notification-title {
+  font-family: var(--font-heading) !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+}
+
+/* Notification Description */
+.redigo-admin-root .notification-desc {
+  font-family: var(--font-body) !important;
+  font-weight: 400 !important;
+  font-size: 13px !important;
+}
+
+/* Modal Titles */
+.redigo-admin-root .modal-title {
+  font-family: var(--font-heading) !important;
+  font-weight: 600 !important;
+  font-size: 17px !important;
+}
+
+/* Modal Description */
+.redigo-admin-root .modal-desc {
+  font-family: var(--font-body) !important;
+  font-weight: 400 !important;
+  font-size: 13px !important;
+}
+
+/* Cards Hover Lift Animation */
+.redigo-admin-root .admin-card,
+.redigo-admin-root [class*="card"] {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.redigo-admin-root .admin-card:hover,
+.redigo-admin-root [class*="card"]:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Buttons Hover Scale Animation */
+.redigo-admin-root button,
+.redigo-admin-root .admin-btn-primary,
+.redigo-admin-root .admin-btn-secondary {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease !important;
+}
+.redigo-admin-root button:hover,
+.redigo-admin-root .admin-btn-primary:hover,
+.redigo-admin-root .admin-btn-secondary:hover {
+  transform: scale(1.02) !important;
+}
+.redigo-admin-root button:active,
+.redigo-admin-root .admin-btn-primary:active,
+.redigo-admin-root .admin-btn-secondary:active {
+  transform: scale(0.98) !important;
+}
+
+/* Sidebar Item Hover Slide Animation */
+.redigo-admin-root aside a,
+.redigo-admin-root aside button {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, color 0.2s ease !important;
+  line-height: 1.35 !important;
+}
+.redigo-admin-root aside a:hover,
+.redigo-admin-root aside button:hover {
+  transform: translateX(3px) !important;
+  line-height: 1.35 !important;
+}
+
+/* Table Row Hover Background */
+.redigo-admin-root table tr,
+.redigo-admin-root .admin-table tr {
+  transition: background-color 0.15s ease !important;
+}
+.redigo-admin-root table tr:hover,
+.redigo-admin-root .admin-table tr:hover {
+  background-color: #F8FAFC !important;
+}
+
+/* Chart/Card Fade-In Animation */
+@keyframes adminFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.redigo-admin-root svg,
+.redigo-admin-root canvas {
+  animation: adminFadeIn 0.35s ease-out forwards !important;
+}
+
+/* Modal/Drawer Slide + Fade Animations */
+@keyframes adminDrawerSlide {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes adminModalSlide {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -45%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+.redigo-admin-root [class*="drawer"],
+.redigo-admin-root [class*="Drawer"] {
+  animation: adminDrawerSlide 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+.redigo-admin-root [class*="modal"]:not([class*="overlay"]),
+.redigo-admin-root [class*="Modal"]:not([class*="overlay"]) {
+  animation: adminModalSlide 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+/* Sidebar Specific Styles */
+.redigo-admin-root aside {
+  background-color: var(--admin-sidebar) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 1px 0 0 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+.redigo-admin-root aside .active {
+  background-color: var(--admin-accent) !important;
+  color: #040E08 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 3px 0 rgba(28, 227, 101, 0.2) !important;
+}
+
+.redigo-admin-root aside .active svg {
+  opacity: 1 !important;
+  color: #040E08 !important;
+}
+
+.redigo-admin-root aside .active span {
+  font-weight: 600 !important;
+  opacity: 1 !important;
+}
+
+/* Submenu Items (Fallback) */
+.redigo-admin-root aside ul li a,
+.redigo-admin-root aside .submenu-item,
+.redigo-admin-root aside [class*="submenu"] {
+  font-weight: 500 !important;
+  font-size: 13px !important;
+}
+
+/* Hover and Normal states for sidebar items */
+.redigo-admin-root aside a:not(.active):hover,
+.redigo-admin-root aside button:not(.active):hover {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  color: #FFFFFF !important;
+  line-height: 1.35 !important;
+}
+
+/* Sidebar section separators */
+.redigo-admin-root .sidebar-separator {
+  border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+  margin: 1.25rem 0.5rem 0.75rem 0.5rem !important;
+}
+
+/* Top Navbar Style */
+.redigo-admin-root header {
+  background-color: #FFFFFF !important;
+  border-bottom: 1px solid var(--admin-border) !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Reusable UI Elements */
+.redigo-admin-root .admin-card {
+  background-color: var(--admin-card) !important;
+  border: 1px solid var(--admin-border) !important;
+  border-radius: 8px !important;
+  padding: 1.5rem !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
+}
+
+.redigo-admin-root .admin-btn-primary {
+  background-color: var(--admin-accent) !important;
+  color: #040E08 !important;
+  font-weight: 500 !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 6px !important;
+  border: 1px solid transparent !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  font-size: 0.875rem !important;
+}
+
+.redigo-admin-root .admin-btn-primary:hover {
+  background-color: #19CD5B !important;
+}
+
+.redigo-admin-root .admin-btn-secondary {
+  background-color: #FFFFFF !important;
+  color: var(--admin-text) !important;
+  font-weight: 500 !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 6px !important;
+  border: 1px solid var(--admin-border) !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  font-size: 13px !important;
+}
+
+.redigo-admin-root .admin-btn-secondary:hover {
+  background-color: #F9FAFB !important;
+  border-color: #D1D5DB !important;
+}
+
+.redigo-admin-root .admin-input {
+  width: 100% !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 13.5px !important;
+  border: 1px solid var(--admin-border) !important;
+  border-radius: 6px !important;
+  background-color: #FFFFFF !important;
+  color: var(--admin-text) !important;
+}
+
+.redigo-admin-root .admin-input:focus {
+  border-color: var(--admin-accent) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 1px var(--admin-accent) !important;
+}
+
+/* Badge Styles */
+.redigo-admin-root .admin-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 0.125rem 0.5rem !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  border-radius: 9999px !important;
+}
+
+.redigo-admin-root .admin-badge-success {
+  background-color: #ECFDF5 !important;
+  color: #065F46 !important;
+  border: 1px solid #A7F3D0 !important;
+}
+
+.redigo-admin-root .admin-badge-danger {
+  background-color: #FEF2F2 !important;
+  color: #991B1B !important;
+  border: 1px solid #FEE2E2 !important;
+}
+
+/* Table Design */
+.redigo-admin-root .admin-table-container {
+  width: 100% !important;
+  overflow-x: auto !important;
+  border: 1px solid var(--admin-border) !important;
+  border-radius: 8px !important;
+}
+
+.redigo-admin-root .admin-table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+
+.redigo-admin-root .admin-table th {
+  background-color: #F9FAFB !important;
+  padding: 0.75rem 1rem !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--admin-text-secondary) !important;
+  border-bottom: 1px solid var(--admin-border) !important;
+}
+
+.redigo-admin-root .admin-table td {
+  padding: 0.75rem 1rem !important;
+  border-bottom: 1px solid var(--admin-border) !important;
+}
+
+/* Fallback generic text replacements to strictly enforce sizes */
+.redigo-admin-root p:not(.notification-dropdown p),
+.redigo-admin-root .admin-desc {
+  font-weight: 400 !important;
+  font-size: 15px !important;
+}
+
+.redigo-admin-root header a:not(.notification-dropdown a),
+.redigo-admin-root header button:not(.notification-dropdown button),
+.redigo-admin-root header span:not(.notification-dropdown span) {
+  font-weight: 600 !important;
+  font-size: 18px !important;
+}
+
+/* ==========================================================================
+   Folded in from src/index.css
+   These had no equivalent here. Where the two files disagreed, the value that
+   was already winning in the browser is kept, so this consolidation is not
+   meant to change how anything looks.
+   ========================================================================== */
+
+/* Tailwind's heaviest weight utilities, toned to the panel's heading weight.
+   font-black/extrabold render as shouting on 12-14px UI text. */
+.redigo-admin-root .font-black,
+.redigo-admin-root .font-extrabold {
+  font-weight: var(--admin-weight-heading) !important;
+}
+
+/* Text colour normalisation: components reach for both slate-* and gray-* for
+   the same intent, which read as two different greys side by side. */
+.redigo-admin-root .text-slate-900,
+.redigo-admin-root .text-gray-900 {
+  color: #0f172a !important;
+}
+.redigo-admin-root .text-slate-800,
+.redigo-admin-root .text-gray-800 {
+  color: #1e293b !important;
+}
+.redigo-admin-root .text-slate-700,
+.redigo-admin-root .text-gray-700 {
+  color: #334155 !important;
+}
+.redigo-admin-root .text-slate-500,
+.redigo-admin-root .text-gray-500 {
+  color: #64748b !important;
+}
+.redigo-admin-root .text-slate-400,
+.redigo-admin-root .text-gray-400 {
+  color: #94a3b8 !important;
+}
+
+/* Stops double padding where a page wrapper repeats AdminLayout's own padding. */
+.redigo-admin-root main > div,
+.redigo-admin-root main > section,
+.redigo-admin-root main > form {
+  padding: 0 !important;
+  background-color: transparent !important;
+  min-height: auto !important;
+}
+
+/* Form controls. Unified at --admin-text-body: index.css set the typed inputs to
+   14px via an attribute selector while this file set every other input to
+   13.5px, so a text field and a date field on one row disagreed. */
+.redigo-admin-root input[type='text'],
+.redigo-admin-root input[type='number'],
+.redigo-admin-root input[type='email'],
+.redigo-admin-root input[type='tel'],
+.redigo-admin-root input[type='password'],
+.redigo-admin-root input[type='date'],
+.redigo-admin-root input[type='search'],
+.redigo-admin-root select,
+.redigo-admin-root textarea {
+  border-radius: var(--admin-radius-control) !important;
+  border-color: #cbd5e1 !important;
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  font-size: var(--admin-text-body) !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.redigo-admin-root input[type='text']:focus,
+.redigo-admin-root input[type='number']:focus,
+.redigo-admin-root input[type='email']:focus,
+.redigo-admin-root input[type='tel']:focus,
+.redigo-admin-root input[type='password']:focus,
+.redigo-admin-root input[type='date']:focus,
+.redigo-admin-root input[type='search']:focus,
+.redigo-admin-root select:focus,
+.redigo-admin-root textarea:focus {
+  border-color: #46E580 !important;
+  outline: 2px solid transparent !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 1px #46E580 !important;
+}
+
+/* Card radius: components use rounded-xl, rounded-2xl and rounded-[28px]
+   interchangeably for the same card, so pin them to one value. */
+.redigo-admin-root .rounded-xl,
+.redigo-admin-root .rounded-2xl,
+.redigo-admin-root .rounded-\[28px\] {
+  border-radius: var(--admin-radius-card) !important;
+}
+
+.redigo-admin-root .border-slate-200,
+.redigo-admin-root .border-gray-200 {
+  border-color: #e2e8f0 !important;
+}
+.redigo-admin-root .border-slate-100,
+.redigo-admin-root .border-gray-100 {
+  border-color: #f1f5f9 !important;
+}
+
+/* Tables */
+.redigo-admin-root thead {
+  background-color: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+.redigo-admin-root th {
+  color: #64748b !important;
+}
+.redigo-admin-root td {
+  border-color: #f1f5f9 !important;
+}

@@ -79,6 +79,14 @@ router.use('/v1/quick-commerce', quickCommerceRoutes);
 router.use('/v1/seller', quickCommerceSellerRoutes);
 router.use('/v1/common/onboarding-fees', commonOnboardingFeeRoutes);
 router.use('/v1/common/maps', commonMapsRoutes);
+// Taxi (riders + admin): /api/v1/taxi/*. Own router and own error handler. Loaded defensively: a
+// problem inside the taxi module must never stop Food / Quick Commerce from starting.
+try {
+  const { taxiRouter } = await import('../modules/taxi/routes/index.js');
+  router.use('/v1/taxi', taxiRouter);
+} catch (err) {
+  console.error(`[taxi] module not mounted: ${err.message}`);
+}
 router.use('/v1/food/user', authMiddleware, requireRoles('USER'), userRoutes);
 router.use('/v1/profile', authMiddleware, requireRoles('USER'), masterProfileRoutes);
 

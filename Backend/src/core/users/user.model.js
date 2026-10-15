@@ -141,7 +141,51 @@ const userSchema = new mongoose.Schema(
         currentLocation: {
             type: buildLocationSchema(),
             default: undefined
-        }
+        },
+
+        // ---- Taxi (rides / parcel) --------------------------------------------------------------
+        // Optional fields the taxi module keeps on the same customer record, so one account works
+        // across Food, Quick Commerce and Taxi. Food / Quick Commerce never read or write them.
+        /** Code a driver is given to start this rider's trips; set on the first ride. */
+        rideOtp: { type: String, trim: true, minlength: 4, maxlength: 4, default: null },
+        emergencyContacts: {
+            type: [
+                new mongoose.Schema(
+                    {
+                        name: { type: String, default: '', trim: true },
+                        phone: { type: String, default: '', trim: true },
+                        relation: { type: String, default: 'Other', trim: true }
+                    },
+                    { _id: false }
+                )
+            ],
+            default: []
+        },
+        governmentIdProof: {
+            type: { type: String, enum: ['aadhaar', 'voter_id', 'passport', 'driving_license', 'other', ''], default: '', trim: true },
+            imageUrl: { type: String, default: '', trim: true },
+            backImageUrl: { type: String, default: '', trim: true },
+            fileName: { type: String, default: '', trim: true },
+            backFileName: { type: String, default: '', trim: true },
+            uploadedAt: { type: Date, default: null },
+            backUploadedAt: { type: Date, default: null }
+        },
+        acquiredByEmployeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'TaxiEmployee', default: null, index: true },
+        acquiredByEmployeeCode: { type: String, default: '', trim: true, uppercase: true },
+        referredRideCompletionCount: { type: Number, default: 0, min: 0 },
+        referralRewardGrantedAt: { type: Date, default: null },
+        active: { type: Boolean, default: true },
+        deletedAt: { type: Date, default: null },
+        deletion_reason: { type: String, default: '', trim: true },
+        deletionRequest: {
+            status: { type: String, enum: ['none', 'pending', 'approved', 'rejected'], default: 'none', index: true },
+            reason: { type: String, default: '', trim: true },
+            requestedAt: { type: Date, default: null },
+            reviewedAt: { type: Date, default: null },
+            reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
+            adminNote: { type: String, default: '', trim: true }
+        },
+        currentRideId: { type: mongoose.Schema.Types.ObjectId, ref: 'TaxiRide', default: null }
     },
     {
         collection: 'buddy_users',
@@ -152,6 +196,8 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ 'addresses.location': '2dsphere' });
 userSchema.index({ currentLocation: '2dsphere' });
+userSchema.index({ deletedAt: 1, createdAt: -1 });
+userSchema.index({ acquiredByEmployeeCode: 1 });
 
 export const FoodUser = mongoose.model('FoodUser', userSchema);
 

@@ -11,6 +11,7 @@ const debugError = (...args) => {}
 export default function AdminLayout() {
   const location = useLocation();
   const isQuickCommerce = location.pathname.startsWith("/admin/quick-commerce");
+  const isTaxi = location.pathname.startsWith("/admin/taxi");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -69,7 +70,7 @@ export default function AdminLayout() {
         <main className="flex-1 min-h-0 w-full max-w-full overflow-x-hidden overflow-y-auto bg-neutral-100">
           {/* Quick Commerce pages (ported from Blaze) expect ambient page padding from the layout;
               Food pages already pad themselves per-page, so only QC gets it here. */}
-          {isQuickCommerce ? (
+          {isQuickCommerce || isTaxi ? (
             <div className="p-4 sm:p-6">
               <Outlet />
             </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { isTaxiRide } from '@taxi/delivery/taxiDeliveryApi';
 import { motion } from 'framer-motion';
 import { MapPin, Clock, ChefHat, ChevronDown, AlertTriangle } from 'lucide-react';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
@@ -82,7 +83,10 @@ function LocationStep({
  */
 export const NewOrderModal = ({ order, onAccept, onReject, onMinimize, riderProfile }) => {
   const { riderLocation } = useDeliveryStore();
-  const [timeLeft, setTimeLeft] = useState(60);
+  // A ride offer counts down on the dispatch clock the server set for it.
+  const [timeLeft, setTimeLeft] = useState(() =>
+    isTaxiRide(order) ? Math.max(5, Math.min(180, Number(order.expiresInSeconds) || 60)) : 60,
+  );
 
   useEffect(() => {
     if (timeLeft <= 0) {
@@ -257,7 +261,11 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize, riderProf
         <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-start justify-between gap-3 text-white bg-[#0A1F0A] shrink-0 border-b border-white/5">
           <div className="min-w-0 flex-1 pr-1">
             <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-1 truncate">
-              {isShared ? 'Special Shared Request' : 'Incoming Request'}
+              {isShared
+                ? 'Special Shared Request'
+                : isTaxiRide(order)
+                  ? (order.serviceType === 'parcel' ? 'New Parcel Request' : 'New Ride Request')
+                  : 'Incoming Request'}
             </p>
             <h2
               className={`text-xl sm:text-3xl font-bold tracking-tight tabular-nums break-all [overflow-wrap:anywhere] ${
@@ -352,9 +360,11 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize, riderProf
                   key={`pickup-${pickup.restaurantId || idx}`}
                   icon={ChefHat}
                   label={
-                    pickups.length > 1
-                      ? `Restaurant Pickup #${idx + 1}`
-                      : 'Restaurant Pickup'
+                    isTaxiRide(order)
+                      ? 'Passenger Pickup'
+                      : pickups.length > 1
+                        ? `Restaurant Pickup #${idx + 1}`
+                        : 'Restaurant Pickup'
                   }
                   title={pickup.restaurantName || pickup.restaurant_name || restaurantName}
                   address={resolvePickupAddress(pickup, restaurantAddress)}
@@ -363,8 +373,8 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize, riderProf
               ))}
               <LocationStep
                 icon={MapPin}
-                label="Customer Drop"
-                title="Customer Location"
+                label={isTaxiRide(order) ? 'Drop' : 'Customer Drop'}
+                title={isTaxiRide(order) ? 'Drop Location' : 'Customer Location'}
                 address={customerAddress}
                 isLast
                 accentDotClass="bg-[#0A1F0A]"

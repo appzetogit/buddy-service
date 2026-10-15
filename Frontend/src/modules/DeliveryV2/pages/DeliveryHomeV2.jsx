@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { taxiDeliveryAPI, isTaxiRide } from '@taxi/delivery/taxiDeliveryApi';
+import { TaxiTripSheet } from '@/modules/DeliveryV2/components/modals/TaxiTripSheet';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useDeliveryStore, orderKeyOf, orderAliasesOf } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { DELIVERY_TRIP_POLL_MS, pollEnabled } from '@/services/socket/pollConfig';
@@ -922,6 +924,13 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   useEffect(() => { if (newOrder) setIncomingOrder(newOrder); }, [newOrder]);
 
+  // A taxi ride has its own realtime room (the passenger's map, cancellations). Accepting joins it
+  // on the server; this re-joins after a reconnect or a page reload mid-ride.
+  useEffect(() => {
+    if (!socket || !isSocketConnected || !isTaxiRide(activeOrder)) return;
+    socket.emit('joinRide', { rideId: String(activeOrder._id) });
+  }, [socket, isSocketConnected, activeOrder?._id]);
+
   // Order stacking: an offer is dismissed only when the rider genuinely has no free slot left
   // (backend limit, default 2), or when the offer is for an order they already hold. Before
   // stacking, ANY active order killed every incoming offer — that is what made a second order
@@ -1011,6 +1020,21 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
             ['confirmed', 'preparing', 'ready_for_pickup'].includes(orderStatus)
           );
         });
+
+        // No Food offer on screen: a rider who opted in to taxi may have a ride offer waiting.
+        if (!cancelled && !nextIncomingOrder) {
+          try {
+            const rideRes = await taxiDeliveryAPI.getAvailableOrders();
+            const rideOffer = (rideRes?.data?.data?.orders || [])[0];
+            if (rideOffer) {
+              setIncomingOrder((prev) =>
+                prev && String(prev._id) === String(rideOffer._id) ? prev : prev || rideOffer,
+              );
+            }
+          } catch {
+            // Taxi is optional for a rider.
+          }
+        }
 
         if (!cancelled && nextIncomingOrder) {
           setCashLimitNotice(null);
@@ -1713,6 +1737,10 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                       }
                     }}
                     onReject={() => {
+                      // Declining (or letting it expire) a ride tells dispatch to try the next rider.
+                      if (isTaxiRide(incomingOrder)) {
+                        taxiDeliveryAPI.rejectOrder(incomingOrder._id).catch(() => { });
+                      }
                       setIncomingOrder(null);
                       clearNewOrder();
                       clearSharedOrder();
@@ -1747,7 +1775,33 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                     onSkip={() => setShowPickupSequence(false)}
                   />
                 )}
-                {!showPickupSequence && activeOrder && (tripStatus === 'PICKING_UP' || tripStatus === 'REACHED_PICKUP') && (
+                {activeOrder && isTaxiRide(activeOrder) &&
+                  ['PICKING_UP', 'REACHED_PICKUP', 'PICKED_UP', 'REACHED_DROP'].includes(tripStatus) && (
+                  <TaxiTripSheet
+                    order={activeOrder}
+                    status={tripStatus}
+                    isWithinRange={isWithinRange}
+                    distanceToTarget={distanceToTarget}
+                    eta={eta}
+                    onReachedPickup={reachPickup}
+                    onStartRide={async (otp) => {
+                      try {
+                        await pickUpOrder(null, { otp });
+                      } catch {
+                        // pickUpOrder already told the rider what went wrong (e.g. wrong ride code).
+                      }
+                    }}
+                    onReachedDrop={reachDrop}
+                    onComplete={async ({ collectedVia }) => {
+                      const endedOrderId = activeOrderIdRef.current;
+                      const res = await completeDelivery(null, collectedVia || null);
+                      clearTripMapState(endedOrderId);
+                      return res;
+                    }}
+                    onMinimize={() => setIsModalMinimized(true)}
+                  />
+                )}
+                {!showPickupSequence && activeOrder && !isTaxiRide(activeOrder) && (tripStatus === 'PICKING_UP' || tripStatus === 'REACHED_PICKUP') && (
                   <PickupActionModal
                     order={activeOrder}
                     status={tripStatus}
@@ -1759,7 +1813,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                     onMinimize={() => setIsModalMinimized(true)}
                   />
                 )}
-                {activeOrder && (tripStatus === 'PICKED_UP' || tripStatus === 'REACHED_DROP') && (
+                {activeOrder && !isTaxiRide(activeOrder) && (tripStatus === 'PICKED_UP' || tripStatus === 'REACHED_DROP') && (
                   <div className="absolute inset-x-0 z-[120] px-4" style={{ bottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
                     {tripStatus === 'PICKED_UP' ? (
                       <div className="bg-white rounded-[2rem] p-6 shadow-[0_-20px_80px_rgba(0,0,0,0.4)] border border-gray-100 flex flex-col items-center">
@@ -1834,7 +1888,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                     )}
                   </div>
                 )}
-                {showVerification && activeOrder && tripStatus !== 'COMPLETED' && (
+                {showVerification && activeOrder && !isTaxiRide(activeOrder) && tripStatus !== 'COMPLETED' && (
                   <DeliveryVerificationModal
                     order={activeOrder}
                     onComplete={async (otp, paymentOverride) => {

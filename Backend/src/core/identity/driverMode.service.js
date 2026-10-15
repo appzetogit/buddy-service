@@ -6,8 +6,8 @@ import { getEffectiveServiceStatus } from './driverOnboardingAdmin.service.js';
 
 const VALID_MODES = ['off', 'food'];
 const OFF_ALIASES = new Set(['off', 'none', 'offline', '', null, undefined]);
-const DELIVERY_SERVICES = ['food', 'quickCommerce'];
-const SERVICE_LABEL = { food: 'Food', quickCommerce: 'Quick Commerce' };
+const DELIVERY_SERVICES = ['food', 'quickCommerce', 'taxi'];
+const SERVICE_LABEL = { food: 'Food', quickCommerce: 'Quick Commerce', taxi: 'Taxi' };
 
 /**
  * `services` picks which delivery jobs the rider takes while online (food,
@@ -61,6 +61,13 @@ export const setDriverMode = async (identity, mode, options = {}) => {
   }
   if (services) {
     for (const svc of services) {
+      // Taxi has no separate onboarding: an approved delivery partner can opt in to rides.
+      if (svc === 'taxi') {
+        if (partner.status !== 'approved') {
+          throw new ForbiddenError(`Taxi is ${partner.status || 'pending'} — wait for admin approval`);
+        }
+        continue;
+      }
       const { status } = getEffectiveServiceStatus(identity, svc, partner);
       if (status !== 'approved') {
         throw new ForbiddenError(`${SERVICE_LABEL[svc]} is ${status.replace('_', ' ')} — wait for admin approval`);

@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { taxiDeliveryAPI, isTaxiRide } from '@taxi/delivery/taxiDeliveryApi';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { deliveryAPI } from '@food/api';
 import { quickDeliveryAPI, isQuickDeliveryOrder } from '@quickCommerce/delivery/quickDeliveryApi';
@@ -22,8 +23,11 @@ export const useOrderManager = () => {
 
   // Quick Commerce jobs live in their own collection, so they use the QC rider endpoints.
   // Same method names, so every call below stays unchanged.
-  const apiFor = (orderLike = activeOrder) =>
-    (isQuickDeliveryOrder(orderLike) ? quickDeliveryAPI : deliveryAPI);
+  // Taxi rides have their own rider endpoints too (ride code at pickup, fare at the end).
+  const apiFor = (orderLike = activeOrder) => {
+    if (isTaxiRide(orderLike)) return taxiDeliveryAPI;
+    return isQuickDeliveryOrder(orderLike) ? quickDeliveryAPI : deliveryAPI;
+  };
 
   const resolveOrderId = (orderLike = activeOrder) =>
     orderLike?._id || orderLike?.id || orderLike?.orderId || orderLike?.order_id;
@@ -155,7 +159,7 @@ export const useOrderManager = () => {
   /**
    * Mark "Picked Up" (Confirm order ID & start delivery)
    */
-  const pickUpOrder = async (billImageUrl) => {
+  const pickUpOrder = async (billImageUrl, extra = {}) => {
     const orderId = resolveOrderId();
     if (!orderId) {
       toast.error('Order id not found. Please refresh current trip.');
@@ -167,7 +171,8 @@ export const useOrderManager = () => {
         orderId,
         activeOrder.displayOrderId || orderId,
         riderLocation || {},
-        { billImageUrl }
+        // `extra.otp` is the passenger's ride code for a taxi ride (no bill photo there).
+        { billImageUrl, ...extra }
       );
 
       if (response?.data?.success) {
@@ -233,6 +238,10 @@ export const useOrderManager = () => {
             toast.info(waitMsg.body);
           } else if (isFullyPicked || myLegCollected) {
             updateTripStatus('PICKED_UP');
+            if (isTaxiRide(updatedOrder)) {
+              toast.success('Ride started - heading to the destination');
+              return;
+            }
             toast.success(
               myLegCollected && !isFullyPicked
                 ? 'Your items collected! Heading to Drop-off'

@@ -2247,12 +2247,23 @@ export const deliveryAPI = {
         contextModule: "delivery",
       });
       const quickTrip = (qcRes?.data?.data?.orders || [])[0];
-      if (!quickTrip) return foodRes;
-      return { ...qcRes, data: { ...qcRes.data, data: { activeOrder: quickTrip } } };
+      if (quickTrip) {
+        return { ...qcRes, data: { ...qcRes.data, data: { activeOrder: quickTrip } } };
+      }
     } catch {
       // Quick Commerce is optional for a rider; never let it break the food trip sync.
-      return foodRes;
     }
+
+    try {
+      const rideRes = await apiClient.get("/taxi/delivery/rides/current", { contextModule: "delivery" });
+      const rideTrip = (rideRes?.data?.data?.orders || [])[0];
+      if (rideTrip) {
+        return { ...rideRes, data: { ...rideRes.data, data: { activeOrder: rideTrip } } };
+      }
+    } catch {
+      // Taxi is optional for a rider as well.
+    }
+    return foodRes;
   },
   /**
    * GET /food/delivery/orders/active - every trip the rider is running right now.
@@ -2282,7 +2293,15 @@ export const deliveryAPI = {
       // Quick Commerce is optional for a rider.
     }
 
-    return { activeOrders: [...activeOrders, ...quickOrders], capacity };
+    let rideOrders = [];
+    try {
+      const rideRes = await apiClient.get("/taxi/delivery/rides/current", { contextModule: "delivery" });
+      rideOrders = rideRes?.data?.data?.orders || [];
+    } catch {
+      // Taxi is optional for a rider.
+    }
+
+    return { activeOrders: [...activeOrders, ...quickOrders, ...rideOrders], capacity };
   },
   acceptOrder: (orderId, body = {}) =>
     apiClient.patch(

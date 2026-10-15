@@ -74,6 +74,14 @@ export function getRazorpayKeyId() {
     return KEY_ID;
 }
 
+/**
+ * The resolved key pair, for modules (Taxi) that build their own Razorpay client or verify their own
+ * signatures. Same credentials and the same environment rules as every other payment path.
+ */
+export function getRazorpayCredentials() {
+    return { keyId: KEY_ID, keySecret: KEY_SECRET, environment: ENVIRONMENT };
+}
+
 /** Which environment the resolved credentials belong to: 'test' | 'live'. */
 export function getRazorpayEnvironment() {
     return ENVIRONMENT;

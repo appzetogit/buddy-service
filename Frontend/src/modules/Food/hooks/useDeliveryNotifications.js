@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { isTaxiRide } from '@taxi/delivery/taxiDeliveryApi';
+import { attachTaxiRideListeners } from '@taxi/delivery/taxiDeliverySocket';
+import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { API_BASE_URL } from '@food/api/config';
 import { createRealtimeSocket } from '@/services/socket/createRealtimeSocket';
 import { createSyncEngine } from '@/services/socket/syncEngine';
@@ -944,6 +947,27 @@ export const useDeliveryNotifications = () => {
       if (claimedId) setClaimedOrderId(claimedId);
     });
 
+    // Taxi rides: offers, closed offers and passenger cancellations arrive on this same socket.
+    attachTaxiRideListeners(socketRef.current, {
+      onOffer: (job) => applyOrderOffer(job),
+      onClosed: (rideId) => {
+        stopAlertLoop();
+        activeOrderRef.current = null;
+        setNewOrder((current) => (current && String(current._id) === String(rideId) ? null : current));
+        if (rideId) setClaimedOrderId(rideId);
+      },
+      onCancelled: (rideId, payload) => {
+        if (!rideId) return;
+        setOrderStatusUpdate({
+          orderId: String(rideId),
+          orderMongoId: String(rideId),
+          status: 'cancelled',
+          orderStatus: 'cancelled',
+          message: payload?.message || 'The passenger cancelled this ride',
+        });
+      },
+    });
+
     socketRef.current.on('admin_notification', (payload) => {
       debugLog('Admin broadcast received via socket', payload);
       setAdminNotification(payload);
@@ -1040,6 +1064,19 @@ export const useDeliveryNotifications = () => {
 
   const emitLocation = useCallback((data) => {
     if (socketRef.current && socketRef.current.connected) {
+      // A taxi ride follows the rider on the ride's own room, not the food tracking room.
+      const heldRide = useDeliveryStore.getState().activeOrder;
+      if (isTaxiRide(heldRide) && String(data?.orderId) === String(heldRide._id)) {
+        socketRef.current.emit('ride:driver-location:update', {
+          rideId: String(heldRide._id),
+          coordinates: [Number(data.lng), Number(data.lat)],
+          heading: data.heading,
+          speed: data.speed,
+          accuracy: data.accuracy,
+          timestamp: Date.now(),
+        });
+        return true;
+      }
       // debugLog('? Emitting location via socket:', data);
       socketRef.current.emit('update-location', data);
       return true;

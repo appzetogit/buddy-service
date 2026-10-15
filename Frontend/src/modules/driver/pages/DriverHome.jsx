@@ -350,9 +350,11 @@ export default function DriverHome() {
                 {[
                   { id: "food", label: "Food" },
                   { id: "quickCommerce", label: "Quick Commerce" },
+                  { id: "taxi", label: "Taxi" },
                 ].map((svc) => {
-                  // No saved choice yet = taking everything, so show both as on.
-                  const selected = !services || services.includes(svc.id);
+                  // No saved choice yet = taking Food and Quick Commerce, so show those as on.
+                  // Taxi is always an explicit opt-in.
+                  const selected = svc.id === "taxi" ? Boolean(services?.includes("taxi")) : !services || services.includes(svc.id);
                   return (
                     <button
                       key={svc.id}
@@ -385,7 +387,7 @@ export default function DriverHome() {
                 })}
               </div>
               <div className="text-gray-400 text-[11px] mt-2">
-                Quick Commerce needs its own admin approval.
+                Quick Commerce needs its own admin approval. Taxi sends you ride and parcel requests while you are online.
               </div>
             </div>
           )}

@@ -48,11 +48,26 @@ import {
   Lock,
   Car,
   ShieldCheck,
+  Briefcase,
+  Bus,
+  Gavel,
+  Home,
+  Layers,
+  MessageCircle,
+  Monitor,
+  Settings2,
+  Share2,
+  ShieldAlert,
+  Smartphone,
+  TrendingUp,
+  PlusCircle,
+  Star,
 } from "lucide-react"
 import { cn } from "@food/utils/utils"
 import { Input } from "@food/components/ui/input"
 import { adminSidebarMenu } from "@food/utils/adminSidebarMenu"
 import { quickAdminSidebarMenu } from "@food/utils/quickAdminSidebarMenu"
+import { taxiAdminSidebarMenu } from "@food/utils/taxiAdminSidebarMenu"
 import BusinessLogo from "@food/components/BusinessLogo"
 import { toast } from "sonner"
 const debugLog = (...args) => {}
@@ -104,12 +119,29 @@ const iconMap = {
   Lock,
   X,
   ShieldCheck,
+  // Taxi admin menu icons
+  Briefcase,
+  Bus,
+  Gavel,
+  Home,
+  House: Home, // lucide exposes Home under the name "House"
+  Layers,
+  MessageCircle,
+  Monitor,
+  Settings2,
+  Share2,
+  ShieldAlert,
+  Smartphone,
+  TrendingUp,
+  PlusCircle,
+  Star,
 }
 
 export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange }) {
   const location = useLocation()
   const isQuickCommerce = location.pathname.startsWith("/admin/quick-commerce")
-  const activeMenu = isQuickCommerce ? quickAdminSidebarMenu : adminSidebarMenu
+  const isTaxi = location.pathname.startsWith("/admin/taxi")
+  const activeMenu = isTaxi ? taxiAdminSidebarMenu : isQuickCommerce ? quickAdminSidebarMenu : adminSidebarMenu
   const [searchQuery, setSearchQuery] = useState("")
   const [badges, setBadges] = useState({})
 
@@ -622,14 +654,14 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
             </div>
           )}
 
-          {/* Food / Quick Commerce module switcher — swaps the whole menu below */}
+          {/* Food / Quick Commerce / Taxi module switcher — swaps the whole menu below */}
           {!isCollapsed && (
-            <div className="mb-3 flex items-center gap-1 rounded-xl border border-neutral-800 bg-neutral-900 p-1 animate-[slideIn_0.4s_ease-out_0.15s_both]">
+            <div className="mb-3 grid grid-cols-2 items-center gap-1 rounded-xl border border-neutral-800 bg-neutral-900 p-1 animate-[slideIn_0.4s_ease-out_0.15s_both]">
               <Link
                 to="/admin/food"
                 className={cn(
                   "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide transition-all",
-                  !isQuickCommerce ? "bg-white text-neutral-900 shadow" : "text-neutral-400 hover:text-white"
+                  !isQuickCommerce && !isTaxi ? "bg-white text-neutral-900 shadow" : "text-neutral-400 hover:text-white"
                 )}
               >
                 <UtensilsCrossed className="w-3.5 h-3.5" />
@@ -644,6 +676,16 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
               >
                 <Package className="w-3.5 h-3.5" />
                 Quick Commerce
+              </Link>
+              <Link
+                to="/admin/taxi/dashboard"
+                className={cn(
+                  "col-span-2 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide transition-all",
+                  isTaxi ? "bg-white text-neutral-900 shadow" : "text-neutral-400 hover:text-white"
+                )}
+              >
+                <Car className="w-3.5 h-3.5" />
+                Taxi
               </Link>
             </div>
           )}

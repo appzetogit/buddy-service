@@ -15,6 +15,7 @@ const AuthApp = lazy(() => import('../modules/auth/routes'))
 const DriverApp = lazy(() => import('../modules/driver/routes'))
 const QuickCommerceApp = lazy(() => import('../modules/quickCommerce/routes'))
 const SellerApp = lazy(() => import('../modules/seller/routes'))
+const TaxiApp = lazy(() => import('../modules/taxi/TaxiUserApp'))
 const SellerAuthPage = lazy(() => import('../modules/seller/pages/Auth'))
 
 const PageLoader = () => <AppShellSkeleton />
@@ -169,7 +170,7 @@ const AppRoutes = () => {
       <Route path="/cab/*" element={<Navigate to="/food/user" replace />} />
       <Route path="/intercity/*" element={<Navigate to="/food/user" replace />} />
       <Route path="/bus/*" element={<Navigate to="/food/user" replace />} />
-      <Route path="/taxi/*" element={<Navigate to="/food/user" replace />} />
+      <Route path="/taxi/*" element={<Suspense fallback={<PageLoader />}><TaxiApp /></Suspense>} />
 
       <Route path="/*" element={<FoodAppWrapper />} />
     </Routes>

@@ -122,6 +122,8 @@ const EditRestaurant = lazy(() => import("@food/pages/admin/restaurant/EditResta
 const AdminLogin = lazy(() => import("@food/pages/admin/auth/AdminLogin"));
 // Quick Commerce admin (ported module) — same admin session/layout, separate tab.
 const QuickCommerceAdminRoutes = lazy(() => import("../../../quickCommerce/admin/routes/index.jsx"));
+// Taxi admin (ported module) — same admin session/layout, separate tab.
+const TaxiAdminRoutes = lazy(() => import("../../../taxi/routes/adminRoutes.jsx"));
 const AdminSignup = lazy(() => import("@food/pages/admin/auth/AdminSignup"));
 const AdminForgotPassword = lazy(() => import("@food/pages/admin/auth/AdminForgotPassword"));
 
@@ -292,6 +294,9 @@ export default function AdminRouter() {
 
           {/* QUICK COMMERCE ADMIN — ported module, nested like food/* above */}
           <Route path="quick-commerce/*" element={<QuickCommerceAdminRoutes />} />
+
+          {/* TAXI ADMIN — ported module (rides + parcel), mounted like quick-commerce */}
+          <Route path="taxi/*" element={<TaxiAdminRoutes />} />
 
         </Route>
 

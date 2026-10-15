@@ -1,0 +1,804 @@
+import mongoose from 'mongoose';
+import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
+
+const rideMessageSchema = new mongoose.Schema(
+  {
+    senderRole: {
+      type: String,
+      enum: ['user', 'driver'],
+      required: true,
+    },
+    senderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+    },
+    message: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: 1000,
+    },
+    // Optional attachment (e.g. rider's current-location photo). A message may
+    // carry text, an image, or both.
+    imageUrl: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    sentAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: true },
+);
+
+const rideSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FoodUser',
+      required: true,
+    },
+    driverId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiDriver',
+      default: null,
+    },
+    vehicleTypeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiVehicle',
+      default: null,
+    },
+    dispatchVehicleTypeIds: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'TaxiVehicle',
+        },
+      ],
+      default: [],
+    },
+    dispatchTracking: {
+      notifiedDriverIds: {
+        type: [String],
+        default: [],
+      },
+      rejectedDriverIds: {
+        type: [String],
+        default: [],
+      },
+      lastDispatchAttemptAt: {
+        type: Date,
+        default: null,
+      },
+    },
+    vehicleIconType: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    vehicleIconUrl: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    deliveryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Delivery',
+      default: null,
+    },
+    // Where the booking originated. Website enquiries are leads with no real
+    // coordinates, so dispatch must skip them — see dispatchService.
+    bookingSource: {
+      type: String,
+      enum: ['app', 'website', 'admin'],
+      default: 'app',
+      trim: true,
+    },
+    serviceType: {
+      type: String,
+      enum: ['ride', 'parcel', 'intercity'],
+      default: 'ride',
+      lowercase: true,
+      trim: true,
+    },
+    intercity: {
+      bookingId: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      fromCity: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      toCity: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      tripType: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      travelDate: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      passengers: {
+        type: Number,
+        default: 1,
+        min: 1,
+      },
+      distance: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      vehicleName: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+    },
+    parcel: {
+      category: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      weight: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      description: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      deliveryCategory: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      goodsTypeFor: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      deliveryScope: {
+        type: String,
+        enum: ['city', 'outstation'],
+        default: 'city',
+        lowercase: true,
+        trim: true,
+      },
+      isOutstation: {
+        type: Boolean,
+        default: false,
+      },
+      senderName: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      senderMobile: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      receiverName: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      receiverMobile: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      /// Photos of the parcel taken by the sender when booking. The app caps
+      /// this at two; they are upload URLs rather than inline data so that ride
+      /// documents stay small.
+      photos: {
+        type: [String],
+        default: [],
+      },
+      /// Handling notes from the sender ('fragile', 'call before arriving').
+      /// Separate from `description`, which names what is inside.
+      instructions: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      /// Proof the driver collected the parcel. Without it the trip cannot
+      /// start -- see `assertParcelProof` in rideService.
+      pickupProof: {
+        url: { type: String, default: '' },
+        at: { type: Date, default: null },
+      },
+      /// Proof the driver handed it over. Without it the trip cannot complete.
+      deliveryProof: {
+        url: { type: String, default: '' },
+        at: { type: Date, default: null },
+      },
+    },
+    scheduledAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    status: {
+      type: String,
+      enum: Object.values(RIDE_STATUS),
+      default: RIDE_STATUS.SEARCHING,
+    },
+    liveStatus: {
+      type: String,
+      enum: Object.values(RIDE_LIVE_STATUS),
+      default: RIDE_LIVE_STATUS.SEARCHING,
+    },
+    pickupLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number],
+        required: true,
+      },
+    },
+    pickupAddress: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    dropLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number],
+        required: true,
+      },
+    },
+    dropAddress: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    fare: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    // Parcel waiting at pickup: minutes the driver waited beyond the free
+    // window, and what that added to the fare. Stored so a receipt can show the
+    // charge rather than an unexplained jump in the total.
+    waitingMinutes: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    waitingCharge: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    baseFare: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    bookingMode: {
+      type: String,
+      enum: ['normal', 'bidding'],
+      default: 'normal',
+      lowercase: true,
+      trim: true,
+    },
+    pricingNegotiationMode: {
+      type: String,
+      enum: ['none', 'driver_bid', 'user_increment_only'],
+      default: 'none',
+      lowercase: true,
+      trim: true,
+    },
+    biddingStatus: {
+      type: String,
+      enum: ['none', 'open', 'accepted', 'expired', 'cancelled'],
+      default: 'none',
+      lowercase: true,
+      trim: true,
+    },
+    bidStepAmount: {
+      type: Number,
+      default: 10,
+      min: 1,
+    },
+    bidFloorFare: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    userMaxBidFare: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    bidCeilingMaxFare: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    fareIncreaseWaitMinutes: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    nextFareIncreaseAt: {
+      type: Date,
+      default: null,
+    },
+    acceptedBidId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiRideBid',
+      default: null,
+    },
+    /// The road route for this trip, resolved once when the ride is created.
+    ///
+    /// Stored rather than fetched per client so the rider and the driver draw
+    /// the same line, and so the map still works when a routing provider is
+    /// throttled.
+    route: {
+      polyline: { type: String, default: '' },
+      distanceMeters: { type: Number, default: 0 },
+      durationMinutes: { type: Number, default: 0 },
+      provider: { type: String, default: '' },
+      fetchedAt: { type: Date, default: null },
+    },
+    estimatedDistanceMeters: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    estimatedDurationMinutes: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    paymentMethod: {
+      type: String,
+      enum: ['cash', 'online'],
+      default: 'cash',
+      lowercase: true,
+      trim: true,
+    },
+    // Set when an admin cancels the ride from the Trips page.
+    cancelledBy: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    cancelReason: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    cancelledAt: {
+      type: Date,
+      default: null,
+    },
+    // Removed from the admin trip lists by an admin. The ride itself is kept,
+    // so earnings, wallet history and reports still add up.
+    adminDeletedAt: {
+      type: Date,
+      default: null,
+    },
+    adminDeletedBy: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    // How the driver actually collected the fare at ride end. Both 'cash' and
+    // 'upi' mean the money reached the driver directly (not the platform), so
+    // settlement treats them identically (cash-like). This field only records
+    // the tender type for reporting; it does not change commission handling.
+    // 'online' is a rider who paid the fare in the app (Razorpay): the money
+    // reached Buddy, which credits the driver's wallet.
+    collectedVia: {
+      type: String,
+      enum: ['cash', 'upi', 'online'],
+      default: 'cash',
+      lowercase: true,
+      trim: true,
+    },
+    otp: {
+      type: String,
+      trim: true,
+      minlength: 4,
+      maxlength: 4,
+    },
+    driverPaymentCollection: {
+      provider: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      providerId: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      providerOrderId: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      providerPaymentId: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      providerMode: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      source: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      status: {
+        type: String,
+        enum: ['pending', 'created', 'active', 'issued', 'closed', 'paid', 'captured', 'completed', 'expired', 'cancelled', 'failed'],
+        default: 'pending',
+      },
+      amount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      currency: {
+        type: String,
+        default: 'INR',
+        trim: true,
+      },
+      linkUrl: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      paidAt: {
+        type: Date,
+        default: null,
+      },
+      updatedAt: {
+        type: Date,
+        default: null,
+      },
+    },
+    subscriptionUsage: {
+      covered: {
+        type: Boolean,
+        default: false,
+      },
+      subscriptionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiUserSubscription',
+        default: null,
+      },
+      planId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiSubscriptionPlan',
+        default: null,
+      },
+      planName: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      vehicleTypeId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiVehicle',
+        default: null,
+      },
+      benefitType: {
+        type: String,
+        enum: ['limited', 'unlimited', ''],
+        default: '',
+      },
+      fareCovered: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      ridesUsedBefore: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      ridesRemainingBefore: {
+        type: Number,
+        default: null,
+        min: 0,
+      },
+      ridesUsedAfter: {
+        type: Number,
+        default: null,
+        min: 0,
+      },
+      ridesRemainingAfter: {
+        type: Number,
+        default: null,
+        min: 0,
+      },
+    },
+    service_location_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiServiceLocation',
+      default: null,
+    },
+    transport_type: {
+      type: String,
+      enum: ['taxi', 'delivery', 'intercity', 'all'],
+      default: 'taxi',
+      trim: true,
+    },
+    // City, airport or outstation, from the pickup and drop at booking. The
+    // airport fee is included in the fare when the app added it.
+    trip_category: {
+      category: {
+        type: String,
+        default: 'city',
+        trim: true,
+      },
+      airport_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiAirport',
+        default: null,
+      },
+      airport_name: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      airport_fee: {
+        type: Number,
+        default: 0,
+      },
+    },
+    // Surge the fare was quoted under; the fare already includes it.
+    surge: {
+      multiplier: {
+        type: Number,
+        default: 1,
+      },
+      source: {
+        type: String,
+        default: 'none',
+        trim: true,
+      },
+      hex: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+    },
+    pricingSnapshot: {
+      setPriceId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiSetPrice',
+        default: null,
+      },
+      admin_commission_type_from_driver: {
+        type: Number,
+        default: 1,
+      },
+      admin_commission_from_driver: {
+        type: Number,
+        default: 0,
+      },
+      admin_commission_type_for_owner: {
+        type: Number,
+        default: 1,
+      },
+      admin_commission_for_owner: {
+        type: Number,
+        default: 0,
+      },
+      waiting_charge: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      free_waiting_before: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      free_waiting_after: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      allowed_payment_methods: {
+        type: [String],
+        default: ['cash', 'online'],
+      },
+      // Where a parcel's delivery tariff came from: 'zone', 'service_location'
+      // or 'vehicle'. Its presence also tells the waiting charge that
+      // waiting_charge and free_waiting_before above were locked to that tariff
+      // at booking; parcels booked before it existed use the vehicle's pricing.
+      delivery_tariff_source: {
+        type: String,
+        default: null,
+      },
+      // The platform fee the rider was charged on top of the trip. Part of
+      // `fare`, but admin's money: settlement takes it with the commission.
+      rider_platform_fee: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      resolvedAt: {
+        type: Date,
+        default: null,
+      },
+    },
+    commissionAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    driverEarnings: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    walletSettledAt: {
+      type: Date,
+      default: null,
+    },
+    promo: {
+      code: {
+        type: String,
+        default: '',
+        trim: true,
+        uppercase: true,
+      },
+      promo_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiPromoCode',
+        default: null,
+      },
+      discount_amount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      fare_before_discount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      fare_after_discount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      service_location_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiServiceLocation',
+        default: null,
+      },
+      transport_type: {
+        type: String,
+        enum: ['taxi', 'delivery', 'intercity', 'all'],
+        default: 'taxi',
+        trim: true,
+      },
+      applied_at: {
+        type: Date,
+        default: null,
+      },
+    },
+    lastDriverLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number],
+        default: undefined,
+      },
+      heading: {
+        type: Number,
+        default: null,
+      },
+      speed: {
+        type: Number,
+        default: null,
+      },
+      updatedAt: {
+        type: Date,
+        default: null,
+      },
+    },
+    messages: {
+      type: [rideMessageSchema],
+      default: [],
+    },
+    acceptedAt: {
+      type: Date,
+      default: null,
+    },
+    arrivedAt: {
+      type: Date,
+      default: null,
+    },
+    startedAt: {
+      type: Date,
+      default: null,
+    },
+    completedAt: {
+      type: Date,
+      default: null,
+    },
+    feedback: {
+      rating: {
+        type: Number,
+        default: null,
+        min: 1,
+        max: 5,
+      },
+      comment: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 500,
+      },
+      tipAmount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      tipPaymentId: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      tipOrderId: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      tipPaidAt: {
+        type: Date,
+        default: null,
+      },
+      submittedAt: {
+        type: Date,
+        default: null,
+      },
+    },
+  },
+  { timestamps: true },
+);
+
+rideSchema.index({ userId: 1, createdAt: -1 });
+rideSchema.index({ driverId: 1, createdAt: -1 });
+rideSchema.index({ status: 1, liveStatus: 1, scheduledAt: 1, createdAt: -1 });
+rideSchema.index({ driverId: 1, scheduledAt: 1, status: 1, liveStatus: 1 });
+
+export const Ride = mongoose.models.TaxiRide || mongoose.model('TaxiRide', rideSchema);

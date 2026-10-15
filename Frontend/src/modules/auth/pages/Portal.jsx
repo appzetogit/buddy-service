@@ -20,7 +20,7 @@ const SERVICES = [
     name: "Taxi",
     description: "Safe city rides",
     image: "/super-app/taxi.png",
-    path: "/food/user",
+    path: "/taxi/user",
     icon: Car,
     color: "from-[#333333] to-[#000000]",
     badge: "Safe",
