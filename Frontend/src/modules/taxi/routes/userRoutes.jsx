@@ -7,7 +7,6 @@ import {
   AirportCab,
   AirportCabConfirm,
   CabHome,
-  Chat,
   ComingSoon,
   DeleteAccount,
   IntercityConfirm,
@@ -38,7 +37,6 @@ import {
   SupportTickets,
   UserAppLayout,
   UserNotifications,
-  UserReferral,
   Wallet,
 } from './lazyPages';
 
@@ -59,7 +57,6 @@ export default function TaxiUserRoutes() {
         <Route path="/user/activity" element={<Activity />} />
         <Route path="/user/support" element={<Support />} />
         <Route path="/user/profile" element={<Profile />} />
-        <Route path="/user/referral" element={<UserReferral />} />
         <Route path="/user/promo" element={<PromoCodes />} />
         <Route path="/user/notifications" element={<UserNotifications />} />
       </Route>
@@ -70,7 +67,6 @@ export default function TaxiUserRoutes() {
       <Route path="/user/ride/searching" element={<SearchingDriver />} />
       <Route path="/user/ride/tracking" element={<RideTracking />} />
       <Route path="/user/ride/complete" element={<RideComplete />} />
-      <Route path="/user/ride/chat" element={<Chat />} />
       <Route path="/user/ride/detail/:id" element={<RideDetail />} />
 
       <Route path="/user/parcel/type" element={<ParcelType />} />

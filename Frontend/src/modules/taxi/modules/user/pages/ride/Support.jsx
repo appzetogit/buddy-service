@@ -22,14 +22,6 @@ const Support = () => {
     window.open(`tel:${SUPPORT_INFO.phoneHref}`, '_self');
   };
 
-  const openSupportChat = (topicTitle = '') => {
-    const initialDraft = topicTitle ? `Hi, I need help with: ${topicTitle}.` : '';
-
-    navigate(`${routePrefix}/ride/chat?admin=true&role=user`, {
-      state: initialDraft ? { initialDraft } : undefined,
-    });
-  };
-
   return (
     <div className="min-h-screen max-w-lg mx-auto flex flex-col font-sans relative pb-24 overflow-hidden user-app-theme">
       <div className="absolute -top-20 right-[-40px] h-48 w-48 rounded-full bg-green-100/55 dark:bg-green-500/10 blur-3xl pointer-events-none" />
@@ -53,24 +45,7 @@ const Support = () => {
       </header>
 
       <div className="relative z-10 px-5 pt-4 flex-1 space-y-5">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <motion.button
-            type="button"
-            whileTap={{ scale: 0.98 }}
-            onClick={() => openSupportChat()}
-            className="relative overflow-hidden rounded-2xl border border-white/80 bg-white/80 p-4 text-left shadow-[0_14px_34px_rgba(15,23,42,0.07)]"
-          >
-            <div className="absolute inset-0 bg-[radial-gradient(140px_100px_at_20%_25%,rgba(42, 229, 111,0.18),transparent_60%)]" aria-hidden="true" />
-            <div className="relative z-10 flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl border border-white/80 bg-white/70 shadow-sm flex items-center justify-center text-green-600">
-                <MessageCircle size={20} strokeWidth={2.6} />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[13px] font-black text-slate-900 leading-tight">Live chat</div>
-                <div className="mt-0.5 text-[11px] font-bold text-slate-500 truncate">Get quick help</div>
-              </div>
-            </div>
-          </motion.button>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 
           <motion.button
             type="button"
@@ -119,7 +94,7 @@ const Support = () => {
                 key={topic.title}
                 type="button"
                 whileTap={{ scale: 0.99 }}
-                onClick={() => openSupportChat(topic.title)}
+                onClick={() => navigate(`${routePrefix}/support/tickets`)}
                 className="w-full text-left bg-white/85 backdrop-blur-sm rounded-2xl p-3.5 border border-white/80 shadow-[0_14px_34px_rgba(15,23,42,0.07)] flex items-center justify-between gap-3 transition-all hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(15,23,42,0.09)] active:translate-y-0"
               >
                 <div className="flex items-center gap-3 min-w-0">

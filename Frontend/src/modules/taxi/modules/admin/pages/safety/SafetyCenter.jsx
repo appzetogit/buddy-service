@@ -9,7 +9,6 @@ import toast from 'react-hot-toast';
 import { socketService } from '../../../../shared/api/socket';
 import { adminService } from '../../services/adminService';
 import { HAS_VALID_GOOGLE_MAPS_KEY, INDIA_CENTER, useBaseGoogleMapsLoader } from '../../utils/googleMaps';
-import { getChatSession } from '../../../shared/chat/chatIdentity';
 
 const mapContainerStyle = { width: '100%', height: '100%' };
 
@@ -142,91 +141,6 @@ const IncidentCard = ({ alert, isActive, onClick }) => (
   </div>
 );
 
-const AdminSosChat = ({ alert }) => {
-  const [messages, setMessages] = useState([]);
-  const [inputValue, setInputValue] = useState('');
-  const messagesEndRef = useRef(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    setMessages([
-      { id: '1', text: 'Distress signal received. Open communication channel established.', sender: 'system', time: new Date() }
-    ]);
-  }, [alert]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const handleSend = () => {
-    // Disabled as per no API requirement. Handled by button disabled state.
-  };
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 flex flex-col h-[320px] shadow-sm">
-      {/* Header */}
-      <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between bg-gray-50 rounded-t-xl">
-        <div>
-          <div className="text-xs font-bold text-gray-900">Live Support Chat</div>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-            <span className="text-[10px] font-semibold text-gray-500">{getParticipantTitle(alert)} Online</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 p-3 overflow-y-auto space-y-3 bg-gray-50/30">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex flex-col ${msg.sender === 'admin' ? 'items-end' : msg.sender === 'system' ? 'items-center' : 'items-start'}`}>
-            {msg.sender === 'system' ? (
-              <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">{msg.text}</span>
-            ) : (
-              <div className={`max-w-[85%] rounded-xl p-2.5 text-[11px] ${msg.sender === 'admin' ? 'bg-yellow-400 text-black rounded-tr-none' : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none shadow-sm'}`}>
-                <p className="font-medium leading-relaxed">{msg.text}</p>
-                <div className={`flex items-center gap-1 mt-1 text-[9px] font-bold ${msg.sender === 'admin' ? 'text-black/60 justify-end' : 'text-gray-400'}`}>
-                  {msg.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  {msg.sender === 'admin' && <CheckCheck size={10} className="text-black" />}
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input */}
-      <div className="p-2 border-t border-gray-100 bg-white flex items-center gap-2 rounded-b-xl">
-        <button disabled className="p-1.5 text-gray-300 rounded-lg cursor-not-allowed">
-          <Paperclip size={16} />
-        </button>
-        <input 
-          type="text" 
-          placeholder="Chat API unavailable..." 
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          disabled
-          className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] outline-none text-gray-500 cursor-not-allowed"
-        />
-        <button disabled className="p-1.5 text-gray-300 rounded-lg cursor-not-allowed">
-          <Mic size={16} />
-        </button>
-        <button 
-          disabled
-          title="Chat API Unavailable"
-          onClick={handleSend} 
-          className="p-1.5 bg-gray-100 text-gray-400 rounded-lg shadow-sm cursor-not-allowed"
-        >
-          <Send size={16} />
-        </button>
-      </div>
-    </div>
-  );
-};
-
 // -------------- MAIN COMPONENT -------------- //
 
 const SafetyCenter = () => {
@@ -241,8 +155,6 @@ const SafetyCenter = () => {
     () => alerts.find((entry) => entry.id === selectedAlertId) || alerts[0] || null,
     [alerts, selectedAlertId],
   );
-
-  const adminSession = useMemo(() => getChatSession('admin'), []);
 
   const loadAlerts = async () => {
     setIsLoading(true);
@@ -550,8 +462,6 @@ const SafetyCenter = () => {
                         </div>
                      </div>
 
-                     {/* Live Chat */}
-                     <AdminSosChat alert={selectedAlert} />
                   </div>
                </div>
 

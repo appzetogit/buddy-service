@@ -1,38 +1,6 @@
 import mongoose from 'mongoose';
 import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
 
-const rideMessageSchema = new mongoose.Schema(
-  {
-    senderRole: {
-      type: String,
-      enum: ['user', 'driver'],
-      required: true,
-    },
-    senderId: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true,
-    },
-    message: {
-      type: String,
-      default: '',
-      trim: true,
-      maxlength: 1000,
-    },
-    // Optional attachment (e.g. rider's current-location photo). A message may
-    // carry text, an image, or both.
-    imageUrl: {
-      type: String,
-      default: '',
-      trim: true,
-    },
-    sentAt: {
-      type: Date,
-      default: Date.now,
-    },
-  },
-  { _id: true },
-);
-
 const rideSchema = new mongoose.Schema(
   {
     userId: {
@@ -670,10 +638,6 @@ const rideSchema = new mongoose.Schema(
         type: Date,
         default: null,
       },
-    },
-    messages: {
-      type: [rideMessageSchema],
-      default: [],
     },
     acceptedAt: {
       type: Date,

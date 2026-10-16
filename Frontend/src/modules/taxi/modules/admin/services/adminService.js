@@ -23,24 +23,8 @@ export const adminService = {
     if (String(search || '').trim()) {
       params.set('search', String(search).trim());
     }
-    if (String(filters.employeeId || '').trim()) {
-      params.set('employeeId', String(filters.employeeId).trim());
-    }
-    if (String(filters.referralSource || '').trim()) {
-      params.set('referralSource', String(filters.referralSource).trim());
-    }
     return api.get(`/admin/users?${params.toString()}`);
   },
-  getEmployees: (page = 1, limit = 50, search = '') => {
-    const params = new URLSearchParams({ page, limit });
-    if (String(search || '').trim()) {
-      params.set('search', String(search).trim());
-    }
-    return api.get(`/admin/employees?${params.toString()}`);
-  },
-  getEmployee: (id) => api.get(`/admin/employees/${id}`),
-  createEmployee: (data) => api.post('/admin/employees', data),
-  updateEmployee: (id, data) => api.patch(`/admin/employees/${id}`, data),
   
   bulkImportUsers: (payload) => api.post('/admin/users/bulk-import', payload),
 
@@ -76,11 +60,6 @@ export const adminService = {
   createDriverNeededDocument: (data) => api.post('/admin/driver-management/driver-needed-document', data),
   updateDriverNeededDocument: (id, data) => api.patch(`/admin/driver-management/driver-needed-document/${id}`, data),
   deleteDriverNeededDocument: (id) => api.delete(`/admin/driver-management/driver-needed-document/${id}`),
-  getReferralTranslations: () => api.get('/admin/referrals/translation'),
-  updateReferralTranslation: (languageCode, data) =>
-    api.patch(`/admin/referrals/translation/${languageCode}`, data),
-  getReferralSettings: (type) => api.get(`/admin/referrals/settings/${type}`),
-  updateReferralSettings: (type, data) => api.patch(`/admin/referrals/settings/${type}`, data),
   // Wallet Payment APIs
   searchUsers: (query) => api.get(`/admin/users?search=${encodeURIComponent(query)}`),
   searchDrivers: (query) => api.get(`/admin/drivers?search=${query}`),
@@ -98,7 +77,6 @@ export const adminService = {
   rejectDriverWithdrawalRequest: (requestId) => api.patch(`/admin/wallet/drivers/withdrawals/${requestId}/reject`),
 
 
-  getReferralDashboard: () => api.get('/admin/referral/dashboard'),
 
   
   /**
@@ -286,35 +264,6 @@ export const adminService = {
   createAppModule: (data) => api.post('/admin/common/app-modules', data),
   updateAppModule: (id, data) => api.patch(`/admin/common/app-modules/${id}`, data),
   deleteAppModule: (id) => api.delete(`/admin/common/app-modules/${id}`),
-
-  /**
-   * Notification Channels Management
-   */
-  getNotificationChannels: (params) => api.get('/admin/notification-channels', { params }),
-  updateNotificationChannel: (id, data) => api.patch(`/admin/notification-channels/${id}`, data),
-  toggleChannelPush: (id, active) => api.patch(`/admin/notification-channels/${id}/push`, { push_notification: active ? 1 : 0 }),
-  toggleChannelMail: (id, active) => api.patch(`/admin/notification-channels/${id}/mail`, { mail: active ? 1 : 0 }),
-
-  /**
-   * Integration Settings
-   */
-  getPaymentGateways: (params) => api.get('/admin/integration-settings/payment-gateways', { params }),
-  updatePaymentGateway: (id, data) => api.patch(`/admin/integration-settings/payment-gateways/${id}`, data),
-  getPaymentSettings: () => api.get('/admin/integration-settings/payment-settings'),
-  updatePaymentSettings: (data) => api.patch('/admin/integration-settings/payment-settings', data),
-  getSMSSettings: () => api.get('/admin/integration-settings/sms'),
-  updateSMSSettings: (data) => api.patch('/admin/integration-settings/sms', data),
-  getFirebaseSettings: () => api.get('/admin/integration-settings/firebase'),
-  updateFirebaseSettings: (data) => api.patch('/admin/integration-settings/firebase', data),
-  getMapSettings: () => api.get('/admin/integration-settings/map'),
-  updateMapSettings: (data) => api.patch('/admin/integration-settings/map', data),
-  getMailSettings: () => api.get('/admin/integration-settings/mail'),
-  updateMailSettings: (data) => api.patch('/admin/integration-settings/mail', data),
-  sendTestMail: (to) => api.post('/admin/integration-settings/mail/test', { to }),
-  getRechargeApiSettings: () => api.get('/admin/integration-settings/recharge-api'),
-  updateRechargeApiSettings: (data) => api.patch('/admin/integration-settings/recharge-api', data),
-  generateRechargeApiToken: () => api.post('/admin/integration-settings/recharge-api/generate-token'),
-  testRechargeApiSettings: () => api.post('/admin/integration-settings/recharge-api/test'),
 
   /**
    * Onboarding Screens Management

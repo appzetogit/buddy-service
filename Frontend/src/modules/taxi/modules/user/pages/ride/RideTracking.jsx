@@ -441,7 +441,6 @@ const RideTracking = () => {
   const { isLoaded, loadError } = useBaseGoogleMapsLoader();
   const routeHome = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/';
   const routeComplete = location.pathname.startsWith('/taxi/user') ? '/taxi/user/ride/complete' : '/ride/complete';
-  const routeChat = location.pathname.startsWith('/taxi/user') ? '/taxi/user/ride/chat' : '/ride/chat';
   const routeSupport = location.pathname.startsWith('/taxi/user') ? '/taxi/user/support' : '/ride/support';
   const routeSos = location.pathname.startsWith('/taxi/user') ? '/taxi/user/safety/sos' : '/safety/sos';
 
@@ -1327,20 +1326,6 @@ const RideTracking = () => {
     window.open(`tel:${phone}`, '_self');
   };
 
-  const openRideChat = () => {
-    navigate(routeChat, {
-      state: {
-        rideId,
-        peer: {
-          name: driver.name || 'Driver',
-          phone: driver.phone || driver.mobile || driver.phoneNumber || '',
-          subtitle: 'Driver - Active now',
-          role: 'Driver',
-        },
-      },
-    });
-  };
-
   const ActionBtn = ({ icon: Icon, label, onClick, colorClass }) => (
     <motion.button
       whileTap={{ scale: 0.94 }}
@@ -1725,10 +1710,9 @@ const RideTracking = () => {
           </div>
 
           {/* High-Fidelity Action Grid */}
-          <div className="grid grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-3 gap-2.5">
             {[
               { id: 'call', icon: Phone, label: 'CALL', action: handleCallDriver },
-              { id: 'chat', icon: MessageCircle, label: 'CHAT', action: openRideChat },
               { id: 'share', icon: Share2, label: 'SHARE', action: handleShare },
               { id: 'help', icon: AlertTriangle, label: 'HELP', action: () => navigate(routeSupport) }
             ].map((btn) => (

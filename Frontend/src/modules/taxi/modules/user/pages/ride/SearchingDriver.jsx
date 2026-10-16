@@ -1349,14 +1349,6 @@ const SearchingDriver = () => {
                       <Phone size={18} className="text-slate-900" strokeWidth={2.5} />
                       <span className="text-[13px] font-black text-slate-900 uppercase tracking-widest leading-none">Call</span>
                     </motion.button>
-                    <motion.button
-                      whileTap={{ scale: 0.96 }}
-                      onClick={() => navigate(`${routePrefix}/ride/chat`, { state: buildHistoryState({ driver }) })}
-                      className="flex items-center justify-center gap-3 rounded-[22px] bg-slate-950 py-4.5 shadow-[0_12px_24px_rgba(15,23,42,0.15)] active:shadow-none"
-                    >
-                      <MessageCircle size={18} className="text-white" strokeWidth={2.5} />
-                      <span className="text-[13px] font-black text-white uppercase tracking-widest leading-none">Chat</span>
-                    </motion.button>
                   </div>
                 </div>
               </div>

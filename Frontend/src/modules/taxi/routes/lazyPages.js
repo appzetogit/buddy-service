@@ -6,7 +6,6 @@ export const SelectVehicle = lazy(() => import('../modules/user/pages/ride/Selec
 export const SelectCategory = lazy(() => import('../modules/user/pages/ride/SelectCategory'));
 export const SearchingDriver = lazy(() => import('../modules/user/pages/ride/SearchingDriver'));
 export const RideTracking = lazy(() => import('../modules/user/pages/ride/RideTracking'));
-export const Chat = lazy(() => import('../modules/user/pages/ride/Chat'));
 export const Support = lazy(() => import('../modules/user/pages/ride/Support'));
 export const RideDetail = lazy(() => import('../modules/user/pages/ride/RideDetail'));
 export const ParcelType = lazy(() => import('../modules/user/pages/parcel/ParcelType'));
@@ -24,7 +23,6 @@ export const ParcelSearchingDriver = lazy(() => import('../modules/user/pages/pa
 export const ParcelTracking = lazy(() => import('../modules/user/pages/parcel/ParcelTracking'));
 export const UserNotifications = lazy(() => import('../modules/user/pages/Notifications'));
 export const PromoCodes = lazy(() => import('../modules/user/pages/PromoCodes'));
-export const UserReferral = lazy(() => import('../modules/user/pages/Referral'));
 export const SOSContacts = lazy(() => import('../modules/user/pages/safety/SOSContacts'));
 export const SupportTickets = lazy(() => import('../modules/user/pages/support/SupportTickets'));
 export const SupportTicketDetail = lazy(() => import('../modules/user/pages/support/SupportTicketDetail'));
@@ -46,7 +44,6 @@ export const AdminDashboard = lazy(() => import('../modules/admin/pages/dashboar
 export const AdminEarnings = lazy(() => import('../modules/admin/pages/dashboard/AdminEarnings'));
 export const AdminPayments = lazy(() => import('../modules/admin/pages/payments/Payments'));
 export const AdminEarningsDetail = lazy(() => import('../modules/admin/pages/dashboard/EarningsDetail'));
-export const AdminChat = lazy(() => import('../modules/admin/pages/operations/Chat'));
 export const AdminTrips = lazy(() => import('../modules/admin/pages/operations/Trips'));
 export const AdminDeliveries = lazy(() => import('../modules/admin/pages/operations/Deliveries'));
 export const AdminOngoing = lazy(() => import('../modules/admin/pages/operations/Ongoing'));
@@ -75,13 +72,6 @@ export const AdminDriverAudit = lazy(() => import('../modules/admin/pages/driver
 export const AdminPaymentMethods = lazy(() => import('../modules/admin/pages/drivers/PaymentMethods'));
 export const AdminDriverCreate = lazy(() => import('../modules/admin/pages/drivers/CreateDriver'));
 export const AdminDriverEdit = lazy(() => import('../modules/admin/pages/drivers/EditDriver'));
-export const AdminEmployeeList = lazy(() => import('../modules/admin/pages/employees/EmployeeList'));
-export const AdminEmployeeCreate = lazy(() => import('../modules/admin/pages/employees/EmployeeCreate'));
-export const AdminEmployeeDetails = lazy(() => import('../modules/admin/pages/employees/EmployeeDetails'));
-export const AdminReferralDashboard = lazy(() => import('../modules/admin/pages/referrals/ReferralDashboard'));
-export const AdminUserReferralSettings = lazy(() => import('../modules/admin/pages/referrals/UserReferralSettings'));
-export const AdminDriverReferralSettings = lazy(() => import('../modules/admin/pages/referrals/DriverReferralSettings'));
-export const AdminReferralTranslation = lazy(() => import('../modules/admin/pages/referrals/ReferralTranslation'));
 export const AdminPromoCodes = lazy(() => import('../modules/admin/pages/promotions/PromoCodes'));
 export const AdminSendNotification = lazy(() => import('../modules/admin/pages/promotions/SendNotification'));
 export const AdminBannerImage = lazy(() => import('../modules/admin/pages/promotions/BannerImage'));
@@ -106,7 +96,6 @@ export const AdminCMSBuilder = lazy(() => import('../modules/admin/pages/cms/CMS
 export const AdminLandingContent = lazy(() => import('../modules/admin/pages/cms/LandingContent'));
 export const AdminWebsiteEnquiries = lazy(() => import('../modules/admin/pages/cms/WebsiteEnquiries'));
 export const AdminHeaderFooter = lazy(() => import('../modules/admin/pages/cms/HeaderFooter'));
-export const AdminGlobalSettings = lazy(() => import('../modules/admin/pages/settings/GlobalSettings'));
 export const AdminGeneralSettings = lazy(() => import('../modules/admin/pages/settings/GeneralSettings'));
 export const AdminTransportRideSettings = lazy(() => import('../modules/admin/pages/settings/TransportRideSettings'));
 export const AdminBidRideSettings = lazy(() => import('../modules/admin/pages/settings/BidRideSettings'));
@@ -115,19 +104,9 @@ export const AdminTipSettings = lazy(() => import('../modules/admin/pages/settin
 export const AdminRideVoiceSettings = lazy(() => import('../modules/admin/pages/settings/RideVoiceSettings'));
 export const AdminAppModules = lazy(() => import('../modules/admin/pages/settings/AppModules'));
 export const AdminOnboardingScreens = lazy(() => import('../modules/admin/pages/settings/OnboardingScreens'));
-export const AdminPaymentGateways = lazy(() => import('../modules/admin/pages/settings/PaymentGateways'));
-export const AdminSMSGateways = lazy(() => import('../modules/admin/pages/settings/SMSGateways'));
-export const AdminFirebaseSettings = lazy(() => import('../modules/admin/pages/settings/FirebaseSettings'));
-export const AdminMapSettings = lazy(() => import('../modules/admin/pages/settings/MapSettings'));
-export const AdminMailSettings = lazy(() => import('../modules/admin/pages/settings/MailSettings'));
-export const AdminNotificationChannels = lazy(() => import('../modules/admin/pages/settings/NotificationChannels'));
-export const AdminRechargeApiSettings = lazy(() => import('../modules/admin/pages/settings/RechargeApiSettings'));
-export const AdminDispatcherAddons = lazy(() => import('../modules/admin/pages/settings/DispatcherAddons'));
 export const AdminCountryManagement = lazy(() => import('../modules/admin/pages/masters/CountryManagement'));
 export const AdminSupportTicketTitle = lazy(() => import('../modules/admin/pages/support/TicketTitle'));
 export const AdminSupportTickets = lazy(() => import('../modules/admin/pages/support/SupportTickets'));
-export const AdminJobPositions = lazy(() => import('../modules/admin/pages/careers/JobPositions'));
-export const AdminCareerApplications = lazy(() => import('../modules/admin/pages/careers/CareerApplications'));
 export const AdminUserReport = lazy(() => import('../modules/admin/pages/reports/UserReport'));
 export const AdminDriverReport = lazy(() => import('../modules/admin/pages/reports/DriverReport'));
 export const AdminDriverDutyReport = lazy(() => import('../modules/admin/pages/reports/DriverDutyReport'));

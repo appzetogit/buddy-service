@@ -120,24 +120,6 @@ export const createDefaultAdminState = () => {
         mobile_menu_icon: 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/package.svg',
       },
     ],
-    notificationChannels: [
-      {
-        name: 'Ride Assigned',
-        topic_name: 'Ride Assigned',
-        description: 'Notify when a ride gets assigned.',
-        push_notification: true,
-        mail: false,
-        for_user: true,
-      },
-      {
-        name: 'Payout Settled',
-        topic_name: 'Payout Settled',
-        description: 'Notify driver after settlement.',
-        push_notification: true,
-        mail: true,
-        for_user: false,
-      },
-    ],
     preferences: [
       {
         name: 'Pet Friendly',
@@ -153,11 +135,6 @@ export const createDefaultAdminState = () => {
     roles: [
       { name: 'Operations Manager', slug: 'operations-manager', description: 'Runs day to day dispatch and support.' },
       { name: 'Finance Analyst', slug: 'finance-analyst', description: 'Monitors payouts and reconciliations.' },
-    ],
-    paymentGateways: [
-      { name: 'Razorpay', slug: 'razorpay', active: true },
-      { name: 'Stripe', slug: 'stripe', active: true },
-      { name: 'PayPal', slug: 'paypal', active: false },
     ],
     onboardingScreens: [
       {

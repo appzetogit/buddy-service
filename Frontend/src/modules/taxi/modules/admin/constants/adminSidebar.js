@@ -48,7 +48,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
       { icon: Home, label: 'Dashboard', path: '/admin/dashboard', permission: 'dashboard.view' },
       { icon: IndianRupee, label: 'Admin Earnings', path: '/admin/earnings', permission: 'earnings.view' },
       { icon: Receipt, label: 'Payments', path: '/admin/payments', permission: 'earnings.view' },
-      { icon: MessageCircle, label: 'Chat', path: '/admin/chat', permission: 'chat.view' },
       {
         icon: TrendingUp,
         label: 'Promotions Management',
@@ -134,24 +133,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
         ],
       },
       {
-        icon: Share2,
-        label: 'Referral Management',
-        subItems: [
-          { label: 'Referral Dashboard', path: '/admin/referrals/dashboard', permission: 'referrals.view' },
-          { label: 'User Referral Settings', path: '/admin/referrals/user-settings', permission: 'referrals.view' },
-          { label: 'Driver Referral Settings', path: '/admin/referrals/driver-settings', permission: 'referrals.view' },
-          { label: 'Referral Translation', path: '/admin/referrals/translation', permission: 'referrals.view' },
-        ],
-      },
-      {
-        icon: UserCog,
-        label: 'Employee Management',
-        subItems: [
-          { label: 'Employee List', path: '/admin/employees', permission: 'employees.view' },
-          { label: 'Add Employee', path: '/admin/employees/create', permission: 'employees.view' },
-        ],
-      },
-      {
         icon: FileText,
         label: 'Report',
         subItems: [
@@ -167,14 +148,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
         subItems: [
           { label: 'Ticket Title', path: '/admin/support/ticket-title', permission: 'support.view' },
           { label: 'Support Tickets', path: '/admin/support/tickets', permission: 'support.view' },
-        ],
-      },
-      {
-        icon: Briefcase,
-        label: 'Careers Management',
-        subItems: [
-          { label: 'Job Positions', path: '/admin/careers/jobs', permission: 'support.view' },
-          { label: 'Applications', path: '/admin/careers/applications', permission: 'support.view' },
         ],
       },
     ],
@@ -225,24 +198,8 @@ export const ADMIN_SIDEBAR_SECTIONS = [
           { label: 'Footer Content', path: '/admin/settings/user-app/footer-content', permission: 'settings.view' },
         ],
       },
-      {
-        icon: Settings2,
-        label: 'Third-party Settings',
-        permission: 'settings.view',
-        subItems: [
-          { label: 'Payment Gateway Settings', path: '/admin/settings/third-party/payment', permission: 'settings.view' },
-          { label: 'Recharge API Setup', path: '/admin/settings/third-party/recharge-api', permission: 'settings.view' },
-          // { label: 'SMS Gateway Settings', path: '/admin/settings/third-party/sms', permission: 'settings.view' },
-          // { label: 'Firebase Settings', path: '/admin/settings/third-party/firebase', permission: 'settings.view' },
-          // { label: 'Map and Map APIs Settings', path: '/admin/settings/third-party/map-apis', permission: 'settings.view' },
-          { label: 'SMTP Configuration', path: '/admin/settings/third-party/mail', permission: 'settings.view' },
-          // { label: 'Notification Channel', path: '/admin/settings/third-party/notification-channel' },
-        ],
-      },
       // {
       //   icon: PlusCircle,
-      //   label: 'Addons',
-      //   subItems: [{ label: 'Dispatcher Addons', path: '/admin/settings/addons/dispatcher' }],
       // },
       // Only the sections that are actually editable are listed. The rest of
       // the marketing site is still hardcoded in modules/landing; add entries

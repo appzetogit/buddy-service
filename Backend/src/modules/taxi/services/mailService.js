@@ -1,20 +1,10 @@
 import nodemailer from 'nodemailer';
-import { AdminThirdPartySetting } from '../admin/models/AdminThirdPartySetting.js';
 
 /**
- * SMTP comes from the admin panel (Settings -> SMTP Configuration), falling back
- * to the EMAIL_* env vars so existing deployments keep working.
- *
- * The settings document is read on every send rather than cached. Mail volume is
- * one message per completed ride, so a findOne costs nothing, and it means a
- * credential change in the panel takes effect immediately across all four
- * instances instead of after a cache expiry or a restart. The previous version
- * built one transporter at import time from process.env, which is why anything
- * saved in the admin panel had no effect at all.
+ * SMTP comes from the EMAIL_* environment variables (host defaults to smtp.gmail.com, as before).
  */
 const readMailSettings = async () => {
-  const doc = await AdminThirdPartySetting.findOne({ scope: 'default' }).select('mail').lean();
-  const mail = doc?.mail || {};
+  const mail = {};
   const pick = (value, fallback) => {
     const trimmed = String(value ?? '').trim();
     return trimmed || fallback || '';
@@ -24,7 +14,7 @@ const readMailSettings = async () => {
   const encryption = pick(mail.mail_encryption, '').toLowerCase();
 
   return {
-    host: pick(mail.mail_host, process.env.EMAIL_HOST),
+    host: pick(mail.mail_host, process.env.EMAIL_HOST || 'smtp.gmail.com'),
     port,
     // Implicit TLS is 465; 587 upgrades via STARTTLS and must not set secure.
     secure: encryption === 'ssl' || port === 465,

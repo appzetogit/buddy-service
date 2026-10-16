@@ -128,7 +128,6 @@ export const ADMIN_PERMISSION_GROUPS = [
     items: [
       { key: 'dashboard.view', label: 'Dashboard' },
       { key: 'earnings.view', label: 'Admin Earnings' },
-      { key: 'chat.view', label: 'Chat' },
       { key: 'promotions.view', label: 'Promotions' },
       { key: 'subadmins.manage', label: 'Subadmins' },
     ],
@@ -141,11 +140,9 @@ export const ADMIN_PERMISSION_GROUPS = [
       { key: 'ongoing.view', label: 'Ongoing Requests' },
       { key: 'drivers.view', label: 'Drivers' },
       { key: 'users.view', label: 'Customers' },
-      { key: 'employees.view', label: 'Employees' },
       { key: 'wallet.view', label: 'Wallet' },
       { key: 'support.view', label: 'Support' },
       { key: 'reports.view', label: 'Reports' },
-      { key: 'referrals.view', label: 'Referrals' },
     ],
   },
   {

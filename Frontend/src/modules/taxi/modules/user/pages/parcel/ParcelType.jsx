@@ -316,35 +316,6 @@ const ParcelType = () => {
           ))}
         </div>
 
-        {/* Promo Banner: Explore Porter Rewards */}
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
-          onClick={() => navigate('/taxi/user/referral')}
-          className="relative overflow-hidden rounded-[24px] bg-gradient-to-r from-green-100 via-yellow-100 to-yellow-50 border border-yellow-200/60 p-5 mb-8 shadow-md group cursor-pointer"
-        >
-          {/* Decorative coin circles */}
-          <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full blur-xl" />
-          <div className="absolute right-10 bottom-2 w-12 h-12 bg-yellow-400/10 rounded-full blur-lg" />
-          
-          <div className="relative z-10 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-600 flex items-center justify-center shadow-lg border-4 border-white/20">
-                  <div className="w-6 h-6 rounded-full border-2 border-white/40 flex items-center justify-center font-black text-white text-[14px]">
-                    $
-                  </div>
-               </div>
-                <div>
-                  <h3 className="text-[17px] font-black tracking-tight leading-tight text-dark-force">Explore Rewards</h3>
-                  <p className="text-[11px] font-bold text-dark-force-muted mt-1">Earn 2 coins for every 100 spent</p>
-                </div>
-            </div>
-             <div className="w-8 h-8 rounded-full bg-slate-900/10 flex items-center justify-center text-dark-force group-hover:translate-x-1 transition-transform">
-                <ArrowRight size={18} strokeWidth={3} />
-             </div>
-          </div>
-        </motion.div>
 
         {/* Footer Illustration */}
         <div className="mt-4 flex justify-center">

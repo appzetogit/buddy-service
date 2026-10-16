@@ -123,9 +123,6 @@ export const deleteAdminAccount = asyncHandler(async (req, res) => {
 export const getUsers = asyncHandler(async (req, res) =>
   ok(res, await adminService.listUsers(req.query)),
 );
-export const getEmployees = asyncHandler(async (req, res) =>
-  ok(res, await adminService.listEmployees(req.query, req.auth?.admin)),
-);
 export const bulkImportUsers = asyncHandler(async (req, res) =>
   ok(res, await adminService.bulkImportUsers(req.body)),
 );
@@ -140,15 +137,6 @@ export const updateUser = asyncHandler(async (req, res) =>
 );
 export const getUser = asyncHandler(async (req, res) =>
   ok(res, await adminService.getUserById(req.params.id)),
-);
-export const createEmployee = asyncHandler(async (req, res) =>
-  ok(res, await adminService.createEmployee(req.body, req.auth?.admin)),
-);
-export const updateEmployee = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateEmployee(req.params.id, req.body, req.auth?.admin)),
-);
-export const getEmployee = asyncHandler(async (req, res) =>
-  ok(res, await adminService.getEmployeeById(req.params.id, req.auth?.admin)),
 );
 export const deleteUser = asyncHandler(async (req, res) => {
   await adminService.deleteUser(req.params.id);
@@ -319,17 +307,8 @@ export const adjustDriverWallet = asyncHandler(async (req, res) =>
   ok(res, await adminService.adjustDriverWallet(req.params.id, req.body)),
 );
 
-export const getReferralSettings = asyncHandler(async (req, res) =>
-  ok(res, await adminService.getReferralSettings(req.params.type)),
-);
 
-export const updateReferralSettings = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateReferralSettings(req.params.type, req.body)),
-);
 
-export const getReferralDashboard = asyncHandler(async (_req, res) =>
-  ok(res, await adminService.getReferralDashboard()),
-);
 
 export const getServiceLocations = asyncHandler(async (req, res) =>
   ok(res, await adminService.listServiceLocations(req.auth?.admin)),
@@ -590,12 +569,6 @@ export const deleteDriverNeededDocument = asyncHandler(async (req, res) => {
   await adminService.deleteDriverNeededDocument(req.params.id);
   ok(res, { deleted: true });
 });
-export const getReferralTranslations = asyncHandler(async (_req, res) =>
-  ok(res, { results: await adminService.listReferralTranslations() }),
-);
-export const updateReferralTranslation = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateReferralTranslation(req.params.languageCode, req.body)),
-);
 
 export const getLanguages = asyncHandler(async (_req, res) => {
   const items = await adminService.listLanguages();
@@ -663,33 +636,7 @@ export const deleteAppModule = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
-export const getNotificationChannels = asyncHandler(async (_req, res) =>
-  ok(res, { results: await adminService.listNotificationChannels() }),
-);
-export const toggleChannelPush = asyncHandler(async (req, res) =>
-  ok(
-    res,
-    await adminService.updateNotificationChannelField(
-      req.params.id,
-      "push_notification",
-      req.body.push_notification,
-    ),
-  ),
-);
-export const toggleChannelMail = asyncHandler(async (req, res) =>
-  ok(
-    res,
-    await adminService.updateNotificationChannelField(
-      req.params.id,
-      "mail",
-      req.body.mail,
-    ),
-  ),
-);
 
-export const getPaymentGateways = asyncHandler(async (_req, res) =>
-  ok(res, { results: await adminService.listPaymentGateways() }),
-);
 export const getPaymentMethods = asyncHandler(async (_req, res) =>
   ok(res, { results: await adminService.listPaymentMethods() }),
 );
@@ -703,89 +650,17 @@ export const deletePaymentMethod = asyncHandler(async (req, res) => {
   await adminService.deletePaymentMethod(req.params.id);
   ok(res, { deleted: true });
 });
-export const getPaymentSettings = asyncHandler(async (_req, res) =>
-  ok(res, await adminService.getPaymentSettings()),
-);
-export const updatePaymentSettings = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updatePaymentSettings(req.body)),
-);
 
-export const getSmsSettings = asyncHandler(async (_req, res) =>
-  ok(res, await adminService.getSMSSettings()),
-);
-export const updateSmsSettings = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateSMSSettings(req.body)),
-);
 
-export const getFirebaseSettings = asyncHandler(async (_req, res) =>
-  ok(res, { settings: await adminService.getFirebaseSettings() }),
-);
-export const updateFirebaseSettings = asyncHandler(async (req, res) =>
-  ok(res, { settings: await adminService.updateFirebaseSettings(req.body) }),
-);
 
-export const getMapSettings = asyncHandler(async (_req, res) =>
-  ok(res, { settings: await adminService.getMapSettings() }),
-);
-export const updateMapSettings = asyncHandler(async (req, res) =>
-  ok(res, { settings: await adminService.updateMapSettings(req.body) }),
-);
 
-export const getMailSettings = asyncHandler(async (_req, res) =>
-  ok(res, { settings: await adminService.getMailSettings() }),
-);
-export const updateMailSettings = asyncHandler(async (req, res) =>
-  ok(res, { settings: await adminService.updateMailSettings(req.body) }),
-);
 
 /**
  * Sends a real message using whatever SMTP is currently saved, so the panel can
  * prove the credentials work. The previous "Send Test Mail" button only waited
  * 1.2s in the browser and always reported success.
  */
-export const sendTestMail = asyncHandler(async (req, res) => {
-  const status = await getMailConfigStatus();
 
-  if (!status.configured) {
-    throw new ApiError(400, `SMTP is not configured: missing ${status.missing.join(', ')}`);
-  }
-
-  const to = String(req.body?.to || '').trim() || req.auth?.email;
-
-  if (!to) {
-    throw new ApiError(400, 'A recipient address is required');
-  }
-
-  try {
-    await sendEmail({
-      to,
-      subject: 'Buddy SMTP test',
-      text: `This is a test message from the Buddy admin panel.
-
-SMTP host: ${status.host}:${status.port}
-If you received this, outgoing mail works.`,
-    });
-  } catch (error) {
-    // Surface the SMTP reason — this endpoint is admin-only and the whole point
-    // is to diagnose credentials.
-    throw new ApiError(502, `SMTP rejected the message: ${error.message}`);
-  }
-
-  ok(res, { sent: true, to, host: status.host, port: status.port });
-});
-
-export const getRechargeApiSettings = asyncHandler(async (_req, res) =>
-  ok(res, await adminService.getRechargeApiSettings()),
-);
-export const updateRechargeApiSettings = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateRechargeApiSettings(req.body)),
-);
-export const generateRechargeApiToken = asyncHandler(async (_req, res) =>
-  ok(res, await adminService.generateRechargeApiToken()),
-);
-export const runRechargeApiTest = asyncHandler(async (_req, res) =>
-  ok(res, await adminService.runRechargeApiTest()),
-);
 
 export const getUserOnboarding = asyncHandler(async (_req, res) =>
   res.json({

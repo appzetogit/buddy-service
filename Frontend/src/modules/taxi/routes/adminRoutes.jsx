@@ -8,13 +8,11 @@ import {
   AdminAppModules,
   AdminBannerImage,
   AdminBidRideSettings,
-  AdminChat,
   AdminCountryManagement,
   AdminCreatePackagePrice,
   AdminDashboard,
   AdminDeleteRequestUsers,
   AdminDeliveries,
-  AdminDispatcherAddons,
   AdminDriverAudit,
   AdminDriverBulkUpload,
   AdminDriverCreate,
@@ -28,17 +26,12 @@ import {
   AdminDriverList,
   AdminDriverRatingDetail,
   AdminDriverRatings,
-  AdminDriverReferralSettings,
   AdminDriverReport,
   AdminDriverWallet,
   AdminEarnings,
   AdminEarningsDetail,
-  AdminEmployeeCreate,
-  AdminEmployeeDetails,
-  AdminEmployeeList,
   AdminFinance,
   AdminFinanceReport,
-  AdminFirebaseSettings,
   AdminGeneralSettings,
   AdminGeoFencing,
   AdminGlobalDocuments,
@@ -46,24 +39,16 @@ import {
   AdminGoodsTypes,
   AdminHeatMap,
   AdminLanguages,
-  AdminMailSettings,
-  AdminMapSettings,
   AdminNegativeBalanceDrivers,
-  AdminNotificationChannels,
   AdminOnboardingScreens,
   AdminOngoing,
-  AdminPaymentGateways,
   AdminPaymentMethods,
   AdminPayments,
   AdminPendingDrivers,
   AdminPreferences,
   AdminPriceHike,
   AdminPromoCodes,
-  AdminRechargeApiSettings,
-  AdminReferralDashboard,
-  AdminReferralTranslation,
   AdminRideVoiceSettings,
-  AdminSMSGateways,
   AdminSafetyCenter,
   AdminSendNotification,
   AdminServiceLocation,
@@ -81,7 +66,6 @@ import {
   AdminUserDetails,
   AdminUserImportCreate,
   AdminUserList,
-  AdminUserReferralSettings,
   AdminUserReport,
   AdminVehicleType,
   AdminWalletPayment,
@@ -147,7 +131,6 @@ export default function TaxiAdminRoutes() {
       <Route path="earnings" element={<AdminEarnings />} />
       <Route path="earnings/:metric" element={<AdminEarningsDetail />} />
       <Route path="payments" element={<AdminPayments />} />
-      <Route path="chat" element={<AdminChat />} />
       <Route path="trips" element={<AdminTrips />} />
       <Route path="deliveries" element={<AdminDeliveries />} />
       <Route path="ongoing" element={<AdminOngoing />} />
@@ -179,14 +162,6 @@ export default function TaxiAdminRoutes() {
       <Route path="driver-import/create" element={<AdminDriverImportCreate />} />
       <Route path="drivers/payment-methods" element={<AdminPaymentMethods />} />
       <Route path="drivers/audit/:id" element={<AdminDriverAudit />} />
-      <Route path="employees" element={<AdminEmployeeList />} />
-      <Route path="employees/create" element={<AdminEmployeeCreate />} />
-      <Route path="employees/edit/:id" element={<AdminEmployeeCreate />} />
-      <Route path="employees/:id" element={<AdminEmployeeDetails />} />
-      <Route path="referrals/dashboard" element={<AdminReferralDashboard />} />
-      <Route path="referrals/user-settings" element={<AdminUserReferralSettings />} />
-      <Route path="referrals/driver-settings" element={<AdminDriverReferralSettings />} />
-      <Route path="referrals/translation" element={<AdminReferralTranslation />} />
       <Route path="promotions/promo-codes" element={<AdminPromoCodes />} />
       <Route path="promotions/promo-codes/create" element={<AdminPromoCodes />} />
       <Route path="promotions/promo-codes/edit/:id" element={<AdminPromoCodes />} />
@@ -199,22 +174,6 @@ export default function TaxiAdminRoutes() {
       <Route path="management/admins/create" element={<AdminAdminCreate />} />
       <Route path="management/admins/edit/:id" element={<AdminAdminCreate />} />
 
-      <Route
-        path="referrals/config"
-        element={
-          <div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">
-            Referral Configuration - Under Setup
-          </div>
-        }
-      />
-      <Route
-        path="referrals/active"
-        element={
-          <div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">
-            Active Referrals Logs - Under Setup
-          </div>
-        }
-      />
       <Route path="geo/heatmap" element={<AdminHeatMap />} />
       <Route path="geo/gods-eye" element={<AdminGodsEye />} />
       <Route path="geo/peak-zone" element={<AdminGeoFencing />} />
@@ -290,14 +249,6 @@ export default function TaxiAdminRoutes() {
       <Route path="settings/business/*" element={<AdminGeneralSettings />} />
       <Route path="settings/app/*" element={<AdminGeneralSettings />} />
 
-      <Route path="settings/third-party/payment" element={<AdminPaymentGateways />} />
-      <Route path="settings/third-party/sms" element={<AdminSMSGateways />} />
-      <Route path="settings/third-party/firebase" element={<AdminFirebaseSettings />} />
-      <Route path="settings/third-party/map-apis" element={<AdminMapSettings />} />
-      <Route path="settings/third-party/mail" element={<AdminMailSettings />} />
-      <Route path="settings/third-party/notification-channel" element={<AdminNotificationChannels />} />
-      <Route path="settings/third-party/recharge-api" element={<AdminRechargeApiSettings />} />
-      <Route path="settings/addons/dispatcher" element={<AdminDispatcherAddons />} />
 
       <Route path="*" element={<AdminSectionPlaceholder />} />
       </Routes>

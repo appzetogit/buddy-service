@@ -4,7 +4,6 @@ import { RIDE_LIVE_STATUS } from '../../constants/index.js';
 import { getDriverRoom } from '../../services/dispatchService.js';
 import { DriverLocationHistory } from '../../driver/models/DriverLocationHistory.js';
 import {
-  appendRideMessage,
   getActiveRideForIdentity,
   getRideDetails,
   getRideRoom,
@@ -347,20 +346,4 @@ export const registerRideSocketHandlers = ({ io, socket, onAsync }) => {
     }),
   );
 
-  socket.on(
-    SOCKET_EVENTS.RIDE_MESSAGE_SEND,
-    onAsync(socket, async ({ rideId, message, imageUrl }) => {
-      await authorizeRideRoomAccess({ socket, rideId });
-
-      const savedMessage = await appendRideMessage({
-        rideId,
-        role: socket.auth.role,
-        senderId: socket.auth.sub,
-        message,
-        imageUrl,
-      });
-
-      io.to(getRideRoom(rideId)).emit(SOCKET_EVENTS.RIDE_MESSAGE_NEW, savedMessage);
-    }),
-  );
 };

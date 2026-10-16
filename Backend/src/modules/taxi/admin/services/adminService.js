@@ -16,13 +16,9 @@ import { createDefaultBusinessSettings } from '../data/defaultBusinessSettings.j
 import { createDefaultAppSettings } from '../data/defaultAppSettings.js';
 import { createDefaultRideVoiceSettings } from '../data/defaultRideVoiceSettings.js';
 import { Airport } from '../models/Airport.js';
-import { Employee } from '../models/Employee.js';
 import { DriverNeededDocument } from '../models/DriverNeededDocument.js';
 import { AdminActivity } from '../models/AdminActivity.js';
 import { GoodsType } from '../models/GoodsType.js';
-import { ReferralTranslation } from '../models/ReferralTranslation.js';
-import { AdminThirdPartySetting } from '../models/AdminThirdPartySetting.js';
-import { createDefaultThirdPartySettings } from '../data/defaultThirdPartySettings.js';
 import { SetPrice } from '../models/SetPrice.js';
 import { describeRidePayment } from '../../services/paymentLedgerService.js';
 import { ServiceLocation } from '../models/ServiceLocation.js';
@@ -33,10 +29,8 @@ import { Ride } from '../../user/models/Ride.js';
 import { AppLanguage } from '../models/AppLanguage.js';
 import { RideModule } from '../models/RideModule.js';
 import { TaxiAppModule } from '../models/TaxiAppModule.js';
-import { NotificationChannel } from '../models/NotificationChannel.js';
 import { UserPreference } from '../models/UserPreference.js';
 import { AdminRole } from '../models/AdminRole.js';
-import { PaymentGateway } from '../models/PaymentGateway.js';
 import { PaymentMethod } from '../models/PaymentMethod.js';
 import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
@@ -54,11 +48,10 @@ import {
   getSocketServer,
   notifyUserAccountDeleted,
 } from '../../services/dispatchService.js';
-import { getSupportRoleRoom } from '../../chat/services/supportChatService.js';
+import { getPresenceRoleRoom } from '../../socket/presenceRooms.js';
 import { SafetyAlert } from '../../common/models/SafetyAlert.js';
 import { getRedisStatus } from '../../shared/redisClient.js';
 import { sendEmail } from '../../services/mailService.js';
-import { getActivePaymentGateway, normalizePaymentSettingsPayload } from '../../services/paymentGatewayService.js';
 import { signAccessToken } from '../../services/tokenService.js';
 import { applyPriceHikeToSetPrice, getActivePriceHikeMultiplier } from '../../services/priceHikeService.js';
 import { DEFAULT_PROFILE, getSurgeProfiles, listActiveSurges, resetVehicleSurgeSettings, updateSurgeSettings } from '../../services/surgeService.js';
@@ -114,109 +107,8 @@ const normalizeIpAddressList = (value) => {
   );
 };
 
-const buildRechargeApiCallbackUrl = () => {
-  const baseOrigin =
-    trimTrailingSlash(env.publicBackendUrl) ||
-    `http://localhost:${env.port}`;
 
-  return `${baseOrigin}/api/v1/common/recharge-api/callback`;
-};
 
-const normalizeRechargeApiSettings = (settings = {}) => {
-  const merged = {
-    enabled: '0',
-    provider_name: 'RechargeKit Verify',
-    base_url: 'https://verify.rechargkit.biz',
-    auth_header_name: 'Authorization',
-    auth_header_prefix: 'Bearer',
-    api_token: '',
-    token_generated_at: null,
-    callback_mode: 'auto',
-    callback_url: '',
-    callback_secret: '',
-    allowed_ip_addresses: [],
-    notes: '',
-    endpoints: {
-      bank_verify_penny_less: '/validation/verifyBankRequest',
-      bank_verify_penny_drop: '/validation/penny-drop',
-      bank_verify_v3: '/validation/v3/pennyDropVerify',
-      card_bin: '/validation/cardValidate',
-      upi_basic: '/validation/upiBasic',
-      pan_verify: '/validation/verifyPANRequest',
-      dl_request: '/validation/verifyDL',
-      dl_verify: '/validation/verifyDL',
-      gstin_verify: '/validation/verifyGSTIN',
-      rc_verify: '/validation/rcAdvanceVerify',
-      upi_advance: '/validation/upiAdvanceVerify',
-    },
-    ...settings,
-  };
-
-  return {
-    ...merged,
-    enabled: String(merged.enabled) === '1' ? '1' : '0',
-    provider_name: String(merged.provider_name || 'RechargeKit Verify').trim() || 'RechargeKit Verify',
-    base_url: trimTrailingSlash(String(merged.base_url || 'https://verify.rechargkit.biz').trim()) || 'https://verify.rechargkit.biz',
-    auth_header_name: String(merged.auth_header_name || 'Authorization').trim() || 'Authorization',
-    auth_header_prefix: String(merged.auth_header_prefix || 'Bearer').trim(),
-    callback_mode: String(merged.callback_mode || 'auto').trim().toLowerCase() === 'manual' ? 'manual' : 'auto',
-    callback_url: String(merged.callback_url || '').trim(),
-    callback_secret: String(merged.callback_secret || '').trim(),
-    api_token: String(merged.api_token || '').trim(),
-    notes: String(merged.notes || '').trim(),
-    allowed_ip_addresses: normalizeIpAddressList(merged.allowed_ip_addresses),
-    token_generated_at: merged.token_generated_at || null,
-    endpoints: {
-      bank_verify_penny_less: String(merged?.endpoints?.bank_verify_penny_less || '/validation/verifyBankRequest').trim() || '/validation/verifyBankRequest',
-      bank_verify_penny_drop: String(merged?.endpoints?.bank_verify_penny_drop || '/validation/penny-drop').trim() || '/validation/penny-drop',
-      bank_verify_v3: String(merged?.endpoints?.bank_verify_v3 || '/validation/v3/pennyDropVerify').trim() || '/validation/v3/pennyDropVerify',
-      card_bin: String(merged?.endpoints?.card_bin || '/validation/cardValidate').trim() || '/validation/cardValidate',
-      upi_basic: String(merged?.endpoints?.upi_basic || '/validation/upiBasic').trim() || '/validation/upiBasic',
-      pan_verify: String(merged?.endpoints?.pan_verify || '/validation/verifyPANRequest').trim() || '/validation/verifyPANRequest',
-      dl_request: String(merged?.endpoints?.dl_request || '/validation/verifyDL').trim() || '/validation/verifyDL',
-      dl_verify: String(merged?.endpoints?.dl_verify || '/validation/verifyDL').trim() || '/validation/verifyDL',
-      gstin_verify: String(merged?.endpoints?.gstin_verify || '/validation/verifyGSTIN').trim() || '/validation/verifyGSTIN',
-      rc_verify: String(merged?.endpoints?.rc_verify || '/validation/rcAdvanceVerify').trim() || '/validation/rcAdvanceVerify',
-      upi_advance: String(merged?.endpoints?.upi_advance || '/validation/upiAdvanceVerify').trim() || '/validation/upiAdvanceVerify',
-    },
-  };
-};
-
-const buildRechargeApiResponse = (settings = {}) => {
-  const normalized = normalizeRechargeApiSettings(settings);
-  const resolvedCallbackUrl =
-    normalized.callback_mode === 'manual' && normalized.callback_url
-      ? normalized.callback_url
-      : buildRechargeApiCallbackUrl();
-
-  return {
-    settings: {
-      ...normalized,
-      resolved_callback_url: resolvedCallbackUrl,
-    },
-    metadata: {
-      callback_url: resolvedCallbackUrl,
-      callback_method: 'POST',
-      token_header: 'x-api-token',
-      provider_name: normalized.provider_name,
-      base_url: normalized.base_url,
-      auth_header_name: normalized.auth_header_name,
-      auth_header_prefix: normalized.auth_header_prefix,
-      doc_sections: [
-        'Setup API Token',
-        'Setup Callback URL',
-        'Setup IP Address',
-        'API Testing',
-        'API Documentation',
-      ],
-      sample_endpoints: {
-        callback: resolvedCallbackUrl,
-        healthcheck: `${trimTrailingSlash(env.publicBackendUrl) || `http://localhost:${env.port}`}/api/v1/common/recharge-api/callback`,
-      },
-      provider_endpoints: normalized.endpoints,
-    },
-  };
-};
 
 const buildPaginator = (items, page = 1, limit = 50) => {
   const safePage = Number(page) || 1;
@@ -1077,35 +969,8 @@ const computeRentalCommissionBreakdown = (snapshot = {}, grossAmount = 0) => {
   };
 };
 
-const normalizeEmployeePhone = (value = '') => {
-  const digits = String(value || '').replace(/\D/g, '').trim();
-  return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
-};
 
-const normalizeEmployeeCode = (value = '') =>
-  String(value || '')
-    .trim()
-    .toUpperCase();
 
-const serializeEmployee = (employee, stats = {}) => {
-  const totalUsers = Number(stats.totalUsers || 0);
-  const totalDrivers = Number(stats.totalDrivers || 0);
-
-  return {
-    _id: employee._id,
-    id: employee._id,
-    name: employee.name || '',
-    phone: employee.phone || '',
-    employeeCode: employee.employeeCode || '',
-    active: employee.active !== false,
-    notes: employee.notes || '',
-    totalUsersAcquired: totalUsers,
-    totalDriversAcquired: totalDrivers,
-    totalAcquired: totalUsers + totalDrivers,
-    createdAt: employee.createdAt || null,
-    updatedAt: employee.updatedAt || null,
-  };
-};
 
 const normalizeDeliveryServiceTax = (value, fallback = 0) =>
   Math.max(0, Number(value ?? fallback ?? 0));
@@ -1802,64 +1667,8 @@ const cleanupLegacySeededDriverNeededDocuments = async () => {
   });
 };
 
-const REFERRAL_TRANSLATION_DEFAULTS = {
-  instant_referrer_user: '',
-  instant_referrer_user_and_new_user: '',
-  conditional_referrer_user_ride_count: '',
-  conditional_referrer_user_earnings: '',
-  dual_conditional_referrer_user_and_new_user_ride_count: '',
-  dual_conditional_referrer_user_and_new_user_earnings: '',
-  banner_text: '',
-};
 
-const normalizeReferralTranslationSection = (payload = {}) => ({
-  instant_referrer_user: String(payload.instant_referrer_user || ''),
-  instant_referrer_user_and_new_user: String(payload.instant_referrer_user_and_new_user || ''),
-  conditional_referrer_user_ride_count: String(payload.conditional_referrer_user_ride_count || ''),
-  conditional_referrer_user_earnings: String(payload.conditional_referrer_user_earnings || ''),
-  dual_conditional_referrer_user_and_new_user_ride_count: String(
-    payload.dual_conditional_referrer_user_and_new_user_ride_count || '',
-  ),
-  dual_conditional_referrer_user_and_new_user_earnings: String(
-    payload.dual_conditional_referrer_user_and_new_user_earnings || '',
-  ),
-  banner_text: String(payload.banner_text || ''),
-});
 
-const serializeReferralTranslation = ({ language, translation }) => ({
-  _id: translation?._id || null,
-  language_code: String(language?.code || translation?.language_code || '').toLowerCase(),
-  language_name: language?.name || translation?.language_name || '',
-  active: Number(language?.active ?? 1) === 1,
-  default_status: Number(language?.default_status ?? 0) === 1,
-  user_referral: {
-    ...REFERRAL_TRANSLATION_DEFAULTS,
-    ...normalizeReferralTranslationSection(translation?.user_referral),
-  },
-  driver_referral: {
-    ...REFERRAL_TRANSLATION_DEFAULTS,
-    ...normalizeReferralTranslationSection(translation?.driver_referral),
-  },
-  createdAt: translation?.createdAt || null,
-  updatedAt: translation?.updatedAt || null,
-});
-
-const resolveReferralTranslationLanguage = async (languageCode = '') => {
-  const normalizedLanguageCode = String(languageCode || '').trim().toLowerCase();
-  const languages = await AppLanguage.find().sort({ default_status: -1, code: 1 }).lean();
-
-  const preferredLanguage =
-    languages.find((item) => String(item.code || '').toLowerCase() === normalizedLanguageCode) ||
-    languages.find((item) => Number(item.default_status) === 1) ||
-    languages[0] ||
-    null;
-
-  return {
-    languages,
-    preferredLanguage,
-    normalizedLanguageCode,
-  };
-};
 
 const cleanupLegacySeededDriverNeededDocumentsFinal = async () => {
   const items = await DriverNeededDocument.find().lean();
@@ -1955,8 +1764,6 @@ const serializeDriver = (driver) => ({
   email: driver.email || '',
   driver_code: driver.referralCode || (driver.phone ? `DRV${String(driver.phone).slice(-4)}${String(driver._id || '').slice(-6).toUpperCase()}`.replace(/\W/g, '') : ''),
   referralCode: driver.referralCode || '',
-  acquiredByEmployeeId: driver.acquiredByEmployeeId || null,
-  acquiredByEmployeeCode: driver.acquiredByEmployeeCode || '',
   service_location_id: driver.service_location_id || null,
   zoneId: driver.zoneId?._id || driver.zoneId || null,
   zone_name: driver.zoneId?.name || driver.zone_name || '',
@@ -2017,8 +1824,6 @@ const DRIVER_LIST_SELECT = [
   'phone',
   'email',
   'referralCode',
-  'acquiredByEmployeeId',
-  'acquiredByEmployeeCode',
   'service_location_id',
   'zoneId',
   'city',
@@ -2050,8 +1855,6 @@ const serializeDriverListItem = (driver) => ({
   email: driver.email || '',
   driver_code: driver.referralCode || (driver.phone ? `DRV${String(driver.phone).slice(-4)}${String(driver._id || '').slice(-6).toUpperCase()}`.replace(/\W/g, '') : ''),
   referralCode: driver.referralCode || '',
-  acquiredByEmployeeId: driver.acquiredByEmployeeId || null,
-  acquiredByEmployeeCode: driver.acquiredByEmployeeCode || '',
   service_location_id: driver.service_location_id || null,
   city: driver.city || '',
   service_location_name:
@@ -2117,8 +1920,6 @@ const serializeUser = (user) => ({
   },
   mobile: user.phone || user.mobile || '',
   phone: user.phone || user.mobile || '',
-  acquiredByEmployeeId: user.acquiredByEmployeeId || null,
-  acquiredByEmployeeCode: user.acquiredByEmployeeCode || '',
   wallet_balance: Number(user.wallet_balance || 0),
   active: user.active !== false && user.isActive !== false && !user.deletedAt,
   deletedAt: user.deletedAt || null,
@@ -2137,8 +1938,6 @@ const USER_LIST_SELECT = [
   'governmentIdProof',
   'phone',
   'mobile',
-  'acquiredByEmployeeId',
-  'acquiredByEmployeeCode',
   'wallet_balance',
   'active',
   'isActive',
@@ -2149,7 +1948,7 @@ const USER_LIST_SELECT = [
   'updatedAt',
 ].join(' ');
 
-const serializeUserListItem = (user, employee = null) => ({
+const serializeUserListItem = (user) => ({
   _id: user._id,
   id: user._id,
   name: user.name || '',
@@ -2164,9 +1963,6 @@ const serializeUserListItem = (user, employee = null) => ({
   },
   mobile: user.phone || user.mobile || '',
   phone: user.phone || user.mobile || '',
-  acquiredByEmployeeId: user.acquiredByEmployeeId || null,
-  acquiredByEmployeeCode: user.acquiredByEmployeeCode || '',
-  acquiredByEmployeeName: employee?.name || '',
   wallet_balance: Number(user.wallet_balance || 0),
   active:
     (user.active ?? user.isActive) !== false &&
@@ -2373,11 +2169,6 @@ const seedInitialData = async () => {
 
   // Seed App Modules removed (Migrated to AdminAppSetting)
 
-  // Seed Notification Channels
-  if (await NotificationChannel.countDocuments() === 0) {
-    await NotificationChannel.insertMany(defaults.notificationChannels);
-  }
-
   // Seed Preferences
   if (await UserPreference.countDocuments() === 0) {
     await UserPreference.insertMany(defaults.preferences);
@@ -2386,11 +2177,6 @@ const seedInitialData = async () => {
   // Seed Admin Roles
   if (await AdminRole.countDocuments() === 0) {
     await AdminRole.insertMany(defaults.roles);
-  }
-
-  // Seed Payment Gateways
-  if (await PaymentGateway.countDocuments() === 0) {
-    await PaymentGateway.insertMany(defaults.paymentGateways);
   }
 
   // Seed Onboarding Screens
@@ -2832,16 +2618,12 @@ export const listUsers = async ({
   page = 1,
   limit = 50,
   search = '',
-  employeeId = '',
-  referralSource = 'all',
 }) => {
   const safePage = Math.max(1, Number(page) || 1);
   const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
   const start = (safePage - 1) * safeLimit;
   const query = { deletedAt: null };
   const normalizedSearch = String(search || '').trim();
-  const normalizedEmployeeId = String(employeeId || '').trim();
-  const normalizedReferralSource = String(referralSource || 'all').trim().toLowerCase();
 
   if (normalizedSearch) {
     const escapedSearch = normalizedSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -2856,18 +2638,6 @@ export const listUsers = async ({
     }
   }
 
-  if (normalizedEmployeeId) {
-    query.acquiredByEmployeeId = normalizedEmployeeId;
-  }
-
-  if (normalizedReferralSource === 'employee') {
-    query.acquiredByEmployeeId = normalizedEmployeeId
-      ? normalizedEmployeeId
-      : { $ne: null };
-  } else if (normalizedReferralSource === 'organic') {
-    query.acquiredByEmployeeId = null;
-  }
-
   const [users, total] = await Promise.all([
     User.find(query)
       .select(USER_LIST_SELECT)
@@ -2878,31 +2648,8 @@ export const listUsers = async ({
     User.countDocuments(query),
   ]);
 
-  const employeeIds = [
-    ...new Set(
-      users
-        .map((user) => String(user.acquiredByEmployeeId || '').trim())
-        .filter(Boolean),
-    ),
-  ];
-
-  const employees = employeeIds.length
-    ? await Employee.find({ _id: { $in: employeeIds } })
-      .select('_id name employeeCode')
-      .lean()
-    : [];
-
-  const employeeMap = new Map(
-    employees.map((employee) => [String(employee._id), employee]),
-  );
-
   return {
-    results: users.map((user) =>
-      serializeUserListItem(
-        user,
-        employeeMap.get(String(user.acquiredByEmployeeId || '')) || null,
-      ),
-    ),
+    results: users.map((user) => serializeUserListItem(user)),
     paginator: {
       current_page: safePage,
       per_page: safeLimit,
@@ -4676,93 +4423,10 @@ export const getDriverProfile = async (id) => {
   };
 };
 
-export const getReferralSettings = async (type) => {
-  const setting = await AdminBusinessSetting.findOne({ scope: 'default' }).lean();
-  const referral = setting?.referral || { driver: { enabled: false, type: 'instant_referrer', amount: 0 }, user: { enabled: false, type: 'instant_referrer', amount: 0 } };
-  return type ? referral[type] : referral;
-};
 
-const sanitizeReferralMilestones = (items = []) =>
-  (Array.isArray(items) ? items : [])
-    .map((item, index) => ({
-      id: String(item?.id || `milestone_${index + 1}`).trim(),
-      name: String(item?.name || `Milestone ${index + 1}`).trim(),
-      enabled: Boolean(item?.enabled ?? true),
-      active_hours_per_day: Math.max(0, Number(item?.active_hours_per_day ?? 0) || 0),
-      required_weeks: Math.max(0, Number(item?.required_weeks ?? 0) || 0),
-      min_trips_per_week: Math.max(0, Number(item?.min_trips_per_week ?? 0) || 0),
-      payout_amount: Math.max(0, Number(item?.payout_amount ?? 0) || 0),
-      notes: String(item?.notes || '').trim(),
-    }))
-    .filter((item) => item.name);
 
-const sanitizeReferralRewardFeatures = (items = []) =>
-  (Array.isArray(items) ? items : [])
-    .map((item, index) => ({
-      id: String(item?.id || `feature_${index + 1}`).trim(),
-      key: String(item?.key || `feature_${index + 1}`).trim(),
-      label: String(item?.label || `Feature ${index + 1}`).trim(),
-      enabled: Boolean(item?.enabled ?? false),
-      reward_amount: Math.max(0, Number(item?.reward_amount ?? 0) || 0),
-      target_value: Math.max(0, Number(item?.target_value ?? 0) || 0),
-      unit: String(item?.unit || '').trim(),
-      description: String(item?.description || '').trim(),
-    }))
-    .filter((item) => item.label);
 
-export const updateReferralSettings = async (type, payload) => {
-  const updateKey = `referral.${type}`;
 
-  // Sanitize data
-  const updateData = {
-    ...payload,
-    enabled: Boolean(payload.enabled),
-    amount: Number(payload.amount || 0),
-  };
-
-  if (payload.ride_count !== undefined) {
-    updateData.ride_count = Math.max(0, Number(payload.ride_count || 0) || 0);
-  }
-
-  if (type === 'driver') {
-    updateData.milestone_program_enabled = Boolean(payload.milestone_program_enabled);
-    updateData.milestone_programs = sanitizeReferralMilestones(payload.milestone_programs);
-    updateData.reward_features = sanitizeReferralRewardFeatures(payload.reward_features);
-  }
-
-  const setting = await AdminBusinessSetting.findOneAndUpdate(
-    { scope: 'default' },
-    { $set: { [updateKey]: updateData } },
-    { returnDocument: 'after', upsert: true },
-  );
-
-  return setting.referral[type];
-};
-
-export const getReferralDashboard = async () => {
-  const [totalDrivers, totalUsers] = await Promise.all([
-    Driver.countDocuments(),
-    User.countDocuments(),
-  ]);
-
-  // Mocking some parts for the dashboard view
-  return {
-    total_drivers: totalDrivers,
-    total_users: totalUsers,
-    active_referrals: 0,
-    referral_earning: 0,
-    user_referrals: {
-      normal_user: totalUsers,
-      referral_user: 0,
-      monthly: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    },
-    driver_referrals: {
-      normal_driver: totalDrivers,
-      referral_driver: 0,
-      monthly: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    }
-  };
-};
 
 export const listServiceLocations = async (currentAdmin = null) => {
   await ensureServiceLocationsSeeded();
@@ -5106,239 +4770,9 @@ const toAdminIntercityTripRow = (ride) => {
   };
 };
 
-export const listEmployees = async ({ page = 1, limit = 50, search = '' } = {}, currentAdmin = null) => {
-  if (currentAdmin) {
-    assertAdminPermission(currentAdmin, 'employees.view', 'employees');
-  }
 
-  const safePage = Math.max(1, Number(page) || 1);
-  const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
-  const start = (safePage - 1) * safeLimit;
-  const normalizedSearch = String(search || '').trim();
-  const query = {};
 
-  if (normalizedSearch) {
-    const escapedSearch = normalizedSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const digits = normalizedSearch.replace(/\D/g, '');
-    const regex = new RegExp(escapedSearch, 'i');
-    query.$or = [{ name: regex }, { employeeCode: regex }];
 
-    if (digits) {
-      query.$or.push({ phone: new RegExp(`^${digits}`) });
-    } else {
-      query.$or.push({ phone: regex });
-    }
-  }
-
-  const [employees, total] = await Promise.all([
-    Employee.find(query)
-      .sort({ createdAt: -1 })
-      .skip(start)
-      .limit(safeLimit)
-      .lean(),
-    Employee.countDocuments(query),
-  ]);
-
-  const employeeIds = employees.map((employee) => employee._id);
-  const [userCounts, driverCounts] = await Promise.all([
-    employeeIds.length
-      ? User.aggregate([
-        { $match: { acquiredByEmployeeId: { $in: employeeIds } } },
-        { $group: { _id: '$acquiredByEmployeeId', count: { $sum: 1 } } },
-      ])
-      : [],
-    employeeIds.length
-      ? Driver.aggregate([
-        { $match: { acquiredByEmployeeId: { $in: employeeIds } } },
-        { $group: { _id: '$acquiredByEmployeeId', count: { $sum: 1 } } },
-      ])
-      : [],
-  ]);
-
-  const userCountMap = new Map(userCounts.map((item) => [String(item._id), Number(item.count || 0)]));
-  const driverCountMap = new Map(driverCounts.map((item) => [String(item._id), Number(item.count || 0)]));
-
-  return {
-    results: employees.map((employee) =>
-      serializeEmployee(employee, {
-        totalUsers: userCountMap.get(String(employee._id)) || 0,
-        totalDrivers: driverCountMap.get(String(employee._id)) || 0,
-      })),
-    paginator: {
-      current_page: safePage,
-      per_page: safeLimit,
-      total,
-      last_page: Math.max(1, Math.ceil(total / safeLimit)),
-    },
-  };
-};
-
-export const createEmployee = async (payload = {}, currentAdmin = null) => {
-  if (currentAdmin) {
-    assertAdminPermission(currentAdmin, 'employees.view', 'employees');
-  }
-
-  const name = String(payload.name || '').trim();
-  const phone = normalizeEmployeePhone(payload.phone);
-  const employeeCode = normalizeEmployeeCode(payload.employeeCode);
-  const active = payload.active === undefined ? true : normalizeBoolean(payload.active);
-  const notes = String(payload.notes || '').trim();
-
-  if (!name || name.length < 2 || name.length > 80) {
-    throw new ApiError(400, 'Employee name must be between 2 and 80 characters');
-  }
-
-  if (!/^\d{10}$/.test(phone)) {
-    throw new ApiError(400, 'Employee phone must be a valid 10-digit number');
-  }
-
-  if (!/^[A-Z0-9-]{3,40}$/.test(employeeCode)) {
-    throw new ApiError(400, 'Employee code must be 3 to 40 characters using letters, numbers, or hyphens');
-  }
-
-  const existingPhone = await Employee.findOne({ phone }).select('_id').lean();
-  if (existingPhone) {
-    throw new ApiError(409, 'Employee phone is already in use');
-  }
-
-  const existingCode = await Employee.findOne({ employeeCode }).select('_id').lean();
-  if (existingCode) {
-    throw new ApiError(409, 'Employee code is already in use');
-  }
-
-  const employee = await Employee.create({
-    name,
-    phone,
-    employeeCode,
-    active,
-    notes,
-  });
-
-  return serializeEmployee(employee.toObject());
-};
-
-export const updateEmployee = async (id, payload = {}, currentAdmin = null) => {
-  if (currentAdmin) {
-    assertAdminPermission(currentAdmin, 'employees.view', 'employees');
-  }
-
-  const employee = await Employee.findById(id);
-  if (!employee) {
-    throw new ApiError(404, 'Employee not found');
-  }
-
-  if (payload.name !== undefined) {
-    const name = String(payload.name || '').trim();
-    if (!name || name.length < 2 || name.length > 80) {
-      throw new ApiError(400, 'Employee name must be between 2 and 80 characters');
-    }
-    employee.name = name;
-  }
-
-  if (payload.phone !== undefined) {
-    const phone = normalizeEmployeePhone(payload.phone);
-    if (!/^\d{10}$/.test(phone)) {
-      throw new ApiError(400, 'Employee phone must be a valid 10-digit number');
-    }
-    const conflict = await Employee.findOne({ phone, _id: { $ne: employee._id } }).select('_id').lean();
-    if (conflict) {
-      throw new ApiError(409, 'Employee phone is already in use');
-    }
-    employee.phone = phone;
-  }
-
-  let employeeCodeChanged = false;
-
-  if (payload.employeeCode !== undefined) {
-    const employeeCode = normalizeEmployeeCode(payload.employeeCode);
-    if (!/^[A-Z0-9-]{3,40}$/.test(employeeCode)) {
-      throw new ApiError(400, 'Employee code must be 3 to 40 characters using letters, numbers, or hyphens');
-    }
-    const conflict = await Employee.findOne({ employeeCode, _id: { $ne: employee._id } }).select('_id').lean();
-    if (conflict) {
-      throw new ApiError(409, 'Employee code is already in use');
-    }
-    employeeCodeChanged = employee.employeeCode !== employeeCode;
-    employee.employeeCode = employeeCode;
-  }
-
-  if (payload.active !== undefined) {
-    employee.active = normalizeBoolean(payload.active);
-  }
-
-  if (payload.notes !== undefined) {
-    employee.notes = String(payload.notes || '').trim();
-  }
-
-  await employee.save();
-
-  if (employeeCodeChanged) {
-    await Promise.all([
-      User.updateMany(
-        { acquiredByEmployeeId: employee._id },
-        { $set: { acquiredByEmployeeCode: employee.employeeCode } },
-      ),
-      Driver.updateMany(
-        { acquiredByEmployeeId: employee._id },
-        { $set: { acquiredByEmployeeCode: employee.employeeCode } },
-      ),
-    ]);
-  }
-
-  return serializeEmployee(employee.toObject());
-};
-
-export const getEmployeeById = async (id, currentAdmin = null) => {
-  if (currentAdmin) {
-    assertAdminPermission(currentAdmin, 'employees.view', 'employees');
-  }
-
-  const employee = await Employee.findById(id).lean();
-  if (!employee) {
-    throw new ApiError(404, 'Employee not found');
-  }
-
-  const [users, drivers, totalUsers, totalDrivers] = await Promise.all([
-    User.find({ acquiredByEmployeeId: employee._id })
-      .select('_id name phone email gender createdAt active isActive deletedAt acquiredByEmployeeCode')
-      .sort({ createdAt: -1 })
-      .lean(),
-    Driver.find({ acquiredByEmployeeId: employee._id })
-      .select('_id name phone email vehicleType registerFor status approve createdAt acquiredByEmployeeCode')
-      .sort({ createdAt: -1 })
-      .lean(),
-    User.countDocuments({ acquiredByEmployeeId: employee._id }),
-    Driver.countDocuments({ acquiredByEmployeeId: employee._id }),
-  ]);
-
-  return {
-    employee: serializeEmployee(employee, { totalUsers, totalDrivers }),
-    users: users.map((user) => ({
-      _id: user._id,
-      id: user._id,
-      name: user.name || '',
-      phone: user.phone || '',
-      email: user.email || '',
-      gender: user.gender || '',
-      active: (user.active ?? user.isActive) !== false && !user.deletedAt,
-      employeeCode: user.acquiredByEmployeeCode || '',
-      createdAt: user.createdAt || null,
-    })),
-    drivers: drivers.map((driver) => ({
-      _id: driver._id,
-      id: driver._id,
-      name: driver.name || '',
-      phone: driver.phone || '',
-      email: driver.email || '',
-      vehicleType: driver.vehicleType || '',
-      registerFor: driver.registerFor || '',
-      status: driver.status || '',
-      approve: Boolean(driver.approve),
-      employeeCode: driver.acquiredByEmployeeCode || '',
-      createdAt: driver.createdAt || null,
-    })),
-  };
-};
 
 const clampAdminRideListPageSize = (value, fallback = 10) => {
   const parsed = Number(value);
@@ -7046,9 +6480,7 @@ const getLiveDashboardStats = async () => {
     const io = getSocketServer();
     const mongoState = mongoose.connection?.readyState; // 1 = connected
     const redis = getRedisStatus();
-    const mapSettings = await getMapSettings().catch(() => null);
-    const mapApis = mapSettings?.settings || {};
-    const mapKey = mapApis.google_map_key_for_web_apps || mapApis.google_map_key_for_distance_matrix;
+    const mapKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_SERVER_KEY || '';
 
     return {
       database: mongoState === 1 ? 'operational' : 'down',
@@ -7062,12 +6494,12 @@ const getLiveDashboardStats = async () => {
     const io = getSocketServer();
     if (!io) return 0;
 
-    const sockets = await io.in(getSupportRoleRoom('user')).fetchSockets();
+    const sockets = await io.in(getPresenceRoleRoom('user')).fetchSockets();
     const riders = new Set();
 
     for (const socket of sockets) {
       for (const room of socket.rooms) {
-        if (String(room).startsWith('chat:participant:user:')) riders.add(room);
+        if (String(room).startsWith('presence:participant:user:')) riders.add(room);
       }
     }
 
@@ -8906,124 +8338,8 @@ export const deleteDriverNeededDocument = async (id) => {
   return true;
 };
 
-export const listReferralTranslations = async () => {
-  const [languages, translations] = await Promise.all([
-    AppLanguage.find().sort({ default_status: -1, code: 1 }).lean(),
-    ReferralTranslation.find().sort({ language_code: 1 }).lean(),
-  ]);
 
-  const translationMap = new Map(
-    translations.map((item) => [String(item.language_code || '').toLowerCase(), item]),
-  );
 
-  const languageRows = languages.map((language) =>
-    serializeReferralTranslation({
-      language,
-      translation: translationMap.get(String(language.code || '').toLowerCase()) || null,
-    }),
-  );
-
-  const existingCodes = new Set(languageRows.map((item) => item.language_code));
-
-  const orphanRows = translations
-    .filter((item) => !existingCodes.has(String(item.language_code || '').toLowerCase()))
-    .map((item) =>
-      serializeReferralTranslation({
-        language: null,
-        translation: item,
-      }),
-    );
-
-  return [...languageRows, ...orphanRows];
-};
-
-export const updateReferralTranslation = async (languageCode, payload = {}) => {
-  const normalizedLanguageCode = String(languageCode || '').trim().toLowerCase();
-
-  if (!normalizedLanguageCode) {
-    throw new ApiError(400, 'languageCode is required');
-  }
-
-  const language = await AppLanguage.findOne({ code: normalizedLanguageCode }).lean();
-
-  const item = await ReferralTranslation.findOneAndUpdate(
-    { language_code: normalizedLanguageCode },
-    {
-      $set: {
-        language_code: normalizedLanguageCode,
-        language_name: language?.name || String(payload.language_name || ''),
-        user_referral: normalizeReferralTranslationSection(payload.user_referral),
-        driver_referral: normalizeReferralTranslationSection(payload.driver_referral),
-      },
-    },
-    {
-      returnDocument: 'after',
-      upsert: true,
-      setDefaultsOnInsert: true,
-    },
-  ).lean();
-
-  return serializeReferralTranslation({
-    language,
-    translation: item,
-  });
-};
-
-export const getReferralTranslationContent = async (languageCode = '') => {
-  const { languages, preferredLanguage, normalizedLanguageCode } =
-    await resolveReferralTranslationLanguage(languageCode);
-
-  const codesToTry = [
-    normalizedLanguageCode,
-    preferredLanguage?.code,
-    languages.find((item) => Number(item.default_status) === 1)?.code,
-    'en',
-  ]
-    .map((item) => String(item || '').trim().toLowerCase())
-    .filter(Boolean);
-
-  let translation = null;
-  let resolvedLanguage = preferredLanguage;
-
-  if (codesToTry.length > 0) {
-    translation = await ReferralTranslation.findOne({
-      language_code: { $in: codesToTry },
-    })
-      .sort({ updatedAt: -1 })
-      .lean();
-
-    if (translation) {
-      resolvedLanguage =
-        languages.find(
-          (item) =>
-            String(item.code || '').toLowerCase() === String(translation.language_code || '').toLowerCase(),
-        ) || resolvedLanguage;
-    }
-  }
-
-  return {
-    language_code: String(
-      resolvedLanguage?.code || translation?.language_code || normalizedLanguageCode || 'en',
-    )
-      .trim()
-      .toLowerCase(),
-    language_name: resolvedLanguage?.name || translation?.language_name || '',
-    user_referral: {
-      ...REFERRAL_TRANSLATION_DEFAULTS,
-      ...normalizeReferralTranslationSection(translation?.user_referral),
-    },
-    driver_referral: {
-      ...REFERRAL_TRANSLATION_DEFAULTS,
-      ...normalizeReferralTranslationSection(translation?.driver_referral),
-    },
-    available_languages: languages.map((item) => ({
-      code: String(item.code || '').toLowerCase(),
-      name: item.name || '',
-      active: Number(item.active ?? 1) === 1,
-      default_status: Number(item.default_status ?? 0) === 1,
-    })),
-  };
-};
 
 export const listLanguages = async () => AppLanguage.find().sort({ code: 1 }).lean();
 
@@ -9080,21 +8396,9 @@ export const deleteRole = async (id) => {
   return true;
 };
 
-export const listNotificationChannels = async () => NotificationChannel.find().sort({ createdAt: 1 }).lean();
 
-export const toggleChannelPush = async (id, status) => {
-  const channel = await NotificationChannel.findByIdAndUpdate(id, { push_notification: !!status }, { returnDocument: 'after' });
-  if (!channel) throw new ApiError(404, 'Channel not found');
-  return channel.toObject();
-};
 
-export const toggleChannelMail = async (id, status) => {
-  const channel = await NotificationChannel.findByIdAndUpdate(id, { mail: !!status }, { returnDocument: 'after' });
-  if (!channel) throw new ApiError(404, 'Channel not found');
-  return channel.toObject();
-};
 
-export const listPaymentGateways = async () => PaymentGateway.find().sort({ name: 1 }).lean();
 
 export const listPaymentMethods = async () =>
   PaymentMethod.find().sort({ createdAt: -1 }).lean();
@@ -9172,144 +8476,19 @@ export const deletePaymentMethod = async (id) => {
   return true;
 };
 
-export const getPaymentSettings = async () => {
-  const settings = await ensureThirdPartySettings();
-  const activeGateway = await getActivePaymentGateway();
-  return { settings: settings.payment || {}, active_gateway: activeGateway };
-};
 
-export const updatePaymentSettings = async (payload) => {
-  const settings = await ensureThirdPartySettings();
-  settings.payment = normalizePaymentSettingsPayload(
-    settings.payment || {},
-    deepMerge(settings.payment || {}, payload),
-  );
-  settings.markModified('payment');
-  await settings.save();
-  const activeGateway = await getActivePaymentGateway();
-  return { settings: settings.payment, active_gateway: activeGateway };
-};
 
-export const getSMSSettings = async () => {
-  const settings = await ensureThirdPartySettings();
-  return { settings: settings.sms || {} };
-};
 
-export const updateSMSSettings = async (payload) => {
-  const settings = await ensureThirdPartySettings();
-  settings.sms = deepMerge(settings.sms || {}, payload);
-  settings.markModified('sms');
-  await settings.save();
-  return { settings: settings.sms };
-};
 
-export const getFirebaseSettings = async () => {
-  const settings = await ensureThirdPartySettings();
-  return { settings: settings.firebase || {} };
-};
 
-export const updateFirebaseSettings = async (payload) => {
-  const settings = await ensureThirdPartySettings();
-  settings.firebase = {
-    ...settings.firebase,
-    ...payload,
-    firebase_json_name: payload.firebase_json_name || settings.firebase.firebase_json_name,
-  };
-  settings.markModified('firebase');
-  await settings.save();
-  return { settings: settings.firebase };
-};
 
-export const getMapSettings = async () => {
-  const settings = await ensureThirdPartySettings();
-  return { settings: settings.map_apis || {} };
-};
 
-export const updateMapSettings = async (payload) => {
-  const settings = await ensureThirdPartySettings();
-  settings.map_apis = { ...settings.map_apis, ...payload };
-  settings.markModified('map_apis');
-  await settings.save();
-  return { settings: settings.map_apis };
-};
 
-export const getMailSettings = async () => {
-  const settings = await ensureThirdPartySettings();
-  return { settings: settings.mail || {} };
-};
 
-export const updateMailSettings = async (payload) => {
-  const settings = await ensureThirdPartySettings();
-  settings.mail = { ...settings.mail, ...payload };
-  settings.markModified('mail');
-  await settings.save();
-  return { settings: settings.mail };
-};
 
-export const getRechargeApiSettings = async () => {
-  const settings = await ensureThirdPartySettings();
-  return buildRechargeApiResponse(settings.recharge_api || {});
-};
 
-export const updateRechargeApiSettings = async (payload) => {
-  const settings = await ensureThirdPartySettings();
-  settings.recharge_api = normalizeRechargeApiSettings(
-    deepMerge(settings.recharge_api || {}, payload || {}),
-  );
-  settings.markModified('recharge_api');
-  await settings.save();
-  return buildRechargeApiResponse(settings.recharge_api);
-};
 
-export const generateRechargeApiToken = async () => {
-  const settings = await ensureThirdPartySettings();
-  settings.recharge_api = normalizeRechargeApiSettings({
-    ...(settings.recharge_api || {}),
-    api_token: randomBytes(32).toString('base64url'),
-    token_generated_at: new Date().toISOString(),
-  });
-  settings.markModified('recharge_api');
-  await settings.save();
-  return buildRechargeApiResponse(settings.recharge_api);
-};
 
-export const runRechargeApiTest = async () => {
-  const settings = await ensureThirdPartySettings();
-  const payload = buildRechargeApiResponse(settings.recharge_api || {});
-  const apiToken = payload.settings?.api_token || '';
-  const endpointPath = payload.metadata?.provider_endpoints?.bank_verify_penny_less || '/validation/verifyBankRequest';
-  const requestUrl = `${payload.metadata?.base_url || ''}${endpointPath}`;
-  const sampleBody = {
-    bank_account: '330701XXXXXX',
-    ifsc_code: 'ICIC000XXXX',
-    benificiary_name: 'DEMO USER',
-    partner_request_id: `BANK${Date.now()}`,
-  };
-
-  return {
-    success: Boolean(apiToken),
-    message: apiToken
-      ? 'Recharge API configuration looks ready for a callback test.'
-      : 'Generate and save an API token before using this integration in production.',
-    request_preview: {
-      method: 'POST',
-      url: requestUrl,
-      headers: {
-        'Content-Type': 'application/json',
-        [payload.metadata?.auth_header_name || 'Authorization']:
-          `${payload.metadata?.auth_header_prefix ? `${payload.metadata.auth_header_prefix} ` : ''}${apiToken || '<generate-token-first>'}`,
-      },
-      body: sampleBody,
-    },
-    curl: [
-      'curl -X POST',
-      `  "${requestUrl}"`,
-      '  -H "Content-Type: application/json"',
-      `  -H "${payload.metadata?.auth_header_name || 'Authorization'}: ${payload.metadata?.auth_header_prefix ? `${payload.metadata.auth_header_prefix} ` : ''}${apiToken || '<generate-token-first>'}"`,
-      `  -d '${JSON.stringify(sampleBody)}'`,
-    ].join(' \\\n'),
-  };
-};
 
 const buildDateFilter = (date_option, from_date, to_date) => {
   const filter = {};
@@ -9571,16 +8750,6 @@ export const ensureBusinessSettings = async () => {
   return settings;
 };
 
-/**
- * Ensures a default third-party settings document exists.
- */
-export const ensureThirdPartySettings = async () => {
-  let settings = await AdminThirdPartySetting.findOne({ scope: 'default' });
-  if (!settings) {
-    settings = await AdminThirdPartySetting.create(createDefaultThirdPartySettings());
-  }
-  return settings;
-};
 
 /**
  * Ensures a default administrative application settings document exists.

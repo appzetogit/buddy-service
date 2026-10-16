@@ -1,7 +1,6 @@
 import { asyncHandler } from '../../../../utils/asyncHandler.js';
 import { uploadDataUrl } from '../../shared/fileUpload.js';
 import { env } from '../../shared/env.js';
-import { getReferralSettings, getReferralTranslationContent } from '../../admin/services/adminService.js';
 import { getPublicActivePaymentGateway } from '../../services/paymentGatewayService.js';
 import { buildPaymentRequestContext, logPaymentDiagnostic } from '../../services/paymentDiagnostics.js';
 
@@ -31,25 +30,7 @@ export const uploadImage = asyncHandler(async (req, res) => {
     });
 });
 
-export const getReferralTranslation = asyncHandler(async (req, res) => {
-    const languageCode = String(req.query?.language || req.query?.lang || '').trim().toLowerCase();
-    const data = await getReferralTranslationContent(languageCode);
 
-    return res.json({
-        success: true,
-        data,
-    });
-});
-
-export const getReferralSettingsContent = asyncHandler(async (req, res) => {
-    const type = String(req.query?.type || '').trim().toLowerCase();
-    const data = await getReferralSettings(type || undefined);
-
-    return res.json({
-        success: true,
-        data,
-    });
-});
 
 export const getPaymentGatewayConfig = asyncHandler(async (_req, res) => {
     const data = await getPublicActivePaymentGateway();
@@ -76,14 +57,3 @@ export const acknowledgePhonePeCallback = asyncHandler(async (req, res) => {
     });
 });
 
-export const acknowledgeRechargeApiCallback = asyncHandler(async (req, res) => {
-    return res.json({
-        success: true,
-        message: 'Recharge API callback received',
-        data: {
-            query: req.query || {},
-            body: req.body || {},
-            receivedAt: new Date().toISOString(),
-        },
-    });
-});

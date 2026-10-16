@@ -3,13 +3,10 @@ export const SUPERADMIN_PERMISSION = '*';
 export const ADMIN_PERMISSIONS = [
   'dashboard.view',
   'earnings.view',
-  'chat.view',
   'promotions.view',
   'users.view',
-  'employees.view',
   'wallet.view',
   'drivers.view',
-  'referrals.view',
   'subadmins.manage',
   'reports.view',
   'support.view',

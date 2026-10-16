@@ -1193,9 +1193,8 @@ const ParcelTracking = () => {
           </div>
 
           {/* Action Grid */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <ActionButton icon={Phone} label="Call" onClick={handleCall} />
-            <ActionButton icon={MessageCircle} label="Chat" onClick={() => navigate(`${routePrefix}/ride/chat`, { state: { rideId, peer: driver } })} />
             <ActionButton icon={Share2} label="Share" onClick={handleShare} />
             <ActionButton icon={ShieldCheck} label="Safety" onClick={() => navigate(routePrefix ? `${routePrefix}/support` : '/ride/support')} color="dark" />
           </div>

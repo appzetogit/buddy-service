@@ -10,7 +10,6 @@ import {
   createAdminAccount,
   getAdminActivitySummary,
   createAppModule,
-  createEmployee,
   createGoodsType,
   createDriver,
   createDriverNeededDocument,
@@ -63,8 +62,6 @@ import {
   getCountries,
   getDashboardData,
   getDeliveries,
-  getEmployee,
-  getEmployees,
   getDriver,
   getDriverNeededDocument,
   getDriverNeededDocuments,
@@ -81,32 +78,20 @@ import {
   rejectDriverWithdrawalRequest,
   getDeletedDrivers,
   getDriverDeletionRequests,
-  getFirebaseSettings,
   getGoodsTypes,
   getIntercityTrips,
-  getReferralTranslations,
   getGeneralSettingsCategory,
   getLanguages,
-  getMailSettings,
-  getMapSettings,
-  getRechargeApiSettings,
   getNearbyServiceLocations,
-  getNotificationChannels,
   getOngoingRides,
   getOverallEarnings,
-  getPaymentGateways,
   getPaymentMethods,
-  getPaymentSettings,
   getPreferences,
   getRideModules,
   getRoles,
-  getReferralSettings,
-  updateReferralSettings,
-  getReferralDashboard,
   getSetPriceById,
   getSetPrices,
   getServiceLocations,
-  getSmsSettings,
   getTodayEarnings,
   getUserOnboarding,
   getUser,
@@ -137,8 +122,6 @@ import {
   loginAdmin,
   resetPassword,
   verifyResetOtp,
-  toggleChannelMail,
-  toggleChannelPush,
   toggleZoneStatus,
   adjustUserWallet,
   listDriverWalletHistory,
@@ -147,30 +130,19 @@ import {
   updateAirport,
   updateAdminAccount,
   updateDriver,
-  updateEmployee,
   updateDriverNeededDocument,
   updateDriverPassword,
-  updateFirebaseSettings,
   updateOnboardingScreen,
   updateGoodsType,
   updateGeneralSettingsCategory,
   updateLanguageStatus,
-  updateMailSettings,
-  sendTestMail,
-  updateMapSettings,
-  updateRechargeApiSettings,
-  updatePaymentSettings,
   updatePaymentMethod,
   updatePreferenceStatus,
-  updateReferralTranslation,
   updateSetPrice,
   updateServiceLocation,
-  updateSmsSettings,
   updateUser,
   updateVehicleType,
   updateZone,
-  generateRechargeApiToken,
-  runRechargeApiTest,
   createVehicleType,
   deleteAirport,
   deleteAdminAccount,
@@ -207,8 +179,6 @@ adminRouter.patch('/admin/admin-management/admins/:id', updateAdminAccount);
 adminRouter.delete('/admin/admin-management/admins/:id', deleteAdminAccount);
 
 adminRouter.get('/admin/users', getUsers);
-adminRouter.get('/admin/employees', getEmployees);
-adminRouter.post('/admin/employees', createEmployee);
 adminRouter.post('/admin/users/bulk-import', bulkImportUsers);
 adminRouter.post('/admin/users', createUser);
 adminRouter.get('/admin/users/deleted', getDeletedUsers);
@@ -218,8 +188,6 @@ adminRouter.get('/admin/users/delete-requests', getUserDeletionRequests);
 adminRouter.patch('/admin/users/delete-requests/:id/approve', approveUserDeletionRequest);
 adminRouter.patch('/admin/users/delete-requests/:id/reject', rejectUserDeletionRequest);
 adminRouter.get('/admin/users/:id', getUser);
-adminRouter.get('/admin/employees/:id', getEmployee);
-adminRouter.patch('/admin/employees/:id', updateEmployee);
 adminRouter.patch('/admin/users/:id', updateUser);
 adminRouter.delete('/admin/users/:id', deleteUser);
 adminRouter.get('/admin/users/:id/requests', getUserRequests);
@@ -290,11 +258,6 @@ adminRouter.get('/admin/driver-management/driver-needed-document/:id', getDriver
 adminRouter.post('/admin/driver-management/driver-needed-document', createDriverNeededDocument);
 adminRouter.patch('/admin/driver-management/driver-needed-document/:id', updateDriverNeededDocument);
 adminRouter.delete('/admin/driver-management/driver-needed-document/:id', deleteDriverNeededDocument);
-adminRouter.get('/admin/referrals/translation', getReferralTranslations);
-adminRouter.patch('/admin/referrals/translation/:languageCode', updateReferralTranslation);
-adminRouter.get('/admin/referrals/settings/:type', getReferralSettings);
-adminRouter.patch('/admin/referrals/settings/:type', updateReferralSettings);
-adminRouter.get('/admin/referral/dashboard', getReferralDashboard);
 
 adminRouter.get('/admin/dashboard/data', getDashboardData);
 
@@ -346,32 +309,13 @@ adminRouter.post('/admin/common/app-modules', createAppModule);
 adminRouter.patch('/admin/common/app-modules/:id', updateAppModule);
 adminRouter.delete('/admin/common/app-modules/:id', deleteAppModule);
 
-adminRouter.get('/admin/notification-channels', getNotificationChannels);
-adminRouter.patch('/admin/notification-channels/:id/push', toggleChannelPush);
-adminRouter.patch('/admin/notification-channels/:id/mail', toggleChannelMail);
 
-adminRouter.get('/admin/integration-settings/payment-gateways', getPaymentGateways);
-adminRouter.get('/admin/integration-settings/payment-settings', getPaymentSettings);
-adminRouter.patch('/admin/integration-settings/payment-settings', updatePaymentSettings);
 
 adminRouter.get('/admin/payment-methods', authenticate(['admin']), getPaymentMethods);
 adminRouter.post('/admin/payment-methods', authenticate(['admin']), createPaymentMethod);
 adminRouter.patch('/admin/payment-methods/:id', authenticate(['admin']), updatePaymentMethod);
 adminRouter.delete('/admin/payment-methods/:id', authenticate(['admin']), deletePaymentMethod);
 
-adminRouter.get('/admin/integration-settings/sms', getSmsSettings);
-adminRouter.patch('/admin/integration-settings/sms', updateSmsSettings);
-adminRouter.get('/admin/integration-settings/firebase', getFirebaseSettings);
-adminRouter.patch('/admin/integration-settings/firebase', updateFirebaseSettings);
-adminRouter.get('/admin/integration-settings/map', getMapSettings);
-adminRouter.patch('/admin/integration-settings/map', updateMapSettings);
-adminRouter.get('/admin/integration-settings/mail', getMailSettings);
-adminRouter.patch('/admin/integration-settings/mail', updateMailSettings);
-adminRouter.post('/admin/integration-settings/mail/test', sendTestMail);
-adminRouter.get('/admin/integration-settings/recharge-api', getRechargeApiSettings);
-adminRouter.patch('/admin/integration-settings/recharge-api', updateRechargeApiSettings);
-adminRouter.post('/admin/integration-settings/recharge-api/generate-token', generateRechargeApiToken);
-adminRouter.post('/admin/integration-settings/recharge-api/test', runRechargeApiTest);
 
 adminRouter.get('/admin/general-settings/:category', getGeneralSettingsCategory);
 adminRouter.patch('/admin/general-settings/:category', updateGeneralSettingsCategory);

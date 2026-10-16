@@ -15,16 +15,7 @@ import { SOCKET_EVENTS } from './events.js';
 import { resolvePartnerFromAccountId } from '../shared/partner.js';
 import { registerRideSocketHandlers } from './handlers/rideSocketHandler.js';
 import { authorizeRideRoomAccess } from './middleware/rideRoomAuth.js';
-import {
-  broadcastSupportMessage,
-  createSupportMessage,
-  getSupportParticipantRoom,
-  getSupportRoleRoom,
-  getSupportRoom,
-  markSupportMessagesAsRead,
-  parseSupportConversationKey,
-  setSupportChatServer,
-} from '../chat/services/supportChatService.js';
+import { getPresenceParticipantRoom, getPresenceRoleRoom } from './presenceRooms.js';
 import {
   addSocketSubscriptions,
   joinRideRoom,
@@ -70,7 +61,6 @@ const resolveTaxiIdentity = async (socket) => {
 
 export const registerTaxiSocket = (io) => {
   setSocketServer(io);
-  setSupportChatServer(io);
 
   io.on('connection', async (socket) => {
     const identity = await resolveTaxiIdentity(socket).catch(() => null);
@@ -82,50 +72,8 @@ export const registerTaxiSocket = (io) => {
       // A rider who comes online while a ride is still being searched gets that offer now.
       notifyLateAvailableDriver(identity.sub).catch(() => {});
     }
-    socket.join(getSupportParticipantRoom(identity.role, identity.sub));
-    socket.join(getSupportRoleRoom(identity.role));
-
-    socket.on('chat:join', ({ conversationKey } = {}) => {
-      if (!conversationKey) return;
-      const parsed = parseSupportConversationKey(conversationKey);
-      if (parsed) {
-        for (const key of parsed.keys) socket.join(getSupportRoom(key));
-        return;
-      }
-      socket.join(getSupportRoom(conversationKey));
-    });
-
-    socket.on(
-      'chat:send',
-      onAsync(socket, async ({ message, receiverRole, receiverId, conversationKey }) => {
-        let nextReceiverRole = receiverRole;
-        let nextReceiverId = receiverId;
-
-        if (identity.role === 'admin' && (!nextReceiverRole || !nextReceiverId) && conversationKey) {
-          const parsed = parseSupportConversationKey(conversationKey);
-          nextReceiverRole = parsed?.peerRole;
-          nextReceiverId = parsed?.peerId;
-        }
-
-        const savedMessage = await createSupportMessage({
-          senderRole: identity.role,
-          senderId: identity.sub,
-          receiverRole: nextReceiverRole,
-          receiverId: nextReceiverId,
-          conversationKey,
-          message,
-        });
-        broadcastSupportMessage(savedMessage);
-      }),
-    );
-
-    socket.on(
-      'chat:read',
-      onAsync(socket, async ({ conversationKey }) => {
-        if (!conversationKey) return;
-        await markSupportMessagesAsRead({ role: identity.role, id: identity.sub, conversationKey });
-      }),
-    );
+    socket.join(getPresenceParticipantRoom(identity.role, identity.sub));
+    socket.join(getPresenceRoleRoom(identity.role));
 
     socket.on(
       'joinRide',

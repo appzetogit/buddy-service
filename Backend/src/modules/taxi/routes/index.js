@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { taxiDeliveryRouter } from '../delivery/taxiDelivery.routes.js';
-import { chatModuleRouter } from '../chat/routes/index.js';
 import { adminModuleRouter } from '../admin/routes/index.js';
 import { supportModuleRouter } from '../support/routes/index.js';
 import { userModuleRouter } from '../user/routes/index.js';
@@ -18,7 +17,6 @@ export const taxiRouter = Router();
 
 // Riders (delivery partners) taking rides - same login as the rest of the delivery app.
 taxiRouter.use('/delivery', taxiDeliveryRouter);
-taxiRouter.use(chatModuleRouter);
 taxiRouter.use(adminModuleRouter);
 taxiRouter.use(userModuleRouter);
 taxiRouter.use(supportModuleRouter);
