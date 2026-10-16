@@ -94,7 +94,6 @@ const MainDashboard = () => {
   const totalUsers = dashboard?.totalUsers || 0;
   const totalDrivers = dashboard?.totalDrivers?.total || 0;
   const approvedDrivers = dashboard?.totalDrivers?.approved || 0;
-  const totalOwners = dashboard?.totalOwners || 0;
 
   // Counts for right now, sent uncached by the backend. Older builds of the
   // API do not send them, hence the empty object rather than a guess.
@@ -249,7 +248,6 @@ const MainDashboard = () => {
             { label: "Total Customers", value: totalUsers, icon: Users, cardBg: "!bg-violet-500" },
             { label: "Total Drivers", value: totalDrivers, icon: Car, cardBg: "!bg-sky-500" },
             { label: "Approved Drivers", value: approvedDrivers, icon: UserCheck, cardBg: "!bg-emerald-500" },
-            { label: "Vendors", value: totalOwners, icon: Building2, cardBg: "!bg-rose-500" },
             { label: "Online Customers", value: live.onlineCustomers ?? 0, icon: Sparkles, cardBg: "!bg-green-500" },
             { label: "Ongoing Trips", value: live.ongoingTrips ?? 0, icon: Activity, cardBg: "!bg-blue-500" },
             { label: "Today's Revenue", value: `₹${currency(todayEarnings.total)}`, icon: IndianRupee, cardBg: "!bg-emerald-500" },

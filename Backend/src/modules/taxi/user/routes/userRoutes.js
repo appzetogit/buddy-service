@@ -39,9 +39,6 @@ import {
   verifyPhonePeWalletTopup,
   verifyUserOtpRequest,
   verifyUserPhoneForOtpLogin,
-  getAvailableSubscriptionPlans,
-  getMySubscriptions,
-  buySubscription,
   getRoute,
   getSetPrices,
   getTripCategory,
@@ -88,9 +85,6 @@ userRouter.get('/service-locations', asyncHandler(listPublicServiceLocations));
 // unauthenticated and equally worth spamming.
 userRouter.get('/me', authenticate(['user']), asyncHandler(getCurrentUser));
 userRouter.patch('/me', authenticate(['user']), asyncHandler(updateCurrentUser));
-userRouter.get('/subscriptions/plans', authenticate(['user']), asyncHandler(getAvailableSubscriptionPlans));
-userRouter.get('/subscriptions/me', authenticate(['user']), asyncHandler(getMySubscriptions));
-userRouter.post('/subscriptions/purchase', authenticate(['user']), asyncHandler(buySubscription));
 userRouter.post('/me/delete-request', authenticate(['user']), asyncHandler(requestAccountDeletion));
 userRouter.get('/notifications', authenticate(['user']), asyncHandler(getUserNotifications));
 userRouter.delete('/notifications/:id', authenticate(['user']), asyncHandler(deleteUserNotification));

@@ -87,14 +87,6 @@ const setPriceSchema = new mongoose.Schema(
           type: Number,
           default: 0,
         },
-        admin_commission_type_for_owner: {
-          type: Number,
-          default: 1,
-        },
-        admin_commission_for_owner: {
-          type: Number,
-          default: 0,
-        },
         service_tax: {
           type: Number,
           default: 0,
@@ -136,15 +128,6 @@ const setPriceSchema = new mongoose.Schema(
       trim: true,
     },
     driver_commission: {
-      type: Number,
-      default: null,
-    },
-    owner_commission_type: {
-      type: String,
-      default: 'percentage',
-      trim: true,
-    },
-    owner_commission: {
       type: Number,
       default: null,
     },
@@ -234,14 +217,6 @@ const setPriceSchema = new mongoose.Schema(
     enable_ride_sharing: {
       type: Boolean,
       default: false,
-    },
-    admin_commission_type_for_owner: {
-      type: Number,
-      default: 1, // 1 for percentage, 0 for fixed
-    },
-    admin_commission_for_owner: {
-      type: Number,
-      default: 0,
     },
     admin_commision_type: { // Keep same spelling as user sample
       type: Number,

@@ -487,62 +487,6 @@ const rideSchema = new mongoose.Schema(
         default: null,
       },
     },
-    subscriptionUsage: {
-      covered: {
-        type: Boolean,
-        default: false,
-      },
-      subscriptionId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'TaxiUserSubscription',
-        default: null,
-      },
-      planId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'TaxiSubscriptionPlan',
-        default: null,
-      },
-      planName: {
-        type: String,
-        default: '',
-        trim: true,
-      },
-      vehicleTypeId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'TaxiVehicle',
-        default: null,
-      },
-      benefitType: {
-        type: String,
-        enum: ['limited', 'unlimited', ''],
-        default: '',
-      },
-      fareCovered: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-      ridesUsedBefore: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-      ridesRemainingBefore: {
-        type: Number,
-        default: null,
-        min: 0,
-      },
-      ridesUsedAfter: {
-        type: Number,
-        default: null,
-        min: 0,
-      },
-      ridesRemainingAfter: {
-        type: Number,
-        default: null,
-        min: 0,
-      },
-    },
     service_location_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TaxiServiceLocation',
@@ -605,14 +549,6 @@ const rideSchema = new mongoose.Schema(
         default: 1,
       },
       admin_commission_from_driver: {
-        type: Number,
-        default: 0,
-      },
-      admin_commission_type_for_owner: {
-        type: Number,
-        default: 1,
-      },
-      admin_commission_for_owner: {
         type: Number,
         default: 0,
       },

@@ -19,7 +19,6 @@ const UserAccountInvalidationListener = () => {
       !location.pathname.startsWith('/admin') &&
       !location.pathname.startsWith('/user-import') &&
       !location.pathname.startsWith('/driver-import') &&
-      !location.pathname.startsWith('/owner') &&
       !location.pathname.startsWith('/taxi/driver');
 
     if (!isUserRoute) {

@@ -21,11 +21,6 @@ import {
   createPaymentMethod,
   createServiceLocation,
   createSetPrice,
-  createSubscriptionPlan,
-  updateSubscriptionPlan,
-  deleteSubscriptionPlan,
-  getDriverSubscriptionPayments,
-  createCustomerSubscriptionPlan,
   createUser,
   createZone,
   bulkImportUsers,
@@ -112,11 +107,6 @@ import {
   getSetPrices,
   getServiceLocations,
   getSmsSettings,
-  getSubscriptionPlans,
-  getCustomerSubscriptionPlans,
-  getSubscriptionSettings,
-  getUserSubscriptions,
-  updateSubscriptionSettings,
   getTodayEarnings,
   getUserOnboarding,
   getUser,
@@ -133,8 +123,6 @@ import {
   saveAdminLandingContent,
   getRideRequests,
   getPayments,
-  getPaymentSubscribers,
-  getDriverSubscriptionAnalytics,
   getPaymentInvoice,
   rejectUserDeletionRequest,
   rejectDriverDeletionRequest,
@@ -234,7 +222,6 @@ adminRouter.get('/admin/employees/:id', getEmployee);
 adminRouter.patch('/admin/employees/:id', updateEmployee);
 adminRouter.patch('/admin/users/:id', updateUser);
 adminRouter.delete('/admin/users/:id', deleteUser);
-adminRouter.get('/admin/users/:id/subscriptions', getUserSubscriptions);
 adminRouter.get('/admin/users/:id/requests', getUserRequests);
 adminRouter.get('/admin/users/:id/wallet-history', getUserWalletHistory);
 
@@ -267,16 +254,6 @@ adminRouter.patch('/admin/wallet/drivers/withdrawals/:requestId/reject', authent
 adminRouter.get('/admin/driver-ratings', authenticate(['admin']), getDriverRatings);
 adminRouter.get('/admin/driver-ratings/:id', authenticate(['admin']), getDriverRatingDetail);
 
-adminRouter.get('/admin/driver-subscriptions/plans/list', getSubscriptionPlans);
-adminRouter.post('/admin/driver-subscriptions/plans/create', createSubscriptionPlan);
-adminRouter.patch('/admin/driver-subscriptions/plans/:id', updateSubscriptionPlan);
-adminRouter.delete('/admin/driver-subscriptions/plans/:id', deleteSubscriptionPlan);
-adminRouter.get('/admin/driver-subscriptions/payments', getDriverSubscriptionPayments);
-adminRouter.get('/admin/driver-subscriptions/analytics', getDriverSubscriptionAnalytics);
-adminRouter.get('/admin/driver-subscriptions/settings', getSubscriptionSettings);
-adminRouter.post('/admin/driver-subscriptions/settings', updateSubscriptionSettings);
-adminRouter.get('/admin/user-subscriptions/plans/list', getCustomerSubscriptionPlans);
-adminRouter.post('/admin/user-subscriptions/plans/create', createCustomerSubscriptionPlan);
 
 adminRouter.get('/countries', getCountries);
 adminRouter.get('/admin/countries', getCountries);
@@ -308,11 +285,11 @@ adminRouter.delete('/admin/goods-types/:id', deleteGoodsType);
 adminRouter.get('/admin/types/transport-types', getTransportTypes);
 adminRouter.get('/admin/vehicle_preference', getVehiclePreferenceOptions);
 
-adminRouter.get('/admin/owner-management/driver-needed-document', getDriverNeededDocuments);
-adminRouter.get('/admin/owner-management/driver-needed-document/:id', getDriverNeededDocument);
-adminRouter.post('/admin/owner-management/driver-needed-document', createDriverNeededDocument);
-adminRouter.patch('/admin/owner-management/driver-needed-document/:id', updateDriverNeededDocument);
-adminRouter.delete('/admin/owner-management/driver-needed-document/:id', deleteDriverNeededDocument);
+adminRouter.get('/admin/driver-management/driver-needed-document', getDriverNeededDocuments);
+adminRouter.get('/admin/driver-management/driver-needed-document/:id', getDriverNeededDocument);
+adminRouter.post('/admin/driver-management/driver-needed-document', createDriverNeededDocument);
+adminRouter.patch('/admin/driver-management/driver-needed-document/:id', updateDriverNeededDocument);
+adminRouter.delete('/admin/driver-management/driver-needed-document/:id', deleteDriverNeededDocument);
 adminRouter.get('/admin/referrals/translation', getReferralTranslations);
 adminRouter.patch('/admin/referrals/translation/:languageCode', updateReferralTranslation);
 adminRouter.get('/admin/referrals/settings/:type', getReferralSettings);
@@ -332,7 +309,6 @@ adminRouter.get('/admin/ongoing-rides', getOngoingRides);
 adminRouter.get('/admin/ride-requests', getRideRequests);
 // One ledger of every payment, and an invoice PDF for each.
 adminRouter.get('/admin/payments', getPayments);
-adminRouter.get('/admin/payments/subscribers', getPaymentSubscribers);
 adminRouter.get('/admin/payments/:kind/:id/invoice', getPaymentInvoice);
 adminRouter.post('/admin/ride-requests/:id/cancel', cancelRideRequest);
 adminRouter.delete('/admin/ride-requests/:id', deleteRideRequest);

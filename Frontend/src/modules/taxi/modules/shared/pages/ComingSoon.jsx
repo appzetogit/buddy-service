@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, useLocation } from '@taxi/shared/router';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Rocket, Bell, Bike, Car, Landmark, Bus } from 'lucide-react';
+import { ArrowLeft, Rocket, Bell, Bike, Car, Landmark } from 'lucide-react';
 import { useSettings } from '../../../shared/context/SettingsContext';
 import { ContainerScroll } from '@taxi/components/ui/container-scroll-animation';
 
@@ -36,16 +36,6 @@ const FEATURE_META = {
     accent: 'text-green-600',
     border: 'border-green-100',
     tag: 'COMING SOON',
-  },
-  '/cab-sharing': {
-    icon: <Bus size={48} strokeWidth={1.5} />,
-    title: 'Cab Sharing',
-    subtitle: 'Share rides, save big — Buddy\'s USP',
-    description: 'Real-time seat booking in shared cabs. Choose your seat, split the fare, and travel smart.',
-    color: 'bg-green-50',
-    accent: 'text-green-600',
-    border: 'border-green-100',
-    tag: 'LAUNCHING SOON',
   },
 };
 

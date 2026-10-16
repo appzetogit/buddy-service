@@ -23,8 +23,6 @@ const createVehiclePriceRow = () => ({
   admin_commision: '0',
   admin_commission_type_from_driver: '1',
   admin_commission_from_driver: '0',
-  admin_commission_type_for_owner: '1',
-  admin_commission_for_owner: '0',
   service_tax: '0',
   cancellation_fee: '',
   active: 1,
@@ -120,8 +118,6 @@ const CreatePackagePrice = ({ mode = 'create' }) => {
                   admin_commision: String(row.admin_commision ?? 0),
                   admin_commission_type_from_driver: String(row.admin_commission_type_from_driver ?? 1),
                   admin_commission_from_driver: String(row.admin_commission_from_driver ?? 0),
-                  admin_commission_type_for_owner: String(row.admin_commission_type_for_owner ?? 1),
-                  admin_commission_for_owner: String(row.admin_commission_for_owner ?? 0),
                   service_tax: String(row.service_tax ?? 0),
                   cancellation_fee: String(row.cancellation_fee ?? ''),
                   active: Number(row.active ?? 1),
@@ -485,21 +481,7 @@ const CreatePackagePrice = ({ mode = 'create' }) => {
                     <input type="number" value={row.admin_commission_from_driver} onChange={(event) => updateRow(row.id, 'admin_commission_from_driver', event.target.value)} className={inputClass} placeholder="0" required />
                   </div>
 
-                  <div>
-                    <label className={labelClass}>Admin Commission Type From Owner <span className="text-rose-500">*</span></label>
-                    <div className={selectWrapClass}>
-                      <select value={row.admin_commission_type_for_owner} onChange={(event) => updateRow(row.id, 'admin_commission_type_for_owner', event.target.value)} className={`${inputClass} appearance-none`} required>
-                        <option value="1">Percentage</option>
-                        <option value="2">Fixed</option>
-                      </select>
-                      <ChevronDown size={14} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                    </div>
-                  </div>
 
-                  <div>
-                    <label className={labelClass}>Admin Commission From Owner <span className="text-rose-500">*</span></label>
-                    <input type="number" value={row.admin_commission_for_owner} onChange={(event) => updateRow(row.id, 'admin_commission_for_owner', event.target.value)} className={inputClass} placeholder="0" required />
-                  </div>
 
                   <div>
                     <label className={labelClass}>Service Tax (%) <span className="text-rose-500">*</span></label>

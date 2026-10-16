@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { Owner, OwnerWalletTransaction, OwnerBooking, FleetVehicle, BusDriver, BusService, PoolingRoute, RentalQuoteRequest, RentalBookingRequest, RentalPackageType, OwnerNeededDocument, listActiveRentalTrackingBookings, ServiceStore, ServiceCenterStaff, RentalVehicleType, buildRentalTrackingSnapshot } from '../models/UnportedFeatures.js';
+import { RentalQuoteRequest, RentalBookingRequest, RentalPackageType, listActiveRentalTrackingBookings, ServiceStore, ServiceCenterStaff, RentalVehicleType, buildRentalTrackingSnapshot } from '../models/UnportedFeatures.js';
 import { randomBytes } from 'node:crypto';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { uploadDataUrl } from '../../shared/fileUpload.js';
@@ -28,13 +28,10 @@ import { describeRidePayment } from '../../services/paymentLedgerService.js';
 import { ServiceLocation } from '../models/ServiceLocation.js';
 import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../../driver/models/Driver.js';
-import { DriverSubscription } from '../../driver/models/DriverSubscription.js';
 import { Zone } from '../../driver/models/Zone.js';
 import { Ride } from '../../user/models/Ride.js';
-import { UserSubscription } from '../../user/models/UserSubscription.js';
 import { AppLanguage } from '../models/AppLanguage.js';
 import { RideModule } from '../models/RideModule.js';
-import { SubscriptionPlan } from '../models/SubscriptionPlan.js';
 import { TaxiAppModule } from '../models/TaxiAppModule.js';
 import { NotificationChannel } from '../models/NotificationChannel.js';
 import { UserPreference } from '../models/UserPreference.js';
@@ -50,7 +47,6 @@ import { grantDriverJoiningBonus,
   applyDriverWalletAdjustment,
   serializeDriverWallet,
 } from '../../driver/services/walletService.js';
-import { purchaseDriverSubscriptionFromJoiningBonus } from '../../driver/services/driverSubscriptionService.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS, VEHICLE_TYPES } from '../../constants/index.js';
 import {
   cancelRideByAdmin,
@@ -469,18 +465,13 @@ const normalizeDriverVehicleFieldType = (value) => {
 
 const DRIVER_VEHICLE_FIELD_DEFINITIONS = {
   locationId: { label: 'Operating City', field_type: 'location_select', field_group: 'common', account_type: 'both', sort_order: 10 },
-  serviceCategories: { label: 'Service Category', field_type: 'multi_select', field_group: 'driver', account_type: 'individual', sort_order: 20, options: ['taxi', 'outstation', 'delivery', 'pooling'] },
+  serviceCategories: { label: 'Service Category', field_type: 'multi_select', field_group: 'driver', account_type: 'individual', sort_order: 20, options: ['taxi', 'outstation', 'delivery'] },
   vehicleTypeId: { label: 'Vehicle Type', field_type: 'vehicle_type_select', field_group: 'driver', account_type: 'individual', sort_order: 30 },
   make: { label: 'Brand / Make', field_type: 'text', field_group: 'driver', account_type: 'individual', sort_order: 40, placeholder: 'e.g. Maruti Suzuki' },
   model: { label: 'Model', field_type: 'text', field_group: 'driver', account_type: 'individual', sort_order: 50, placeholder: 'Swift, Bolt' },
   year: { label: 'Year', field_type: 'number', field_group: 'driver', account_type: 'individual', sort_order: 60, placeholder: String(new Date().getFullYear()) },
   number: { label: 'Plate Number', field_type: 'text', field_group: 'driver', account_type: 'individual', sort_order: 70, placeholder: 'DL1RT1234' },
   color: { label: 'Exterior Color', field_type: 'text', field_group: 'driver', account_type: 'individual', sort_order: 80, placeholder: 'e.g. White, Black' },
-  companyName: { label: 'Company Name', field_type: 'text', field_group: 'owner', account_type: 'fleet_drivers', sort_order: 30, placeholder: 'Legal Company Name' },
-  companyAddress: { label: 'Company Address', field_type: 'text', field_group: 'owner', account_type: 'fleet_drivers', sort_order: 40, placeholder: 'Business Address' },
-  city: { label: 'City', field_type: 'text', field_group: 'owner', account_type: 'fleet_drivers', sort_order: 50, placeholder: 'City' },
-  postalCode: { label: 'Postal Code', field_type: 'number', field_group: 'owner', account_type: 'fleet_drivers', sort_order: 60, placeholder: 'Pincode' },
-  taxNumber: { label: 'Tax Number (GST/VAT)', field_type: 'text', field_group: 'owner', account_type: 'fleet_drivers', sort_order: 70, placeholder: 'Tax Identification' },
 };
 
 const slugify = (value = '') =>
@@ -531,7 +522,6 @@ const toDocumentKey = (value = '') => {
 const normalizeVehicleTransportType = (value = '') => {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'delivery') return 'delivery';
-  if (normalized === 'pooling') return 'pooling';
   if (normalized === 'both' || normalized === 'all') return 'both';
   return 'taxi';
 };
@@ -542,7 +532,6 @@ const normalizeDriverRegisterFor = (value = '', fallback = 'taxi') => {
   if (normalized === 'both') return 'both';
   if (normalized === 'delivery') return 'delivery';
   if (normalized === 'outstation') return 'outstation';
-  if (normalized === 'pooling') return 'pooling';
   if (normalized === 'bike') return 'bike';
   if (normalized === 'auto') return 'auto';
   if (normalized === 'car') return 'car';
@@ -560,7 +549,7 @@ const normalizeDriverServiceCategories = (value, fallback = 'taxi') => {
     rawValues
       .map((item) => String(item || '').trim().toLowerCase())
       .flatMap((item) => item === 'both' ? ['taxi', 'outstation'] : item ? [item] : [])
-      .filter((item) => ['taxi', 'outstation', 'delivery', 'pooling'].includes(item)),
+      .filter((item) => ['taxi', 'outstation', 'delivery'].includes(item)),
   )];
 
   if (normalized.length > 0) {
@@ -572,7 +561,7 @@ const normalizeDriverServiceCategories = (value, fallback = 'taxi') => {
     return ['taxi', 'outstation'];
   }
 
-  return ['taxi', 'outstation', 'delivery', 'pooling'].includes(registerFor)
+  return ['taxi', 'outstation', 'delivery'].includes(registerFor)
     ? [registerFor]
     : ['taxi'];
 };
@@ -599,8 +588,7 @@ const normalizeDeliveryDistancePricing = (value = {}, fallback = {}) => {
   };
 };
 
-const BUS_DAY_OPTIONS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
+// Seat-layout helpers shared with the rental vehicle blueprints.
 const sanitizeBusText = (value = '', fallback = '') =>
   String(value ?? fallback).trim();
 
@@ -608,53 +596,6 @@ const sanitizeBusSeatPrice = (value, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
-
-const normalizeBusVariantPricing = (value = {}, fallback = 0) => {
-  const source = value && typeof value === 'object' ? value : {};
-  const seatFallback = sanitizeBusSeatPrice(source.seat, fallback);
-
-  return {
-    seat: seatFallback,
-    window: sanitizeBusSeatPrice(source.window, seatFallback),
-    aisle: sanitizeBusSeatPrice(source.aisle, seatFallback),
-    sleeper: sanitizeBusSeatPrice(source.sleeper, seatFallback),
-  };
-};
-
-const sanitizeBusPhone = (value = '') =>
-  String(value || '')
-    .replace(/\D/g, '')
-    .trim()
-    .slice(-10);
-
-const sanitizeBusCoords = (value = null) => {
-  const lat = Number(value?.lat);
-  const lng = Number(value?.lng);
-
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
-    return { lat, lng };
-  }
-
-  return null;
-};
-
-const normalizeBusDeckLayoutConfig = (value = {}, fallback = {}) => {
-  const source = value && typeof value === 'object' ? value : {};
-  const base = fallback && typeof fallback === 'object' ? fallback : {};
-
-  return {
-    enabled: Boolean(source.enabled ?? base.enabled ?? false),
-    rows: Math.max(0, sanitizeBusSeatPrice(source.rows, base.rows ?? 0)),
-    leftSeats: Math.max(0, Math.min(3, sanitizeBusSeatPrice(source.leftSeats, base.leftSeats ?? 0))),
-    rightSeats: Math.max(0, Math.min(3, sanitizeBusSeatPrice(source.rightSeats, base.rightSeats ?? 0))),
-    seatType: source.seatType === 'sleeper' || base.seatType === 'sleeper' ? 'sleeper' : 'seat',
-  };
-};
-
-const normalizeBusLayoutConfig = (value = {}, fallback = {}) => ({
-  lower: normalizeBusDeckLayoutConfig(value?.lower, fallback?.lower),
-  upper: normalizeBusDeckLayoutConfig(value?.upper, fallback?.upper),
-});
 
 const normalizeBusSeatCell = (cell = {}) => {
   if (cell?.kind !== 'seat') {
@@ -685,288 +626,6 @@ const normalizeBusDeck = (deckRows = []) =>
 
 const countSeatsInBlueprintDeck = (deckRows = []) =>
   normalizeBusDeck(deckRows).flat().filter((cell) => cell.kind === 'seat').length;
-
-const normalizeBusStop = (stop = {}, index = 0) => ({
-  id: sanitizeBusText(stop.id, `stop-${Date.now()}-${index}`),
-  city: sanitizeBusText(stop.city),
-  pointName: sanitizeBusText(stop.pointName),
-  stopType: ['pickup', 'drop', 'both'].includes(stop.stopType) ? stop.stopType : 'pickup',
-  arrivalTime: sanitizeBusText(stop.arrivalTime),
-  departureTime: sanitizeBusText(stop.departureTime),
-});
-
-const normalizeBusSchedule = (schedule = {}, index = 0) => ({
-  id: sanitizeBusText(schedule.id, `schedule-${Date.now()}-${index}`),
-  label: sanitizeBusText(schedule.label),
-  departureTime: sanitizeBusText(schedule.departureTime),
-  arrivalTime: sanitizeBusText(schedule.arrivalTime),
-  activeDays: Array.isArray(schedule.activeDays)
-    ? schedule.activeDays.filter((day) => BUS_DAY_OPTIONS.includes(day))
-    : [],
-  status: ['active', 'paused', 'draft'].includes(schedule.status) ? schedule.status : 'active',
-});
-
-const normalizeBusCancellationRule = (rule = {}, index = 0) => ({
-  id: sanitizeBusText(rule.id, `cancel-${Date.now()}-${index}`),
-  label: sanitizeBusText(
-    rule.label,
-    `${sanitizeBusSeatPrice(rule.hoursBeforeDeparture, 0)}h before departure`,
-  ),
-  hoursBeforeDeparture: Math.max(0, sanitizeBusSeatPrice(rule.hoursBeforeDeparture, 0)),
-  refundType: ['percentage', 'fixed', 'none'].includes(rule.refundType)
-    ? rule.refundType
-    : 'percentage',
-  refundValue: Math.max(0, sanitizeBusSeatPrice(rule.refundValue, 0)),
-  notes: sanitizeBusText(rule.notes),
-});
-
-const normalizeBusServicePayload = (payload = {}, existing = {}) => {
-  const blueprint = {
-    templateKey: sanitizeBusText(
-      payload.blueprint?.templateKey,
-      existing.blueprint?.templateKey || 'seater_2_2',
-    ),
-    layoutConfig: normalizeBusLayoutConfig(
-      payload.blueprint?.layoutConfig,
-      existing.blueprint?.layoutConfig,
-    ),
-    lowerDeck: normalizeBusDeck(payload.blueprint?.lowerDeck ?? existing.blueprint?.lowerDeck ?? []),
-    upperDeck: normalizeBusDeck(payload.blueprint?.upperDeck ?? existing.blueprint?.upperDeck ?? []),
-  };
-
-  const route = {
-    routeName: sanitizeBusText(payload.route?.routeName, existing.route?.routeName || ''),
-    originCity: sanitizeBusText(payload.route?.originCity, existing.route?.originCity || ''),
-    destinationCity: sanitizeBusText(payload.route?.destinationCity, existing.route?.destinationCity || ''),
-    originCoords: sanitizeBusCoords(payload.route?.originCoords ?? existing.route?.originCoords),
-    destinationCoords: sanitizeBusCoords(payload.route?.destinationCoords ?? existing.route?.destinationCoords),
-    distanceKm: sanitizeBusText(payload.route?.distanceKm, existing.route?.distanceKm || ''),
-    durationHours: sanitizeBusText(payload.route?.durationHours, existing.route?.durationHours || ''),
-    stops: Array.isArray(payload.route?.stops)
-      ? payload.route.stops.map((stop, index) => normalizeBusStop(stop, index))
-      : Array.isArray(existing.route?.stops)
-        ? existing.route.stops.map((stop, index) => normalizeBusStop(stop, index))
-        : [],
-  };
-
-  const returnRoute = {
-    routeName: sanitizeBusText(payload.returnRoute?.routeName, existing.returnRoute?.routeName || ''),
-    originCity: sanitizeBusText(payload.returnRoute?.originCity, existing.returnRoute?.originCity || ''),
-    destinationCity: sanitizeBusText(payload.returnRoute?.destinationCity, existing.returnRoute?.destinationCity || ''),
-    originCoords: sanitizeBusCoords(payload.returnRoute?.originCoords ?? existing.returnRoute?.originCoords),
-    destinationCoords: sanitizeBusCoords(payload.returnRoute?.destinationCoords ?? existing.returnRoute?.destinationCoords),
-    distanceKm: sanitizeBusText(payload.returnRoute?.distanceKm, existing.returnRoute?.distanceKm || ''),
-    durationHours: sanitizeBusText(payload.returnRoute?.durationHours, existing.returnRoute?.durationHours || ''),
-    stops: Array.isArray(payload.returnRoute?.stops)
-      ? payload.returnRoute.stops.map((stop, index) => normalizeBusStop(stop, index))
-      : Array.isArray(existing.returnRoute?.stops)
-        ? existing.returnRoute.stops.map((stop, index) => normalizeBusStop(stop, index))
-        : [],
-  };
-
-  const schedules = Array.isArray(payload.schedules)
-    ? payload.schedules.map((schedule, index) => normalizeBusSchedule(schedule, index))
-    : Array.isArray(existing.schedules)
-      ? existing.schedules.map((schedule, index) => normalizeBusSchedule(schedule, index))
-      : [];
-
-  const cancellationRules = Array.isArray(payload.cancellationRules)
-    ? payload.cancellationRules.map((rule, index) => normalizeBusCancellationRule(rule, index))
-    : Array.isArray(existing.cancellationRules)
-      ? existing.cancellationRules.map((rule, index) => normalizeBusCancellationRule(rule, index))
-      : [];
-
-  const capacity =
-    payload.capacity !== undefined
-      ? sanitizeBusSeatPrice(payload.capacity, 0)
-      : countSeatsInBlueprintDeck(blueprint.lowerDeck) + countSeatsInBlueprintDeck(blueprint.upperDeck);
-
-  return {
-    operatorName: sanitizeBusText(payload.operatorName, existing.operatorName || ''),
-    busName: sanitizeBusText(payload.busName, existing.busName || ''),
-    serviceNumber: sanitizeBusText(payload.serviceNumber, existing.serviceNumber || ''),
-    driverName: sanitizeBusText(payload.driverName, existing.driverName || ''),
-    driverPhone: sanitizeBusPhone(payload.driverPhone ?? existing.driverPhone ?? ''),
-    busDriverId:
-      toObjectId(payload.busDriverId) ||
-      toObjectId(existing.busDriverId) ||
-      null,
-    ownerDriverId:
-      toObjectId(payload.ownerDriverId) ||
-      toObjectId(existing.ownerDriverId) ||
-      null,
-    coachType: sanitizeBusText(payload.coachType, existing.coachType || 'AC Sleeper'),
-    busCategory: sanitizeBusText(payload.busCategory, existing.busCategory || 'Sleeper'),
-    registrationNumber: sanitizeBusText(payload.registrationNumber, existing.registrationNumber || ''),
-    busColor: sanitizeBusText(payload.busColor, existing.busColor || '#1f2937'),
-    seatPrice: sanitizeBusSeatPrice(payload.seatPrice, existing.seatPrice || 0),
-    adminCommissionPercentage: Math.min(
-      100,
-      Math.max(0, sanitizeBusSeatPrice(payload.adminCommissionPercentage, existing.adminCommissionPercentage || 0)),
-    ),
-    serviceTaxPercentage: Math.min(
-      100,
-      Math.max(0, sanitizeBusSeatPrice(payload.serviceTaxPercentage, existing.serviceTaxPercentage || 0)),
-    ),
-    variantPricing: normalizeBusVariantPricing(
-      payload.variantPricing ?? existing.variantPricing ?? {},
-      sanitizeBusSeatPrice(payload.seatPrice, existing.seatPrice || 0),
-    ),
-    fareCurrency:
-      sanitizeBusText(payload.fareCurrency, existing.fareCurrency || 'INR').toUpperCase() || 'INR',
-    boardingPolicy: sanitizeBusText(payload.boardingPolicy, existing.boardingPolicy || ''),
-    cancellationPolicy: sanitizeBusText(payload.cancellationPolicy, existing.cancellationPolicy || ''),
-    cancellationRules,
-    luggagePolicy: sanitizeBusText(payload.luggagePolicy, existing.luggagePolicy || ''),
-    amenities: Array.isArray(payload.amenities)
-      ? payload.amenities.map((item) => sanitizeBusText(item)).filter(Boolean)
-      : Array.isArray(existing.amenities)
-        ? existing.amenities
-        : [],
-    image: sanitizeBusText(payload.image, existing.image || ''),
-    coverImage: sanitizeBusText(
-      payload.coverImage,
-      payload.image || existing.coverImage || existing.image || '',
-    ),
-    galleryImages: Array.isArray(payload.galleryImages)
-      ? payload.galleryImages.map((item) => sanitizeBusText(item)).filter(Boolean)
-      : Array.isArray(existing.galleryImages)
-        ? existing.galleryImages.map((item) => sanitizeBusText(item)).filter(Boolean)
-        : [],
-    blueprint,
-    route,
-    returnRouteEnabled: Boolean(payload.returnRouteEnabled ?? existing.returnRouteEnabled ?? false),
-    returnRoute,
-    schedules,
-    capacity,
-    status: ['draft', 'active', 'paused'].includes(payload.status) ? payload.status : existing.status || 'draft',
-  };
-};
-
-const serializeBusService = (item = {}) => ({
-  id: String(item._id || item.id || ''),
-  _id: item._id,
-  ownerId: item.ownerId ? String(item.ownerId) : '',
-  ownerDriverId: item.ownerDriverId ? String(item.ownerDriverId) : '',
-  operatorName: item.operatorName || '',
-  busName: item.busName || '',
-  serviceNumber: item.serviceNumber || '',
-  driverName: item.driverName || '',
-  driverPhone: item.driverPhone || '',
-  busDriverId: item.busDriverId ? String(item.busDriverId) : '',
-  coachType: item.coachType || 'AC Sleeper',
-  busCategory: item.busCategory || 'Sleeper',
-  registrationNumber: item.registrationNumber || '',
-  busColor: item.busColor || '#1f2937',
-  seatPrice: item.seatPrice !== undefined && item.seatPrice !== null ? String(item.seatPrice) : '0',
-  adminCommissionPercentage:
-    item.adminCommissionPercentage !== undefined && item.adminCommissionPercentage !== null
-      ? String(item.adminCommissionPercentage)
-      : '0',
-  serviceTaxPercentage:
-    item.serviceTaxPercentage !== undefined && item.serviceTaxPercentage !== null
-      ? String(item.serviceTaxPercentage)
-      : '0',
-  variantPricing: normalizeBusVariantPricing(item.variantPricing || {}, item.seatPrice ?? 0),
-  fareCurrency: item.fareCurrency || 'INR',
-  boardingPolicy: item.boardingPolicy || '',
-  cancellationPolicy: item.cancellationPolicy || '',
-  cancellationRules: Array.isArray(item.cancellationRules)
-    ? item.cancellationRules.map((rule, index) => normalizeBusCancellationRule(rule, index))
-    : [],
-  luggagePolicy: item.luggagePolicy || '',
-  amenities: Array.isArray(item.amenities) ? item.amenities : [],
-  image: item.image || item.coverImage || '',
-  coverImage: item.coverImage || item.image || '',
-  galleryImages: Array.isArray(item.galleryImages) ? item.galleryImages.filter(Boolean) : [],
-  blueprint: {
-    templateKey: item.blueprint?.templateKey || 'seater_2_2',
-    layoutConfig: normalizeBusLayoutConfig(item.blueprint?.layoutConfig || {}),
-    lowerDeck: normalizeBusDeck(item.blueprint?.lowerDeck || []),
-    upperDeck: normalizeBusDeck(item.blueprint?.upperDeck || []),
-  },
-  route: {
-    routeName: item.route?.routeName || '',
-    originCity: item.route?.originCity || '',
-    destinationCity: item.route?.destinationCity || '',
-    originCoords: sanitizeBusCoords(item.route?.originCoords),
-    destinationCoords: sanitizeBusCoords(item.route?.destinationCoords),
-    distanceKm: item.route?.distanceKm || '',
-    durationHours: item.route?.durationHours || '',
-    stops: Array.isArray(item.route?.stops)
-      ? item.route.stops.map((stop, index) => normalizeBusStop(stop, index))
-      : [],
-  },
-  returnRouteEnabled: Boolean(item.returnRouteEnabled),
-  returnRoute: {
-    routeName: item.returnRoute?.routeName || '',
-    originCity: item.returnRoute?.originCity || '',
-    destinationCity: item.returnRoute?.destinationCity || '',
-    originCoords: sanitizeBusCoords(item.returnRoute?.originCoords),
-    destinationCoords: sanitizeBusCoords(item.returnRoute?.destinationCoords),
-    distanceKm: item.returnRoute?.distanceKm || '',
-    durationHours: item.returnRoute?.durationHours || '',
-    stops: Array.isArray(item.returnRoute?.stops)
-      ? item.returnRoute.stops.map((stop, index) => normalizeBusStop(stop, index))
-      : [],
-  },
-  schedules: Array.isArray(item.schedules)
-    ? item.schedules.map((schedule, index) => normalizeBusSchedule(schedule, index))
-    : [],
-  capacity:
-    item.capacity ||
-    countSeatsInBlueprintDeck(item.blueprint?.lowerDeck || []) +
-    countSeatsInBlueprintDeck(item.blueprint?.upperDeck || []),
-  status: item.status || 'draft',
-  createdAt: item.createdAt,
-  updatedAt: item.updatedAt,
-});
-
-const syncBusDriverForBusService = async (busService, normalizedPayload = {}) => {
-  const driverName = sanitizeBusText(normalizedPayload.driverName, busService.driverName || '');
-  const driverPhone = sanitizeBusPhone(normalizedPayload.driverPhone || busService.driverPhone || '');
-  const existingDriverId = toObjectId(busService.busDriverId);
-
-  if (!driverName && !driverPhone) {
-    if (existingDriverId) {
-      await BusDriver.findByIdAndDelete(existingDriverId);
-    }
-
-    busService.driverName = '';
-    busService.driverPhone = '';
-    busService.busDriverId = null;
-    return;
-  }
-
-  if (!driverName || !driverPhone) {
-    throw new ApiError(400, 'Bus driver name and phone are both required');
-  }
-
-  const existingDriver =
-    (existingDriverId && await BusDriver.findById(existingDriverId)) ||
-    (await BusDriver.findOne({ phone: driverPhone }));
-
-  const driver = existingDriver || new BusDriver();
-
-  driver.name = driverName;
-  driver.phone = driverPhone;
-  driver.approve = true;
-  driver.active = true;
-  driver.status = 'approved';
-  driver.assignedBusServiceId = busService._id;
-  driver.operatorName = busService.operatorName || '';
-  driver.busName = busService.busName || '';
-  driver.serviceNumber = busService.serviceNumber || '';
-  driver.registrationNumber = busService.registrationNumber || '';
-  driver.routeName = busService.route?.routeName || '';
-  driver.originCity = busService.route?.originCity || '';
-  driver.destinationCity = busService.route?.destinationCity || '';
-  await driver.save();
-
-  busService.driverName = driver.name;
-  busService.driverPhone = driver.phone;
-  busService.busDriverId = driver._id;
-};
 
 const createRentalSeatCell = (rowNumber, seatCode, variant = 'seat') => ({
   kind: 'seat',
@@ -1151,7 +810,6 @@ const normalizeRentalVehiclePayload = (payload = {}, existing = {}) => {
       : Array.isArray(existing.serviceStoreIds)
         ? existing.serviceStoreIds.map((item) => String(item || '').trim()).filter(Boolean)
         : [],
-    poolingEnabled: normalizeBoolean(payload.poolingEnabled ?? existing.poolingEnabled ?? false),
     blueprint,
     pricing: Array.isArray(payload.pricing) && payload.pricing.length
       ? payload.pricing.map((item, index) => normalizeRentalPricingItem(item, index))
@@ -1170,132 +828,6 @@ const normalizeRentalVehiclePayload = (payload = {}, existing = {}) => {
     active: normalizeBoolean(payload.active ?? existing.active ?? true),
   };
 };
-
-const sanitizePoolingText = (value = '', fallback = '') =>
-  String(value ?? fallback).trim();
-
-const sanitizePoolingNumber = (value, fallback = 0) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
-const normalizePoolingStop = (stop = {}, index = 0, defaultType = 'stop') => ({
-  id: sanitizePoolingText(stop.id, `pool-stop-${Date.now()}-${index}`),
-  name: sanitizePoolingText(stop.name),
-  address: sanitizePoolingText(stop.address),
-  landmark: sanitizePoolingText(stop.landmark),
-  stopType: ['pickup', 'drop', 'both', 'stop'].includes(stop.stopType)
-    ? stop.stopType
-    : defaultType,
-  sequence: Math.max(1, sanitizePoolingNumber(stop.sequence, index + 1)),
-  etaMinutes: Math.max(0, sanitizePoolingNumber(stop.etaMinutes, 0)),
-  latitude:
-    stop.latitude === '' || stop.latitude === null || stop.latitude === undefined
-      ? null
-      : sanitizePoolingNumber(stop.latitude, null),
-  longitude:
-    stop.longitude === '' || stop.longitude === null || stop.longitude === undefined
-      ? null
-      : sanitizePoolingNumber(stop.longitude, null),
-});
-
-const normalizePoolingSchedule = (schedule = {}, index = 0) => ({
-  id: sanitizePoolingText(schedule.id, `pool-schedule-${Date.now()}-${index}`),
-  label: sanitizePoolingText(schedule.label, `Trip ${index + 1}`),
-  departureTime: sanitizePoolingText(schedule.departureTime),
-  arrivalTime: sanitizePoolingText(schedule.arrivalTime),
-  activeDays: Array.isArray(schedule.activeDays)
-    ? schedule.activeDays.filter((day) => BUS_DAY_OPTIONS.includes(day))
-    : [],
-  status: ['active', 'paused', 'draft'].includes(schedule.status)
-    ? schedule.status
-    : 'active',
-});
-
-const normalizePoolingPayload = (payload = {}, existing = {}) => ({
-  routeName: sanitizePoolingText(payload.routeName, existing.routeName || ''),
-  routeCode: sanitizePoolingText(payload.routeCode, existing.routeCode || ''),
-  originLabel: sanitizePoolingText(payload.originLabel, existing.originLabel || ''),
-  destinationLabel: sanitizePoolingText(payload.destinationLabel, existing.destinationLabel || ''),
-  description: sanitizePoolingText(payload.description, existing.description || ''),
-  assignedVehicleTypeIds: Array.isArray(payload.assignedVehicleTypeIds)
-    ? payload.assignedVehicleTypeIds
-      .map((value) => String(value || '').trim())
-      .filter(Boolean)
-    : Array.isArray(existing.assignedVehicleTypeIds)
-      ? existing.assignedVehicleTypeIds.map((value) => String(value || '').trim()).filter(Boolean)
-      : [],
-  pickupPoints: Array.isArray(payload.pickupPoints)
-    ? payload.pickupPoints.map((item, index) => normalizePoolingStop(item, index, 'pickup'))
-    : Array.isArray(existing.pickupPoints)
-      ? existing.pickupPoints.map((item, index) => normalizePoolingStop(item, index, 'pickup'))
-      : [],
-  dropPoints: Array.isArray(payload.dropPoints)
-    ? payload.dropPoints.map((item, index) => normalizePoolingStop(item, index, 'drop'))
-    : Array.isArray(existing.dropPoints)
-      ? existing.dropPoints.map((item, index) => normalizePoolingStop(item, index, 'drop'))
-      : [],
-  stops: Array.isArray(payload.stops)
-    ? payload.stops.map((item, index) => normalizePoolingStop(item, index, 'stop'))
-    : Array.isArray(existing.stops)
-      ? existing.stops.map((item, index) => normalizePoolingStop(item, index, 'stop'))
-      : [],
-  schedules: Array.isArray(payload.schedules)
-    ? payload.schedules.map((item, index) => normalizePoolingSchedule(item, index))
-    : Array.isArray(existing.schedules)
-      ? existing.schedules.map((item, index) => normalizePoolingSchedule(item, index))
-      : [],
-  farePerSeat: Math.max(0, sanitizePoolingNumber(payload.farePerSeat, existing.farePerSeat || 0)),
-  maxSeatsPerBooking: Math.max(
-    1,
-    sanitizePoolingNumber(payload.maxSeatsPerBooking, existing.maxSeatsPerBooking || 1),
-  ),
-  maxAdvanceBookingHours: Math.max(
-    0,
-    sanitizePoolingNumber(
-      payload.maxAdvanceBookingHours,
-      existing.maxAdvanceBookingHours || 24,
-    ),
-  ),
-  boardingBufferMinutes: Math.max(
-    0,
-    sanitizePoolingNumber(
-      payload.boardingBufferMinutes,
-      existing.boardingBufferMinutes || 15,
-    ),
-  ),
-  poolingRules: {
-    allowInstantBooking: normalizeBoolean(
-      payload.poolingRules?.allowInstantBooking ??
-      existing.poolingRules?.allowInstantBooking ??
-      true,
-    ),
-    allowLuggage: normalizeBoolean(
-      payload.poolingRules?.allowLuggage ?? existing.poolingRules?.allowLuggage ?? true,
-    ),
-    womenOnly: normalizeBoolean(
-      payload.poolingRules?.womenOnly ?? existing.poolingRules?.womenOnly ?? false,
-    ),
-    autoAssignNearestPickup: normalizeBoolean(
-      payload.poolingRules?.autoAssignNearestPickup ??
-      existing.poolingRules?.autoAssignNearestPickup ??
-      true,
-    ),
-    maxDetourKm: Math.max(
-      0,
-      sanitizePoolingNumber(
-        payload.poolingRules?.maxDetourKm,
-        existing.poolingRules?.maxDetourKm || 5,
-      ),
-    ),
-  },
-  status: ['draft', 'active', 'paused'].includes(payload.status)
-    ? payload.status
-    : existing.status || 'draft',
-  active: normalizeBoolean(
-    payload.active ?? existing.active ?? (payload.status ? payload.status !== 'draft' : true),
-  ),
-});
 
 const serializeRentalVehicleType = (item = {}) => ({
   id: String(item._id || item.id || ''),
@@ -1320,7 +852,6 @@ const serializeRentalVehicleType = (item = {}) => ({
   serviceStoreIds: Array.isArray(item.serviceStoreIds)
     ? item.serviceStoreIds.map((storeId) => String(storeId))
     : [],
-  poolingEnabled: Boolean(item.poolingEnabled),
   advancePayment: normalizeRentalAdvancePayment(item.advancePayment),
   blueprint: {
     templateKey: item.blueprint?.templateKey || 'compact_4',
@@ -1336,69 +867,6 @@ const serializeRentalVehicleType = (item = {}) => ({
   updatedAt: item.updatedAt,
 });
 
-const serializePoolingRoute = (item = {}, vehicleMap = new Map()) => {
-  const assignedVehicleIds = Array.isArray(item.assignedVehicleTypeIds)
-    ? item.assignedVehicleTypeIds.map((value) => String(value))
-    : [];
-
-  const assignedVehicles = assignedVehicleIds
-    .map((id) => vehicleMap.get(id))
-    .filter(Boolean)
-    .map((vehicle) => ({
-      id: String(vehicle._id || vehicle.id || ''),
-      name: vehicle.name || '',
-      vehicleCategory: vehicle.vehicleCategory || 'Car',
-      capacity: Number(vehicle.capacity || 0),
-      luggageCapacity: Number(vehicle.luggageCapacity || 0),
-      image: vehicle.image || '',
-      poolingEnabled: Boolean(vehicle.poolingEnabled),
-      blueprint: {
-        templateKey: vehicle.blueprint?.templateKey || 'compact_4',
-        lowerDeck: normalizeBusDeck(vehicle.blueprint?.lowerDeck || []),
-        upperDeck: normalizeBusDeck(vehicle.blueprint?.upperDeck || []),
-      },
-    }));
-
-  return {
-    id: String(item._id || item.id || ''),
-    _id: item._id,
-    routeName: item.routeName || '',
-    routeCode: item.routeCode || '',
-    originLabel: item.originLabel || '',
-    destinationLabel: item.destinationLabel || '',
-    description: item.description || '',
-    assignedVehicleTypeIds: assignedVehicleIds,
-    assignedVehicles,
-    pickupPoints: Array.isArray(item.pickupPoints)
-      ? item.pickupPoints.map((stop, index) => normalizePoolingStop(stop, index, 'pickup'))
-      : [],
-    dropPoints: Array.isArray(item.dropPoints)
-      ? item.dropPoints.map((stop, index) => normalizePoolingStop(stop, index, 'drop'))
-      : [],
-    stops: Array.isArray(item.stops)
-      ? item.stops.map((stop, index) => normalizePoolingStop(stop, index, 'stop'))
-      : [],
-    schedules: Array.isArray(item.schedules)
-      ? item.schedules.map((schedule, index) => normalizePoolingSchedule(schedule, index))
-      : [],
-    farePerSeat: Number(item.farePerSeat || 0),
-    maxSeatsPerBooking: Number(item.maxSeatsPerBooking || 1),
-    maxAdvanceBookingHours: Number(item.maxAdvanceBookingHours || 24),
-    boardingBufferMinutes: Number(item.boardingBufferMinutes || 15),
-    poolingRules: {
-      allowInstantBooking: Boolean(item.poolingRules?.allowInstantBooking),
-      allowLuggage: Boolean(item.poolingRules?.allowLuggage),
-      womenOnly: Boolean(item.poolingRules?.womenOnly),
-      autoAssignNearestPickup: Boolean(item.poolingRules?.autoAssignNearestPickup),
-      maxDetourKm: Number(item.poolingRules?.maxDetourKm || 0),
-    },
-    activeVehicleCount: assignedVehicles.length,
-    status: item.status || 'draft',
-    active: item.active !== false,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-  };
-};
 
 const serializeRentalQuoteRequest = (item = {}) => ({
   id: String(item._id || item.id || ''),
@@ -2071,10 +1539,6 @@ const serializeSetPrice = (item) => ({
   admin_commission_type_from_driver: item.admin_commission_type_from_driver ?? (item.driver_commission_type === 'percentage' ? 1 : 0),
   admin_commission_from_driver: item.admin_commission_from_driver ?? item.driver_commission,
 
-  owner_commission_type: item.owner_commission_type || 'percentage',
-  owner_commission: item.owner_commission,
-  admin_commission_type_for_owner: item.admin_commission_type_for_owner ?? (item.owner_commission_type === 'percentage' ? 1 : 0),
-  admin_commission_for_owner: item.admin_commission_for_owner ?? item.owner_commission,
 
   service_tax: item.service_tax,
   eta_sequence: item.eta_sequence,
@@ -2157,73 +1621,9 @@ const normalizePackageVehiclePriceItem = (item = {}) => ({
   admin_commision: Number(item.admin_commision ?? 0),
   admin_commission_type_from_driver: Number(item.admin_commission_type_from_driver ?? 1),
   admin_commission_from_driver: Number(item.admin_commission_from_driver ?? 0),
-  admin_commission_type_for_owner: Number(item.admin_commission_type_for_owner ?? 1),
-  admin_commission_for_owner: Number(item.admin_commission_for_owner ?? 0),
   service_tax: Number(item.service_tax ?? 0),
   cancellation_fee: Number(item.cancellation_fee ?? item.user_cancellation_fee ?? 0),
   active: Number(item.active ?? 1),
-});
-
-const serializeOwnerNeededDocument = (item) => ({
-  _id: item._id,
-  id: item._id,
-  name: item.name || '',
-  image_type: item.image_type || 'front_back',
-  has_expiry_date: Boolean(item.has_expiry_date),
-  has_identify_number: Boolean(item.has_identify_number),
-  is_editable: Boolean(item.is_editable),
-  is_required: Boolean(item.is_required),
-  active: item.active !== false,
-  status: item.active === false ? 'inactive' : 'active',
-  createdAt: item.createdAt,
-  updatedAt: item.updatedAt,
-});
-
-const slugifyOwnerDocumentName = (value) =>
-  String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '') || 'owner_document';
-
-const buildOwnerDocumentFields = (item) => {
-  const baseKey = `${slugifyOwnerDocumentName(item.name)}_${String(item._id || '').replace(/[^a-zA-Z0-9]/g, '')}`;
-
-  if (item.image_type === 'front_back') {
-    return [
-      {
-        key: `${baseKey}_front`,
-        label: `${item.name} Front`,
-        side: 'front',
-        required: item.is_required !== false,
-      },
-      {
-        key: `${baseKey}_back`,
-        label: `${item.name} Back`,
-        side: 'back',
-        required: item.is_required !== false,
-      },
-    ];
-  }
-
-  return [
-    {
-      key: baseKey,
-      label:
-        item.image_type === 'front'
-          ? `${item.name} Front`
-          : item.image_type === 'back'
-            ? `${item.name} Back`
-            : item.name,
-      side: item.image_type === 'front' ? 'front' : item.image_type === 'back' ? 'back' : 'single',
-      required: item.is_required !== false,
-    },
-  ];
-};
-
-const serializeOwnerNeededDocumentTemplate = (item) => ({
-  ...serializeOwnerNeededDocument(item),
-  fields: buildOwnerDocumentFields(item),
 });
 
 const buildDriverDocumentFields = (item) => {
@@ -2547,103 +1947,6 @@ const serializeServiceLocationSnapshot = (serviceLocation, fallback = null) => {
   };
 };
 
-const serializeOwner = (owner) => {
-  const area = serializeServiceLocationSnapshot(owner.service_location_id, owner.area_snapshot);
-  const mobile = owner.mobile || '';
-  const mobileNumber = mobile ? (mobile.startsWith('+') ? mobile : `+91${mobile}`) : '';
-
-  return {
-    _id: owner._id,
-    id: owner.legacy_id || owner._id,
-    user_id: owner.user_id ?? null,
-    transport_type: owner.transport_type || '',
-    service_location_id:
-      owner.legacy_service_location_id ||
-      owner.service_location_id?.legacy_id ||
-      owner.service_location_id?._id ||
-      owner.service_location_id ||
-      '',
-    company_name: owner.company_name || '',
-    owner_name: owner.owner_name ?? null,
-    name: owner.name || '',
-    surname: owner.surname ?? null,
-    email: owner.email || '',
-    mobile,
-    phone: owner.phone ?? null,
-    address: owner.address ?? null,
-    postal_code: owner.postal_code ?? null,
-    city: owner.city ?? null,
-    expiry_date: owner.expiry_date ?? null,
-    no_of_vehicles: Number(owner.no_of_vehicles || 0),
-    tax_number: owner.tax_number ?? null,
-    bank_name: owner.bank_name ?? null,
-    ifsc: owner.ifsc ?? null,
-    account_no: owner.account_no ?? null,
-    iban: owner.iban ?? null,
-    bic: owner.bic ?? null,
-    active: owner.active === false ? 0 : 1,
-    approve: owner.approve ? 1 : 0,
-    status: owner.status || (owner.approve ? 'approved' : 'pending'),
-    created_at: toIsoString(owner.createdAt),
-    updated_at: toIsoString(owner.updatedAt),
-    deleted_at: null,
-    area_name: area?.name || '',
-    mobile_number: mobileNumber,
-    converted_deleted_at: null,
-    area,
-    user: owner.user_snapshot || null,
-    createdAt: owner.createdAt,
-    updatedAt: owner.updatedAt,
-  };
-};
-
-const serializeOwnerBooking = (item) => ({
-  _id: item._id,
-  id: item._id,
-  owner_id: item.owner_id
-    ? {
-      _id: item.owner_id._id || item.owner_id,
-      name: item.owner_id.full_name || item.owner_id.name || '',
-      email: item.owner_id.email || '',
-      mobile: item.owner_id.mobile || '',
-    }
-    : null,
-  booking_reference: item.booking_reference || '',
-  customer_name: item.customer_name || '',
-  customer_phone: item.customer_phone || '',
-  pickup_location: item.pickup_location || '',
-  dropoff_location: item.dropoff_location || '',
-  trip_type: item.trip_type || 'city',
-  vehicle_type: item.vehicle_type || '',
-  trip_date: item.trip_date,
-  fare_amount: Number(item.fare_amount || 0),
-  payment_status: item.payment_status || 'pending',
-  booking_status: item.booking_status || 'pending',
-  notes: item.notes || '',
-  active: item.active !== false,
-  createdAt: item.createdAt,
-  updatedAt: item.updatedAt,
-});
-
-const serializeFleetVehicle = (item) => ({
-  _id: item._id,
-  id: item._id,
-  owner_id: item.owner_id || null,
-  service_location_id: item.service_location_id || null,
-  transport_type: item.transport_type || 'taxi',
-  vehicle_type_id: item.vehicle_type_id || null,
-  car_brand: item.car_brand || '',
-  car_model: item.car_model || '',
-  license_plate_number: item.license_plate_number || '',
-  car_color: item.car_color || '',
-  documents: item.documents || {},
-  status: item.status || 'pending',
-  reason: item.reason || '',
-  active: item.active !== false,
-  createdAt: item.createdAt,
-  updatedAt: item.updatedAt,
-});
-
 const serializeDriver = (driver) => ({
   _id: driver._id,
   name: driver.name || '',
@@ -2654,7 +1957,6 @@ const serializeDriver = (driver) => ({
   referralCode: driver.referralCode || '',
   acquiredByEmployeeId: driver.acquiredByEmployeeId || null,
   acquiredByEmployeeCode: driver.acquiredByEmployeeCode || '',
-  owner_id: driver.owner_id || null,
   service_location_id: driver.service_location_id || null,
   zoneId: driver.zoneId?._id || driver.zoneId || null,
   zone_name: driver.zoneId?.name || driver.zone_name || '',
@@ -2717,7 +2019,6 @@ const DRIVER_LIST_SELECT = [
   'referralCode',
   'acquiredByEmployeeId',
   'acquiredByEmployeeCode',
-  'owner_id',
   'service_location_id',
   'zoneId',
   'city',
@@ -2751,7 +2052,6 @@ const serializeDriverListItem = (driver) => ({
   referralCode: driver.referralCode || '',
   acquiredByEmployeeId: driver.acquiredByEmployeeId || null,
   acquiredByEmployeeCode: driver.acquiredByEmployeeCode || '',
-  owner_id: driver.owner_id || null,
   service_location_id: driver.service_location_id || null,
   city: driver.city || '',
   service_location_name:
@@ -3042,208 +2342,6 @@ const LEGACY_OWNER_ROLE = {
   updated_at: '2026-02-07T15:55:24.000000Z',
 };
 
-const buildLegacyOwnerSeeds = (serviceLocationId) => [
-  {
-    legacy_id: '08e4823f-33df-480b-8419-91e8f49aa204',
-    user_id: 55,
-    transport_type: 'taxi',
-    service_location_id: serviceLocationId,
-    legacy_service_location_id: LEGACY_OWNER_SERVICE_LOCATION.legacy_id,
-    company_name: 'Taxi',
-    owner_name: null,
-    name: 'Demo owner',
-    surname: null,
-    email: 'owner@gmail.com',
-    password: '$2y$10$5P1q/uu.og/yMK1y5fHstuHPW1u7rD5x0CoGGvDoSW6Okjv1v/B0m',
-    mobile: '7470311227',
-    phone: null,
-    address: null,
-    postal_code: null,
-    city: null,
-    expiry_date: null,
-    no_of_vehicles: 0,
-    tax_number: null,
-    bank_name: null,
-    ifsc: null,
-    account_no: null,
-    iban: null,
-    bic: null,
-    active: true,
-    approve: true,
-    status: 'approved',
-    createdAt: new Date('2026-03-20T07:42:58.000Z'),
-    updatedAt: new Date('2026-04-09T07:47:17.000Z'),
-    area_snapshot: LEGACY_OWNER_SERVICE_LOCATION,
-    user_snapshot: {
-      id: 55,
-      name: 'Demo owner',
-      company_key: null,
-      username: null,
-      map_type: null,
-      email: 'owner@gmail.com',
-      mobile: '7470311227',
-      ride_otp: null,
-      gender: null,
-      profile_picture: 'https://zyder.co.in/assets/images/Male_default_image.png',
-      stripe_customer_id: null,
-      is_deleted_at: null,
-      country: 102,
-      timezone: null,
-      active: 1,
-      email_confirmed: 0,
-      mobile_confirmed: 0,
-      fcm_token: null,
-      apn_token: null,
-      refferal_code: null,
-      referred_by: null,
-      rating: 0,
-      lang: null,
-      zone_id: null,
-      current_lat: null,
-      current_lng: null,
-      rating_total: 0,
-      no_of_ratings: 0,
-      login_by: null,
-      last_known_ip: null,
-      last_login_at: null,
-      social_provider: null,
-      is_bid_app: 0,
-      social_nickname: null,
-      social_id: null,
-      social_token: null,
-      social_token_secret: null,
-      social_refresh_token: null,
-      social_expires_in: null,
-      social_avatar: null,
-      social_avatar_original: null,
-      created_at: '2026-03-20T07:42:58.000000Z',
-      updated_at: '2026-04-09T07:47:17.000000Z',
-      authorization_code: null,
-      deleted_at: null,
-      service_location_id: null,
-      country_name: 'India',
-      mobile_number: '+917470311227',
-      role_name: 'owner',
-      converted_deleted_at: null,
-      country_detail: {
-        id: 102,
-        name: 'India',
-        dial_code: '+91',
-        dial_min_length: 7,
-        dial_max_length: 14,
-        code: 'IN',
-        currency_name: 'Indian rupee',
-        currency_code: 'INR',
-        currency_symbol: '₹',
-        flag: 'https://zyder.co.in/image/country/flags/IN.png',
-        active: 1,
-        created_at: null,
-        updated_at: null,
-      },
-      roles: [{ ...LEGACY_OWNER_ROLE, pivot: { user_id: 55, role_id: 3 } }],
-    },
-  },
-  {
-    legacy_id: '941bb56f-2775-4685-818e-8326b44ead94',
-    user_id: 39,
-    transport_type: 'Both',
-    service_location_id: serviceLocationId,
-    legacy_service_location_id: LEGACY_OWNER_SERVICE_LOCATION.legacy_id,
-    company_name: 'itc',
-    owner_name: 'princess',
-    name: 'princess',
-    surname: null,
-    email: 'indra@gmail.com',
-    password: null,
-    mobile: '8072694803',
-    phone: null,
-    address: 'hgxbnmkchcufjbjbivjnvjv',
-    postal_code: '908899',
-    city: 'd6hf hmm kb',
-    expiry_date: null,
-    no_of_vehicles: 0,
-    tax_number: '578999bcv8988',
-    bank_name: null,
-    ifsc: null,
-    account_no: null,
-    iban: null,
-    bic: null,
-    active: true,
-    approve: true,
-    status: 'approved',
-    createdAt: new Date('2026-02-28T12:34:16.000Z'),
-    updatedAt: new Date('2026-02-28T13:36:28.000Z'),
-    area_snapshot: LEGACY_OWNER_SERVICE_LOCATION,
-    user_snapshot: {
-      id: 39,
-      name: 'princess',
-      company_key: null,
-      username: null,
-      map_type: null,
-      email: 'indra@gmail.com',
-      mobile: '8072694803',
-      ride_otp: null,
-      gender: 'female',
-      profile_picture: 'https://zyder.co.in/assets/images/Female_default_image.png',
-      stripe_customer_id: null,
-      is_deleted_at: null,
-      country: 102,
-      timezone: 'Asia/Kolkata',
-      active: 1,
-      email_confirmed: 0,
-      mobile_confirmed: 1,
-      fcm_token: 'dqw_CwtrSXa0l9p5oMxCLl:APA91bH1ZbjCzaE-crPxlDOfbU8LBDXg1gerLnzsrWB5Ky6hy9gRvT7LPZb2OSdK9AHh1w2RBSyj-fnuNIofm9FF6GfkdcfusbSMy2lmmjBQ2omVAXlgJQE',
-      apn_token: null,
-      refferal_code: 'v7CmOw',
-      referred_by: null,
-      rating: 0,
-      lang: 'en',
-      zone_id: '8d426929-591a-4bb7-bc60-256abb196363',
-      current_lat: 11.9190793,
-      current_lng: 79.8034286,
-      rating_total: 0,
-      no_of_ratings: 0,
-      login_by: 'android',
-      last_known_ip: null,
-      last_login_at: null,
-      social_provider: null,
-      is_bid_app: 0,
-      social_nickname: null,
-      social_id: null,
-      social_token: null,
-      social_token_secret: null,
-      social_refresh_token: null,
-      social_expires_in: null,
-      social_avatar: null,
-      social_avatar_original: null,
-      created_at: '2026-02-28T12:34:16.000000Z',
-      updated_at: '2026-02-28T13:10:44.000000Z',
-      authorization_code: null,
-      deleted_at: null,
-      service_location_id: LEGACY_OWNER_SERVICE_LOCATION.legacy_id,
-      country_name: 'India',
-      mobile_number: '+918072694803',
-      role_name: 'owner',
-      converted_deleted_at: null,
-      country_detail: {
-        id: 102,
-        name: 'India',
-        dial_code: '+91',
-        dial_min_length: 7,
-        dial_max_length: 14,
-        code: 'IN',
-        currency_name: 'Indian rupee',
-        currency_code: 'INR',
-        currency_symbol: '₹',
-        flag: 'https://zyder.co.in/image/country/flags/IN.png',
-        active: 1,
-        created_at: null,
-        updated_at: null,
-      },
-      roles: [{ ...LEGACY_OWNER_ROLE, pivot: { user_id: 39, role_id: 3 } }],
-    },
-  },
-];
 
 const seedInitialData = async () => {
   const defaults = createDefaultAdminState();
@@ -3280,11 +2378,6 @@ const seedInitialData = async () => {
     await NotificationChannel.insertMany(defaults.notificationChannels);
   }
 
-  // Seed Subscription Plans
-  if (await SubscriptionPlan.countDocuments() === 0) {
-    await SubscriptionPlan.insertMany(defaults.subscriptionPlans);
-  }
-
   // Seed Preferences
   if (await UserPreference.countDocuments() === 0) {
     await UserPreference.insertMany(defaults.preferences);
@@ -3305,7 +2398,6 @@ const seedInitialData = async () => {
     await OnboardingScreen.insertMany(defaults.onboardingScreens);
   }
 
-  await ensureFleetOwnersSeeded();
 };
 
 export const ensureServiceLocationsSeeded = async () => {
@@ -3315,58 +2407,6 @@ export const ensureServiceLocationsSeeded = async () => {
   }
 };
 
-export const ensureFleetOwnersSeeded = async () => {
-  const now = new Date();
-
-  const serviceLocation = await ServiceLocation.findOneAndUpdate(
-    {
-      $or: [
-        { legacy_id: LEGACY_OWNER_SERVICE_LOCATION.legacy_id },
-        { name: LEGACY_OWNER_SERVICE_LOCATION.name },
-      ],
-    },
-    {
-      $set: {
-        ...LEGACY_OWNER_SERVICE_LOCATION,
-        updatedAt: LEGACY_OWNER_SERVICE_LOCATION.updatedAt || now,
-      },
-      $setOnInsert: {
-        createdAt: LEGACY_OWNER_SERVICE_LOCATION.createdAt || now,
-      },
-    },
-    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
-  );
-
-  const ownerSeeds = buildLegacyOwnerSeeds(serviceLocation._id);
-
-  for (const seed of ownerSeeds) {
-    const existingOwner = await Owner.findOne({
-      $or: [
-        { legacy_id: seed.legacy_id },
-        { email: seed.email },
-        { mobile: seed.mobile },
-      ],
-    }).lean();
-
-    if (existingOwner) {
-      await Owner.updateOne(
-        { _id: existingOwner._id },
-        {
-          $set: {
-            ...seed,
-            updatedAt: seed.updatedAt || now,
-          },
-          $setOnInsert: {
-            createdAt: seed.createdAt || now,
-          },
-        },
-      );
-      continue;
-    }
-
-    await Owner.create(seed);
-  }
-};
 
 export const ensureAdminState = async () => {
   await syncDefaultAdminRecord();
@@ -3379,13 +2419,11 @@ export const getAdminModuleInfo = async () => {
     userCount,
     deletedUserCount,
     driverCount,
-    ownerCount,
     zoneCount
   ] = await Promise.all([
     User.countDocuments({ deletedAt: null }),
     User.countDocuments({ deletedAt: { $ne: null } }),
     Driver.countDocuments(),
-    Owner.countDocuments(),
     Zone.countDocuments(),
   ]);
   return {
@@ -3396,7 +2434,6 @@ export const getAdminModuleInfo = async () => {
       users: userCount,
       deleted_users: deletedUserCount,
       drivers: driverCount,
-      owners: ownerCount,
       zones: zoneCount,
     },
   };
@@ -4106,50 +3143,6 @@ export const createUser = async (payload) => {
   return serializeUser(user.toObject());
 };
 
-export const getOwnerDashboardData = async () => {
-  const [
-    totalOwners,
-    approvedOwners,
-    totalDrivers,
-    approvedDrivers,
-    todayRides,
-  ] = await Promise.all([
-    Owner.countDocuments(),
-    Owner.countDocuments({ approve: true }),
-    Driver.countDocuments(),
-    Driver.countDocuments({ status: 'approved' }),
-    Ride.countDocuments({
-      createdAt: {
-        $gte: new Date(new Date().setHours(0, 0, 0, 0)),
-        $lt: new Date(new Date().setHours(23, 59, 59, 999)),
-      },
-    }),
-  ]);
-
-  return {
-    total_owners: totalOwners,
-    approved_owners: approvedOwners,
-    pending_owners: totalOwners - approvedOwners,
-    total_drivers: totalDrivers,
-    approved_drivers: approvedDrivers,
-    pending_drivers: totalDrivers - approvedDrivers,
-    total_fleets: 0, // Placeholder
-    approved_fleets: 0,
-    pending_fleets: 0,
-    today_earnings: 0,
-    today_cash: 0,
-    today_wallet: 0,
-    today_online: 0,
-    admin_commission: 0,
-    driver_earnings: 0,
-    overall_earnings: 0,
-    overall_cash: 0,
-    overall_wallet: 0,
-    overall_online: 0,
-    overall_admin_comm: 0,
-    overall_owner_earnings: 0,
-  };
-};
 
 export const updateUser = async (id, payload) => {
   const update = {};
@@ -4354,14 +3347,6 @@ export const getUserById = async (id) => {
     throw new ApiError(404, 'User not found');
   }
 
-  const subscriptions = await UserSubscription.find({ userId: id })
-    .sort({ active: -1, expiresAt: 1, createdAt: -1 })
-    .populate('planId', 'name')
-    .populate('vehicle_type_id', 'name')
-    .lean();
-
-  const activeSubscriptions = subscriptions.filter((item) => item.active !== false && String(item.status || '') === 'active');
-
   const rides = await Ride.find({
     userId: id,
     'feedback.rating': { $gte: 1 },
@@ -4372,28 +3357,6 @@ export const getUserById = async (id) => {
 
   return {
     ...serializeUser(user),
-    subscriptionSummary: {
-      activeCount: activeSubscriptions.length,
-      activePlans: activeSubscriptions.map((item) => ({
-        id: String(item._id),
-        planId: item.planId?._id ? String(item.planId._id) : String(item.planId || ''),
-        name: item.name || item.planId?.name || '',
-        status: item.status || 'active',
-        benefit_type: item.benefit_type || 'limited',
-        ride_limit: Number(item.ride_limit || 0),
-        rides_used: Number(item.rides_used || 0),
-        rides_remaining: String(item.benefit_type || '') === 'unlimited'
-          ? null
-          : Math.max(0, Number(item.ride_limit || 0) - Number(item.rides_used || 0)),
-        vehicle_type: item.vehicle_type_id?._id
-          ? {
-            id: String(item.vehicle_type_id._id),
-            name: item.vehicle_type_id.name || '',
-          }
-          : null,
-        expiresAt: item.expiresAt || null,
-      })),
-    },
     reviews: rides.map((ride) => ({
       _id: ride._id,
       request_id: String(ride._id),
@@ -4550,13 +3513,6 @@ export const listDrivers = async ({ page = 1, limit = 50, status, search, approv
     .limit(safeLimit)
     .lean();
 
-  const ownerIds = [
-    ...new Set(
-      drivers
-        .map((driver) => String(driver.owner_id || ''))
-        .filter(Boolean),
-    ),
-  ];
   const serviceLocationIds = [
     ...new Set(
       drivers
@@ -4565,12 +3521,7 @@ export const listDrivers = async ({ page = 1, limit = 50, status, search, approv
     ),
   ];
 
-  const [owners, serviceLocations] = await Promise.all([
-    ownerIds.length
-      ? Owner.find({ _id: { $in: ownerIds } })
-        .select('_id company_name owner_name name email mobile')
-        .lean()
-      : [],
+  const [serviceLocations] = await Promise.all([
     serviceLocationIds.length
       ? ServiceLocation.find({ _id: { $in: serviceLocationIds } })
         .select('_id service_location_name name country')
@@ -4578,16 +3529,12 @@ export const listDrivers = async ({ page = 1, limit = 50, status, search, approv
       : [],
   ]);
 
-  const ownerMap = new Map(
-    owners.map((owner) => [String(owner._id), owner]),
-  );
   const serviceLocationMap = new Map(
     serviceLocations.map((location) => [String(location._id), location]),
   );
 
   const hydratedDrivers = drivers.map((driver) => ({
     ...driver,
-    owner_id: driver.owner_id ? ownerMap.get(String(driver.owner_id)) || driver.owner_id : null,
     service_location_id: driver.service_location_id
       ? serviceLocationMap.get(String(driver.service_location_id)) || driver.service_location_id
       : null,
@@ -5098,64 +4045,6 @@ export const listDriverWalletHistory = async (id) => {
   };
 };
 
-export const adjustOwnerWallet = async (id, payload = {}) => {
-  const amount = Number(payload.amount || 0);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new ApiError(400, 'Amount must be greater than 0');
-  }
-
-  const operation = String(payload.operation || 'credit').toLowerCase();
-  if (!['credit', 'debit'].includes(operation)) {
-    throw new ApiError(400, 'Operation must be credit or debit');
-  }
-
-  const owner = await Owner.findById(id);
-  if (!owner) {
-    throw new ApiError(404, 'Owner not found');
-  }
-
-  const currentBalance = Number(owner.wallet?.balance || 0);
-  const nextBalance = operation === 'credit' ? currentBalance + amount : currentBalance - amount;
-
-  owner.wallet = owner.wallet || {};
-  owner.wallet.balance = nextBalance;
-  owner.markModified('wallet');
-  await owner.save();
-
-  await OwnerWalletTransaction.create({
-    ownerId: id,
-    amount,
-    kind: operation,
-    title: payload.description || `Admin adjustment (${operation})`,
-    balance: nextBalance
-  });
-
-  return { balance: Number(nextBalance.toFixed(2)) };
-};
-
-export const listOwnerWalletHistory = async (id) => {
-  const owner = await Owner.findById(id).lean();
-
-  if (!owner) {
-    throw new ApiError(404, 'Owner not found');
-  }
-
-  const transactions = await OwnerWalletTransaction.find({ ownerId: id })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  return {
-    balance: Number(owner.wallet?.balance || 0),
-    results: transactions.map(t => ({
-      _id: String(t._id),
-      amount: t.amount,
-      type: t.kind || (t.type === 'deduction' ? 'debit' : 'credit'),
-      description: t.title || t.description,
-      createdAt: t.createdAt,
-    })),
-  };
-};
-
 export const listDeletedDrivers = async ({ page = 1, limit = 50 }) => {
   const safePage = Number(page) || 1;
   const safeLimit = Number(limit) || 50;
@@ -5376,7 +4265,6 @@ export const createDriver = async (payload = {}, currentAdmin = null) => {
     name,
     phone,
     email,
-    owner_id: payload.owner_id && mongoose.isValidObjectId(payload.owner_id) ? toObjectId(payload.owner_id) : null,
     service_location_id:
       serviceLocationId && mongoose.isValidObjectId(serviceLocationId) ? toObjectId(serviceLocationId) : null,
     country: payload.country || null,
@@ -5568,14 +4456,6 @@ export const updateDriver = async (id, payload, currentAdmin = null) => {
         return null;
       });
 
-    // First pass ever is paid from the bonus that was just credited, not
-    // left sitting in the wallet. Same fire-and-forget reasoning as above -
-    // the approval already succeeded.
-    const bonusAmount = Number(bonusResult?.transaction?.amount || 0);
-    if (bonusAmount > 0) {
-      await purchaseDriverSubscriptionFromJoiningBonus({ driverId: driver._id, bonusAmount })
-        .catch((error) => console.error('Driver joining bonus auto-subscription failed', driver._id, error.message));
-    }
   }
 
   return serializeDriver(driver);
@@ -5796,26 +4676,6 @@ export const getDriverProfile = async (id) => {
   };
 };
 
-export const getSubscriptionSettings = async () => {
-  const setting = await AdminBusinessSetting.findOne({ scope: 'default' }).lean();
-  return setting?.subscription || { mode: 'commissionOnly' };
-};
-
-export const updateSubscriptionSettings = async (payload) => {
-  const { mode } = payload;
-  if (!['commissionOnly', 'subscriptionOnly', 'both'].includes(mode)) {
-    throw new ApiError(400, 'Invalid subscription mode');
-  }
-
-  const setting = await AdminBusinessSetting.findOneAndUpdate(
-    { scope: 'default' },
-    { $set: { 'subscription.mode': mode } },
-    { returnDocument: 'after', upsert: true },
-  );
-
-  return setting.subscription;
-};
-
 export const getReferralSettings = async (type) => {
   const setting = await AdminBusinessSetting.findOne({ scope: 'default' }).lean();
   const referral = setting?.referral || { driver: { enabled: false, type: 'instant_referrer', amount: 0 }, user: { enabled: false, type: 'instant_referrer', amount: 0 } };
@@ -5901,175 +4761,6 @@ export const getReferralDashboard = async () => {
       referral_driver: 0,
       monthly: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     }
-  };
-};
-
-export const listSubscriptionPlans = async () =>
-  SubscriptionPlan.find({ audience: 'driver' }).sort({ createdAt: -1 }).populate('vehicle_type_id').lean();
-const normalizeVehicleClasses = (value) => {
-  const list = Array.isArray(value) ? value : String(value || '').split(',');
-  return [...new Set(list.map((item) => String(item).trim().toLowerCase()).filter(Boolean))];
-};
-
-export const createSubscriptionPlan = async (payload) => {
-  if (!String(payload?.name || '').trim()) {
-    throw new ApiError(400, 'Subscription name is required');
-  }
-
-  const plan = await SubscriptionPlan.create({
-    ...payload,
-    audience: 'driver',
-    amount: Number(payload.amount || 0),
-    // A daily pass is one day. Anything else the admin types is respected,
-    // so a weekly pass remains possible without another code change.
-    duration: Number(payload.duration || 1),
-    vehicle_classes: normalizeVehicleClasses(payload.vehicle_classes),
-    benefit_type: 'standard',
-    ride_limit: 0,
-    active: payload.active === undefined ? true : Boolean(payload.active),
-  });
-  return plan.toObject();
-};
-
-export const updateSubscriptionPlan = async (id, payload = {}) => {
-  const update = { ...payload };
-  if (payload.amount !== undefined) update.amount = Number(payload.amount || 0);
-  if (payload.duration !== undefined) update.duration = Number(payload.duration || 1);
-  if (payload.vehicle_classes !== undefined) update.vehicle_classes = normalizeVehicleClasses(payload.vehicle_classes);
-
-  const plan = await SubscriptionPlan.findOneAndUpdate(
-    { _id: id, audience: 'driver' },
-    { $set: update },
-    { returnDocument: 'after' },
-  ).lean();
-
-  if (!plan) throw new ApiError(404, 'Subscription plan not found');
-  return plan;
-};
-
-export const deleteSubscriptionPlan = async (id) => {
-  const plan = await SubscriptionPlan.findOneAndDelete({ _id: id, audience: 'driver' }).lean();
-  if (!plan) throw new ApiError(404, 'Subscription plan not found');
-  return plan;
-};
-
-/** Every pass drivers have paid for, newest first - the payment history. */
-export const listDriverSubscriptionPayments = async ({ page = 1, limit = 25, driverId = '', status = '' } = {}) => {
-  const query = { paidAt: { $ne: null } };
-  if (driverId) query.driverId = driverId;
-  if (status === 'active') {
-    query.status = 'active';
-    query.expiresAt = { $gt: new Date() };
-  } else if (status === 'expired') {
-    query.expiresAt = { $lte: new Date() };
-  }
-
-  const pageNumber = Math.max(1, Number(page) || 1);
-  const pageSize = Math.min(100, Math.max(1, Number(limit) || 25));
-
-  const [rows, total] = await Promise.all([
-    DriverSubscription.find(query)
-      .sort({ paidAt: -1 })
-      .skip((pageNumber - 1) * pageSize)
-      .limit(pageSize)
-      .populate('driverId', 'name phone')
-      .lean(),
-    DriverSubscription.countDocuments(query),
-  ]);
-
-  const now = Date.now();
-
-  return {
-    results: rows.map((row) => ({
-      id: String(row._id),
-      driverName: row.driverId?.name || 'Driver',
-      driverPhone: row.driverId?.phone || '',
-      planName: row.planName,
-      amount: row.amount,
-      paymentMethod: row.paymentMethod,
-      paidAt: row.paidAt,
-      startsAt: row.startsAt,
-      expiresAt: row.expiresAt,
-      active: row.status === 'active' && new Date(row.expiresAt).getTime() > now,
-      tripsCovered: row.tripsCovered,
-      commissionWaived: row.commissionWaived,
-    })),
-    total,
-    page: pageNumber,
-    limit: pageSize,
-    // What the passes brought in for the filtered set, since that is the first
-    // question anyone opening this page has.
-    collected: rows.reduce((sum, row) => sum + Number(row.amount || 0), 0),
-  };
-};
-
-export const listCustomerSubscriptionPlans = async () =>
-  SubscriptionPlan.find({ audience: 'user' }).sort({ createdAt: -1 }).populate('vehicle_type_id').lean();
-
-export const createCustomerSubscriptionPlan = async (payload = {}) => {
-  if (!String(payload?.name || '').trim()) {
-    throw new ApiError(400, 'Subscription name is required');
-  }
-  if (!payload?.vehicle_type_id || !mongoose.Types.ObjectId.isValid(payload.vehicle_type_id)) {
-    throw new ApiError(400, 'Valid vehicle type is required');
-  }
-
-  const benefitType = String(payload.benefit_type || '').trim().toLowerCase() === 'unlimited'
-    ? 'unlimited'
-    : 'limited';
-
-  const plan = await SubscriptionPlan.create({
-    ...payload,
-    audience: 'user',
-    amount: Number(payload.amount || 0),
-    duration: Math.max(1, Number(payload.duration || 0)),
-    benefit_type: benefitType,
-    ride_limit: benefitType === 'unlimited' ? 0 : Math.max(1, Number(payload.ride_limit || 0)),
-    active: payload.active !== undefined ? Boolean(payload.active) : true,
-  });
-  return plan.toObject();
-};
-
-export const listUserSubscriptionsByUserId = async (userId) => {
-  const user = await User.findById(userId).lean();
-
-  if (!user) {
-    throw new ApiError(404, 'User not found');
-  }
-
-  const items = await UserSubscription.find({ userId })
-    .sort({ active: -1, expiresAt: 1, createdAt: -1 })
-    .populate('planId', 'name description')
-    .populate('vehicle_type_id', 'name')
-    .lean();
-
-  return {
-    results: items.map((item) => ({
-      id: String(item._id),
-      planId: item.planId?._id ? String(item.planId._id) : String(item.planId || ''),
-      name: item.name || item.planId?.name || '',
-      description: item.description || item.planId?.description || '',
-      amount: Number(item.amount || 0),
-      durationDays: Number(item.durationDays || 0),
-      transport_type: item.transport_type || 'taxi',
-      benefit_type: item.benefit_type || 'limited',
-      ride_limit: Number(item.ride_limit || 0),
-      rides_used: Number(item.rides_used || 0),
-      rides_remaining: String(item.benefit_type || '') === 'unlimited'
-        ? null
-        : Math.max(0, Number(item.ride_limit || 0) - Number(item.rides_used || 0)),
-      status: item.status || 'active',
-      active: item.active !== false,
-      vehicle_type: item.vehicle_type_id?._id
-        ? {
-          id: String(item.vehicle_type_id._id),
-          name: item.vehicle_type_id.name || '',
-        }
-        : null,
-      purchasedAt: item.purchasedAt || null,
-      expiresAt: item.expiresAt || null,
-      createdAt: item.createdAt || null,
-    })),
   };
 };
 
@@ -6825,10 +5516,6 @@ const listAdminRides = async ({
   return buildDatabasePaginator(rides.map(serializer), page, limit, total);
 };
 
-
-
-
-
 export const listOngoingRides = async (query = {}) => {
   return listAdminRides({
     query,
@@ -6997,7 +5684,7 @@ export const listVehicleTypes = async (queryParams = {}) => {
       : { $in: [normalizedTransportType, 'both'] };
   }
   const items = await Vehicle.find(query)
-    .select('name short_description description transport_type dispatch_type icon_types category delivery_category delivery_distance_pricing service_tax admin_commission_type_from_driver admin_commission_from_driver admin_commission_type_for_owner admin_commission_for_owner capacity image icon map_icon status active app_modules createdAt updatedAt')
+    .select('name short_description description transport_type dispatch_type icon_types category delivery_category delivery_distance_pricing service_tax admin_commission_type_from_driver admin_commission_from_driver capacity image icon map_icon status active app_modules createdAt updatedAt')
     .sort({ createdAt: -1 })
     .lean();
   const results = items.map((item) => ({
@@ -7081,8 +5768,6 @@ const buildDatabasePaginator = (results, page = 1, limit = 50, total = 0) => {
 const normalizeVehicleCommissionConfig = (item = {}) => ({
   admin_commission_type_from_driver: Number(item?.admin_commission_type_from_driver ?? 1),
   admin_commission_from_driver: Number(item?.admin_commission_from_driver ?? 0),
-  admin_commission_type_for_owner: Number(item?.admin_commission_type_for_owner ?? 1),
-  admin_commission_for_owner: Number(item?.admin_commission_for_owner ?? 0),
 });
 
 
@@ -7124,7 +5809,7 @@ export const listPublicVehicleCatalog = async () => {
   // listing (listVehicleTypes) still returns them all, so one can be
   // switched back on.
   const items = await Vehicle.find({ active: { $ne: false }, status: { $nin: [0, '0'] } })
-    .select('name short_description description transport_type dispatch_type icon_types category delivery_category delivery_distance_pricing service_tax admin_commission_type_from_driver admin_commission_from_driver admin_commission_type_for_owner admin_commission_for_owner capacity image icon map_icon status active app_modules')
+    .select('name short_description description transport_type dispatch_type icon_types category delivery_category delivery_distance_pricing service_tax admin_commission_type_from_driver admin_commission_from_driver capacity image icon map_icon status active app_modules')
     .sort({ createdAt: -1 })
     .lean();
 
@@ -7288,8 +5973,6 @@ export const createVehicleType = async (payload) => {
       : 0,
     admin_commission_type_from_driver: Number(payload.admin_commission_type_from_driver ?? 1),
     admin_commission_from_driver: Number(payload.admin_commission_from_driver ?? 0),
-    admin_commission_type_for_owner: Number(payload.admin_commission_type_for_owner ?? 1),
-    admin_commission_for_owner: Number(payload.admin_commission_for_owner ?? 0),
     image: payload.image ?? mapIcon,
     icon: mapIcon,
     map_icon: mapIcon,
@@ -7376,12 +6059,6 @@ export const updateVehicleType = async (id, payload) => {
   }
   if (payload.admin_commission_from_driver !== undefined) {
     vehicle.admin_commission_from_driver = Number(payload.admin_commission_from_driver ?? 0);
-  }
-  if (payload.admin_commission_type_for_owner !== undefined) {
-    vehicle.admin_commission_type_for_owner = Number(payload.admin_commission_type_for_owner ?? 1);
-  }
-  if (payload.admin_commission_for_owner !== undefined) {
-    vehicle.admin_commission_for_owner = Number(payload.admin_commission_for_owner ?? 0);
   }
   if (payload.status !== undefined) {
     vehicle.status = Number(payload.status) ? 1 : 0;
@@ -7804,7 +6481,7 @@ const resolveSetPriceVehicleAndTransportType = async ({
 
   const isCompatible =
     vehicleTransportType === 'both'
-      ? ['both', 'taxi', 'delivery', 'pooling'].includes(requestedTransportType)
+      ? ['both', 'taxi', 'delivery'].includes(requestedTransportType)
       : requestedTransportType === vehicleTransportType;
 
   if (!isCompatible) {
@@ -7875,8 +6552,6 @@ export const createSetPrice = async (payload, currentAdmin = null) => {
 
     admin_commision_type: Number(payload.admin_commision_type ?? (payload.customer_commission_type === 'percentage' ? 1 : 0)),
     admin_commision: Number(payload.admin_commision ?? payload.customer_commission ?? 0),
-    admin_commission_type_for_owner: Number(payload.admin_commission_type_for_owner ?? 1),
-    admin_commission_for_owner: Number(payload.admin_commission_for_owner ?? 0),
     admin_commission_type_from_driver: Number(payload.admin_commission_type_from_driver ?? 1),
     admin_commission_from_driver: Number(payload.admin_commission_from_driver ?? 0),
 
@@ -7936,7 +6611,6 @@ export const updateSetPrice = async (id, payload, currentAdmin = null) => {
     'zone_id', 'vehicle_type', 'service_location_id', 'transport_type',
     'pricing_scope', 'package_type_id', 'package_destination', 'package_availability',
     'payment_type', 'active', 'admin_commision_type', 'admin_commision',
-    'admin_commission_type_for_owner', 'admin_commission_for_owner',
     'admin_commission_type_from_driver', 'admin_commission_from_driver',
     'service_tax', 'airport_surge', 'support_airport_fee', 'support_outstation',
     'enable_airport_ride', 'enable_outstation_ride',
@@ -7953,7 +6627,6 @@ export const updateSetPrice = async (id, payload, currentAdmin = null) => {
 
   const nonNegativeFields = new Set([
     'admin_commision',
-    'admin_commission_for_owner',
     'admin_commission_from_driver',
     'service_tax',
     'airport_surge',
@@ -8078,553 +6751,6 @@ export const deleteSetPrice = async (id, currentAdmin = null) => {
   return true;
 };
 
-export const listOwners = async (queryArgs = {}, currentAdmin = null) => {
-  await ensureFleetOwnersSeeded();
-  if (currentAdmin) {
-    assertAdminPermission(currentAdmin, 'owners.view', 'owners');
-  }
-  const search = String(queryArgs.search || '').trim();
-
-  const query = currentAdmin ? buildServiceLocationScopeQuery(currentAdmin) : {};
-  if (search) {
-    const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    query.$or = [{ name: regex }, { mobile: regex }, { email: regex }, { company_name: regex }];
-  }
-
-  const owners = await Owner.find(query)
-    .populate(
-      'service_location_id',
-      'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
-    )
-    .sort({ createdAt: -1 })
-    .lean();
-
-  return owners.map(serializeOwner);
-};
-
-export const approveOwnerSignupFromDriver = async (driverId) => {
-  await ensureFleetOwnersSeeded();
-
-  const id = String(driverId || '').trim();
-  if (!id) {
-    throw new ApiError(400, 'Driver id is required');
-  }
-
-  const driver = await Driver.findById(id).select('+password').lean();
-  if (!driver) {
-    throw new ApiError(404, 'Driver not found');
-  }
-
-  const onboardingRole = String(driver?.onboarding?.role || '').toLowerCase();
-  if (onboardingRole !== 'owner') {
-    throw new ApiError(400, 'Driver is not an owner signup');
-  }
-
-  const company = driver?.onboarding?.company || {};
-  const companyName = String(company.name || '').trim();
-
-  if (!companyName) {
-    throw new ApiError(400, 'Owner company name is missing');
-  }
-
-  const email = String(driver.email || '').trim().toLowerCase();
-  const mobile = String(driver.phone || driver.mobile || '').trim();
-
-  if (!email) {
-    throw new ApiError(400, 'Owner email is missing');
-  }
-
-  if (!mobile) {
-    throw new ApiError(400, 'Owner mobile is missing');
-  }
-
-  const existingOwner =
-    (await Owner.findOne({ legacy_id: String(driver._id) }).lean()) ||
-    (await Owner.findOne({ $or: [{ email }, { mobile }] }).lean());
-
-  if (existingOwner) {
-    await Owner.updateOne(
-      { _id: existingOwner._id },
-      { $set: { approve: true, status: 'approved', active: true } },
-    );
-
-    await Driver.updateOne(
-      { _id: driver._id },
-      {
-        $set: {
-          approve: true,
-          status: 'approved',
-          'onboarding.convertedOwnerId': existingOwner._id,
-        },
-      },
-    );
-
-    const populatedOwner = await Owner.findById(existingOwner._id)
-      .populate(
-        'service_location_id',
-        'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
-      )
-      .lean();
-
-    return serializeOwner(populatedOwner);
-  }
-
-  const serviceLocationId =
-    company.serviceLocationId && mongoose.isValidObjectId(company.serviceLocationId)
-      ? toObjectId(company.serviceLocationId)
-      : null;
-
-  if (!driver.password) {
-    throw new ApiError(400, 'Owner password is missing');
-  }
-
-  const owner = await Owner.create({
-    company_name: companyName,
-    name: String(driver.name || companyName).trim(),
-    mobile,
-    email,
-    password: driver.password,
-    service_location_id: serviceLocationId,
-    legacy_service_location_id: serviceLocationId ? '' : String(company.serviceLocationId || '').trim(),
-    transport_type: String(company.registerFor || driver.registerFor || 'taxi').trim().toLowerCase(),
-    address: String(company.address || '').trim() || null,
-    postal_code: String(company.postalCode || '').trim() || null,
-    city: String(company.city || driver.city || company.serviceLocationName || '').trim() || null,
-    tax_number: String(company.taxNumber || '').trim() || null,
-    active: true,
-    approve: true,
-    status: 'approved',
-    legacy_id: String(driver._id),
-    user_snapshot: {
-      driver_id: String(driver._id),
-      source: 'driver_onboarding_owner',
-    },
-  });
-
-  await Driver.updateOne(
-    { _id: driver._id },
-    { $set: { approve: true, status: 'approved', 'onboarding.convertedOwnerId': owner._id } },
-  );
-
-  const populatedOwner = await Owner.findById(owner._id)
-    .populate(
-      'service_location_id',
-      'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
-    )
-    .lean();
-
-  return serializeOwner(populatedOwner);
-};
-
-export const getOwnerById = async (id, currentAdmin = null) => {
-  await ensureFleetOwnersSeeded();
-
-  const ownerId = String(id || '').trim();
-  if (!ownerId) throw new ApiError(400, 'Owner id is required');
-
-  const owner = await Owner.findOne(
-    mongoose.isValidObjectId(ownerId) ? { _id: ownerId } : { legacy_id: ownerId },
-  )
-    .populate(
-      'service_location_id',
-      'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
-    )
-    .lean();
-
-  if (!owner) throw new ApiError(404, 'Owner not found');
-  if (currentAdmin) {
-    assertAdminPermission(currentAdmin, 'owners.view', 'owners');
-    assertServiceLocationAccess(currentAdmin, owner.service_location_id?._id || owner.service_location_id);
-  }
-  return serializeOwner(owner);
-};
-
-export const createOwner = async (payload) => {
-  if (!payload.company_name?.trim()) {
-    throw new ApiError(400, 'Company name is required');
-  }
-  if (!payload.name?.trim()) {
-    throw new ApiError(400, 'Owner name is required');
-  }
-  if (!payload.mobile?.trim()) {
-    throw new ApiError(400, 'Mobile number is required');
-  }
-  if (!payload.email?.trim()) {
-    throw new ApiError(400, 'Email is required');
-  }
-  if (!payload.password || String(payload.password).length < 6) {
-    throw new ApiError(400, 'Password must be at least 6 characters');
-  }
-  if (payload.password !== payload.password_confirmation) {
-    throw new ApiError(400, 'Passwords do not match');
-  }
-
-  const normalizedEmail = String(payload.email).trim().toLowerCase();
-  const normalizedMobile = String(payload.mobile).trim();
-  const serviceLocationId =
-    payload.service_location_id && mongoose.isValidObjectId(payload.service_location_id)
-      ? toObjectId(payload.service_location_id)
-      : null;
-
-  const existingOwner = await Owner.findOne({
-    $or: [{ email: normalizedEmail }, { mobile: normalizedMobile }],
-  }).lean();
-
-  if (existingOwner) {
-    throw new ApiError(409, 'Owner with this email or mobile already exists');
-  }
-
-  const owner = await Owner.create({
-    company_name: String(payload.company_name).trim(),
-    owner_name: payload.owner_name ? String(payload.owner_name).trim() : null,
-    name: String(payload.name).trim(),
-    mobile: normalizedMobile,
-    email: normalizedEmail,
-    password: await hashPassword(String(payload.password)),
-    service_location_id: serviceLocationId,
-    legacy_service_location_id:
-      payload.legacy_service_location_id || (serviceLocationId ? '' : payload.service_location_id || ''),
-    transport_type: payload.transport_type || 'taxi',
-    phone: payload.phone || null,
-    address: payload.address || null,
-    postal_code: payload.postal_code || null,
-    city: payload.city || null,
-    tax_number: payload.tax_number || null,
-    active: normalizeBoolean(payload.active ?? true),
-    approve: normalizeBoolean(payload.approve ?? false),
-    status: normalizeBoolean(payload.approve ?? false) ? 'approved' : 'pending',
-  });
-
-  const populatedOwner = await Owner.findById(owner._id)
-    .populate(
-      'service_location_id',
-      'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
-    )
-    .lean();
-
-  return serializeOwner(populatedOwner);
-};
-
-export const updateOwner = async (id, payload) => {
-  const owner = await Owner.findById(id);
-  if (!owner) throw new ApiError(404, 'Owner not found');
-
-  if (payload.company_name !== undefined) {
-    owner.company_name = String(payload.company_name).trim();
-  }
-  if (payload.name !== undefined) {
-    owner.name = String(payload.name).trim();
-  }
-  if (payload.mobile !== undefined) {
-    const mobile = String(payload.mobile).trim();
-    const duplicateMobile = await Owner.findOne({ _id: { $ne: id }, mobile }).lean();
-    if (duplicateMobile) {
-      throw new ApiError(409, 'Another owner already uses this mobile number');
-    }
-    owner.mobile = mobile;
-  }
-  if (payload.email !== undefined) {
-    const email = String(payload.email).trim().toLowerCase();
-    const duplicateEmail = await Owner.findOne({ _id: { $ne: id }, email }).lean();
-    if (duplicateEmail) {
-      throw new ApiError(409, 'Another owner already uses this email');
-    }
-    owner.email = email;
-  }
-  if (payload.service_location_id !== undefined) {
-    if (payload.service_location_id && mongoose.isValidObjectId(payload.service_location_id)) {
-      owner.service_location_id = toObjectId(payload.service_location_id);
-      owner.legacy_service_location_id = '';
-    } else {
-      owner.service_location_id = null;
-      owner.legacy_service_location_id = payload.service_location_id || '';
-    }
-  }
-  if (payload.transport_type !== undefined) {
-    owner.transport_type = payload.transport_type || 'taxi';
-  }
-  if (payload.active !== undefined) {
-    owner.active = normalizeBoolean(payload.active);
-  }
-  if (payload.approve !== undefined) {
-    owner.approve = normalizeBoolean(payload.approve);
-    owner.status = owner.approve ? 'approved' : 'pending';
-  }
-  if (payload.status !== undefined) {
-    const normalizedStatus = String(payload.status || 'pending').trim().toLowerCase();
-    if (!['pending', 'approved', 'rejected'].includes(normalizedStatus)) {
-      throw new ApiError(400, 'Invalid owner status');
-    }
-    owner.status = normalizedStatus;
-    owner.approve = normalizedStatus === 'approved';
-    if (payload.active === undefined) {
-      owner.active = normalizedStatus !== 'rejected';
-    }
-  }
-  if (payload.password) {
-    if (String(payload.password).length < 6) {
-      throw new ApiError(400, 'Password must be at least 6 characters');
-    }
-    if (payload.password !== payload.password_confirmation) {
-      throw new ApiError(400, 'Passwords do not match');
-    }
-    owner.password = await hashPassword(String(payload.password));
-  }
-
-  if (payload.owner_name !== undefined) owner.owner_name = payload.owner_name || null;
-  if (payload.phone !== undefined) owner.phone = payload.phone || null;
-  if (payload.address !== undefined) owner.address = payload.address || null;
-  if (payload.postal_code !== undefined) owner.postal_code = payload.postal_code || null;
-  if (payload.city !== undefined) owner.city = payload.city || null;
-  if (payload.tax_number !== undefined) owner.tax_number = payload.tax_number || null;
-  if (payload.no_of_vehicles !== undefined) owner.no_of_vehicles = Number(payload.no_of_vehicles || 0);
-  if (payload.documents !== undefined) {
-    if (!owner.user_snapshot) {
-      owner.user_snapshot = {};
-    }
-    owner.user_snapshot = {
-      ...owner.user_snapshot,
-      documents: payload.documents,
-    };
-    owner.markModified('user_snapshot');
-  }
-
-  await owner.save();
-
-  const populatedOwner = await Owner.findById(owner._id)
-    .populate(
-      'service_location_id',
-      'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
-    )
-    .lean();
-
-  return serializeOwner(populatedOwner);
-};
-
-export const approveOwner = async (id, payload) =>
-  updateOwner(id, { approve: normalizeBoolean(payload.approve), active: true });
-
-export const listFleetVehicles = async () => {
-  await ensureFleetOwnersSeeded();
-
-  const items = await FleetVehicle.find()
-    .populate('owner_id', 'company_name owner_name name email mobile')
-    .populate('service_location_id', 'service_location_name name country')
-    .populate('vehicle_type_id', 'name type_name transport_type icon_types')
-    .sort({ createdAt: -1 })
-    .lean();
-
-  return { results: items.map(serializeFleetVehicle) };
-};
-
-export const createFleetVehicle = async (payload = {}) => {
-  await ensureFleetOwnersSeeded();
-
-  const ownerId = payload.owner_id || payload.ownerId;
-  const serviceLocationId = payload.service_location_id || payload.serviceLocationId;
-  const vehicleTypeId = payload.vehicle_type_id || payload.vehicleTypeId;
-
-  if (!ownerId) throw new ApiError(400, 'Owner is required');
-  if (!serviceLocationId) throw new ApiError(400, 'Service location is required');
-  if (!mongoose.isValidObjectId(ownerId)) throw new ApiError(400, 'Invalid owner id');
-  if (!mongoose.isValidObjectId(serviceLocationId)) throw new ApiError(400, 'Invalid service location id');
-  if (!payload.car_brand?.trim()) throw new ApiError(400, 'Car brand is required');
-  if (!payload.car_model?.trim()) throw new ApiError(400, 'Car model is required');
-  if (!payload.license_plate_number?.trim()) throw new ApiError(400, 'License plate number is required');
-  if (!payload.car_color?.trim()) throw new ApiError(400, 'Car color is required');
-
-  const normalizedPlate = String(payload.license_plate_number).trim().toUpperCase();
-
-  const existing = await FleetVehicle.findOne({
-    owner_id: toObjectId(ownerId),
-    license_plate_number: normalizedPlate,
-  }).lean();
-
-  if (existing) {
-    throw new ApiError(409, 'Fleet vehicle with this license plate already exists for this owner');
-  }
-
-  const item = await FleetVehicle.create({
-    owner_id: toObjectId(ownerId),
-    service_location_id: toObjectId(serviceLocationId),
-    transport_type: String(payload.transport_type || 'taxi').trim().toLowerCase(),
-    vehicle_type_id: vehicleTypeId && mongoose.isValidObjectId(vehicleTypeId) ? toObjectId(vehicleTypeId) : null,
-    car_brand: String(payload.car_brand).trim(),
-    car_model: String(payload.car_model).trim(),
-    license_plate_number: normalizedPlate,
-    car_color: String(payload.car_color).trim(),
-    status: String(payload.status || 'pending').trim().toLowerCase(),
-    reason: String(payload.reason || '').trim(),
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
-  });
-
-  const populated = await FleetVehicle.findById(item._id)
-    .populate('owner_id', 'company_name owner_name name email mobile')
-    .populate('service_location_id', 'service_location_name name country')
-    .populate('vehicle_type_id', 'name type_name transport_type icon_types')
-    .lean();
-
-  return serializeFleetVehicle(populated);
-};
-
-export const updateFleetVehicle = async (id, payload = {}) => {
-  await ensureFleetOwnersSeeded();
-
-  const item = await FleetVehicle.findById(id);
-  if (!item) throw new ApiError(404, 'Fleet vehicle not found');
-
-  if (payload.owner_id !== undefined) {
-    if (payload.owner_id && !mongoose.isValidObjectId(payload.owner_id)) {
-      throw new ApiError(400, 'Invalid owner id');
-    }
-    item.owner_id = payload.owner_id ? toObjectId(payload.owner_id) : item.owner_id;
-  }
-  if (payload.service_location_id !== undefined) {
-    if (payload.service_location_id && !mongoose.isValidObjectId(payload.service_location_id)) {
-      throw new ApiError(400, 'Invalid service location id');
-    }
-    item.service_location_id = payload.service_location_id ? toObjectId(payload.service_location_id) : item.service_location_id;
-  }
-  if (payload.transport_type !== undefined) item.transport_type = String(payload.transport_type || '').trim().toLowerCase();
-  if (payload.vehicle_type_id !== undefined) {
-    item.vehicle_type_id =
-      payload.vehicle_type_id && mongoose.isValidObjectId(payload.vehicle_type_id) ? toObjectId(payload.vehicle_type_id) : null;
-  }
-  if (payload.car_brand !== undefined) item.car_brand = String(payload.car_brand || '').trim();
-  if (payload.car_model !== undefined) item.car_model = String(payload.car_model || '').trim();
-  if (payload.license_plate_number !== undefined) item.license_plate_number = String(payload.license_plate_number || '').trim().toUpperCase();
-  if (payload.car_color !== undefined) item.car_color = String(payload.car_color || '').trim();
-  if (payload.status !== undefined) item.status = String(payload.status || 'pending').trim().toLowerCase();
-  if (payload.reason !== undefined) item.reason = String(payload.reason || '').trim();
-  if (payload.active !== undefined) item.active = normalizeBoolean(payload.active);
-
-  await item.save();
-
-  const populated = await FleetVehicle.findById(item._id)
-    .populate('owner_id', 'company_name owner_name name email mobile')
-    .populate('service_location_id', 'service_location_name name country')
-    .populate('vehicle_type_id', 'name type_name transport_type icon_types')
-    .lean();
-
-  return serializeFleetVehicle(populated);
-};
-
-export const deleteFleetVehicle = async (id) => {
-  const deleted = await FleetVehicle.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Fleet vehicle not found');
-  return true;
-};
-
-export const deleteOwner = async (id) => {
-  const owner = await Owner.findByIdAndDelete(id);
-  if (!owner) throw new ApiError(404, 'Owner not found');
-  return true;
-};
-
-export const listOwnerBookings = async () => {
-  const items = await OwnerBooking.find()
-    .populate('owner_id', 'full_name name email mobile')
-    .sort({ createdAt: -1 })
-    .lean();
-
-  return items.map(serializeOwnerBooking);
-};
-
-export const createOwnerBooking = async (payload) => {
-  if (!payload.booking_reference?.trim()) {
-    throw new ApiError(400, 'Booking reference is required');
-  }
-
-  if (!payload.customer_name?.trim()) {
-    throw new ApiError(400, 'Customer name is required');
-  }
-
-  const item = await OwnerBooking.create({
-    owner_id: payload.owner_id ? toObjectId(payload.owner_id) : null,
-    booking_reference: String(payload.booking_reference).trim(),
-    customer_name: String(payload.customer_name).trim(),
-    customer_phone: String(payload.customer_phone || '').trim(),
-    pickup_location: String(payload.pickup_location || '').trim(),
-    dropoff_location: String(payload.dropoff_location || '').trim(),
-    trip_type: payload.trip_type || 'city',
-    vehicle_type: String(payload.vehicle_type || '').trim(),
-    trip_date: payload.trip_date ? new Date(payload.trip_date) : null,
-    fare_amount: toNullableNumber(payload.fare_amount) ?? 0,
-    payment_status: payload.payment_status || 'pending',
-    booking_status: payload.booking_status || 'pending',
-    notes: String(payload.notes || '').trim(),
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
-  });
-
-  const populatedItem = await OwnerBooking.findById(item._id)
-    .populate('owner_id', 'full_name name email mobile')
-    .lean();
-
-  return serializeOwnerBooking(populatedItem);
-};
-
-export const updateOwnerBooking = async (id, payload) => {
-  const item = await OwnerBooking.findById(id);
-  if (!item) throw new ApiError(404, 'Owner booking not found');
-
-  if (payload.owner_id !== undefined) {
-    item.owner_id = payload.owner_id ? toObjectId(payload.owner_id) : null;
-  }
-  if (payload.booking_reference !== undefined) {
-    item.booking_reference = String(payload.booking_reference || '').trim();
-  }
-  if (payload.customer_name !== undefined) {
-    item.customer_name = String(payload.customer_name || '').trim();
-  }
-  if (payload.customer_phone !== undefined) {
-    item.customer_phone = String(payload.customer_phone || '').trim();
-  }
-  if (payload.pickup_location !== undefined) {
-    item.pickup_location = String(payload.pickup_location || '').trim();
-  }
-  if (payload.dropoff_location !== undefined) {
-    item.dropoff_location = String(payload.dropoff_location || '').trim();
-  }
-  if (payload.trip_type !== undefined) {
-    item.trip_type = payload.trip_type || 'city';
-  }
-  if (payload.vehicle_type !== undefined) {
-    item.vehicle_type = String(payload.vehicle_type || '').trim();
-  }
-  if (payload.trip_date !== undefined) {
-    item.trip_date = payload.trip_date ? new Date(payload.trip_date) : null;
-  }
-  if (payload.fare_amount !== undefined) {
-    item.fare_amount = toNullableNumber(payload.fare_amount) ?? 0;
-  }
-  if (payload.payment_status !== undefined) {
-    item.payment_status = payload.payment_status || 'pending';
-  }
-  if (payload.booking_status !== undefined) {
-    item.booking_status = payload.booking_status || 'pending';
-  }
-  if (payload.notes !== undefined) {
-    item.notes = String(payload.notes || '').trim();
-  }
-  if (payload.active !== undefined) {
-    item.active = normalizeBoolean(payload.active);
-  }
-
-  await item.save();
-
-  const populatedItem = await OwnerBooking.findById(item._id)
-    .populate('owner_id', 'full_name name email mobile')
-    .lean();
-
-  return serializeOwnerBooking(populatedItem);
-};
-
-export const deleteOwnerBooking = async (id) => {
-  const deleted = await OwnerBooking.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Owner booking not found');
-  return true;
-};
-
 const normalizeAdminEarningOption = (value) => String(value || '').trim();
 
 const formatAdminEarningDate = (value) => {
@@ -8684,16 +6810,11 @@ const dateMatch = (startDate, endDate) => {
   return range;
 };
 
-/// Money figures that do not come from rides: driver subscription passes sold,
-/// refunds credited to riders, withdrawals drivers are waiting on, and what
+/// Money figures that do not come from rides: refunds credited to riders, withdrawals drivers are waiting on, and what
 /// sits in driver wallets. Zone and vehicle filters do not apply to these.
 const getAdminEarningExtras = async ({ startDate, endDate }) => {
   const range = dateMatch(startDate, endDate);
-  const [subscriptions, refunds, pending, wallets] = await Promise.all([
-    DriverSubscription.aggregate([
-      { $match: { paidAt: { $ne: null, ...range } } },
-      { $group: { _id: null, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
-    ]),
+  const [refunds, pending, wallets] = await Promise.all([
     UserWallet.aggregate([
       { $unwind: '$transactions' },
       {
@@ -8727,8 +6848,6 @@ const getAdminEarningExtras = async ({ startDate, endDate }) => {
     withdrawalsPaidCount: paid.count,
     withdrawalsFailed: money(failed.amount),
     withdrawalsFailedCount: failed.count,
-    subscriptionRevenue: money(subscriptions[0]?.amount),
-    subscriptionCount: subscriptions[0]?.count || 0,
     refunds: money(refunds[0]?.amount),
     refundCount: refunds[0]?.count || 0,
     pendingSettlements: money(waiting.amount),
@@ -8873,14 +6992,12 @@ export const getAdminEarnings = async (query = {}) => {
   // The cards that were estimates in the browser (5% / 1.5% / 8% of other
   // figures) now come from the records themselves.
   const extras = await getAdminEarningExtras({ startDate, endDate });
-  const netPlatformRevenue = roundedTotals.adminCommission + extras.subscriptionRevenue - extras.refunds;
+  const netPlatformRevenue = roundedTotals.adminCommission - extras.refunds;
 
   return {
     summary: {
       ...roundedTotals,
       averageCommission: rows.length ? Number((totals.adminCommission / rows.length).toFixed(2)) : 0,
-      subscriptionRevenue: extras.subscriptionRevenue,
-      subscriptionCount: extras.subscriptionCount,
       refunds: extras.refunds,
       refundCount: extras.refundCount,
       netPlatformRevenue: Number(netPlatformRevenue.toFixed(2)),
@@ -9017,10 +7134,9 @@ export const getDashboardData = async () => {
     return { ...dashboardCache.value, live };
   }
 
-  const [totalUsers, totalDrivers, totalOwners, approvedDrivers, rides, supportTicketStats] = await Promise.all([
+  const [totalUsers, totalDrivers, approvedDrivers, rides, supportTicketStats] = await Promise.all([
     User.countDocuments(),
     Driver.countDocuments(),
-    Owner.countDocuments(),
     Driver.countDocuments({ approve: true }),
     Ride.find()
       .select('status liveStatus fare paymentMethod commissionAmount driverEarnings driverId createdAt updatedAt completedAt')
@@ -9192,7 +7308,6 @@ export const getDashboardData = async () => {
       approved: approvedDrivers,
       declined: totalDrivers - approvedDrivers
     },
-    totalOwners,
     total_earnings: Number(totalOverallFare.toFixed(2)),
     payment_success_rate: 99.4,
     notifiedSos: {
@@ -9288,7 +7403,7 @@ export const getOverallEarnings = async () => (await getDashboardData()).overall
 export const getTodayEarnings = async () => (await getDashboardData()).todayEarnings;
 export const getCancelChart = async () => (await getDashboardData()).cancelChart;
 
-export const listWithdrawals = async () => WithdrawalRequest.find().populate('driver_id owner_id').sort({ createdAt: -1 }).lean();
+export const listWithdrawals = async () => WithdrawalRequest.find().populate('driver_id').sort({ createdAt: -1 }).lean();
 
 export const listZones = async (currentAdmin = null) => {
   if (currentAdmin) {
@@ -10003,176 +8118,7 @@ export const deleteAirport = async (id, currentAdmin = null) => {
   return true;
 };
 
-export const listBusServices = async (options = {}) => {
-  const filter = {};
-  const scopedOwnerId = toObjectId(options.ownerId);
-
-  if (scopedOwnerId) {
-    filter.ownerId = scopedOwnerId;
-  }
-
-  const items = await BusService.find(filter).sort({ createdAt: -1 }).lean();
-  return items.map((item) => serializeBusService(item));
-};
-
-export const createBusService = async (payload = {}, options = {}) => {
-  const normalizedPayload = normalizeBusServicePayload(payload);
-  const ownerId = toObjectId(options.ownerId) || toObjectId(payload.ownerId) || null;
-
-  if (!normalizedPayload.operatorName) {
-    throw new ApiError(400, 'Operator name is required');
-  }
-
-  if (!normalizedPayload.busName) {
-    throw new ApiError(400, 'Bus name is required');
-  }
-
-  if (!normalizedPayload.route.originCity) {
-    throw new ApiError(400, 'Origin city is required');
-  }
-
-  if (!normalizedPayload.route.destinationCity) {
-    throw new ApiError(400, 'Destination city is required');
-  }
-
-  const item = await BusService.create({
-    ...normalizedPayload,
-    ownerId,
-  });
-  await syncBusDriverForBusService(item, normalizedPayload);
-  await item.save();
-  return serializeBusService(item.toObject());
-};
-
-export const updateBusService = async (id, payload = {}, options = {}) => {
-  const scopedOwnerId = toObjectId(options.ownerId);
-  const existingItem = scopedOwnerId
-    ? await BusService.findOne({ _id: id, ownerId: scopedOwnerId })
-    : await BusService.findById(id);
-
-  if (!existingItem) {
-    throw new ApiError(404, 'Bus service not found');
-  }
-
-  const normalizedPayload = normalizeBusServicePayload(payload, existingItem.toObject());
-
-  if (!normalizedPayload.operatorName) {
-    throw new ApiError(400, 'Operator name is required');
-  }
-
-  if (!normalizedPayload.busName) {
-    throw new ApiError(400, 'Bus name is required');
-  }
-
-  if (!normalizedPayload.route.originCity) {
-    throw new ApiError(400, 'Origin city is required');
-  }
-
-  if (!normalizedPayload.route.destinationCity) {
-    throw new ApiError(400, 'Destination city is required');
-  }
-
-  Object.assign(existingItem, normalizedPayload);
-  if (scopedOwnerId) {
-    existingItem.ownerId = scopedOwnerId;
-  }
-  await syncBusDriverForBusService(existingItem, normalizedPayload);
-  await existingItem.save();
-
-  return serializeBusService(existingItem.toObject());
-};
-
-export const deleteBusService = async (id, options = {}) => {
-  const scopedOwnerId = toObjectId(options.ownerId);
-  const item = scopedOwnerId
-    ? await BusService.findOneAndDelete({ _id: id, ownerId: scopedOwnerId })
-    : await BusService.findByIdAndDelete(id);
-  if (!item) throw new ApiError(404, 'Bus service not found');
-  if (item.busDriverId) {
-    await BusDriver.findByIdAndDelete(item.busDriverId);
-  }
-  return true;
-};
-
-export const listPendingBusDriverSignups = async () => {
-  const items = await BusDriver.find({
-    signupSource: 'self_signup',
-    approve: false,
-  })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  return items.map((item) => ({
-    _id: item._id,
-    id: item._id,
-    name: item.name || '',
-    phone: item.phone || '',
-    email: item.email || '',
-    approve: item.approve !== false,
-    status: item.status || 'pending',
-    rejectionReason: item.rejectionReason || '',
-    operatorName: item.operatorName || '',
-    busName: item.busName || '',
-    serviceNumber: item.serviceNumber || '',
-    routeName: item.routeName || '',
-    originCity: item.originCity || '',
-    destinationCity: item.destinationCity || '',
-    assignedBusServiceId: item.assignedBusServiceId || null,
-    onboarding: item.onboarding || null,
-    createdAt: item.createdAt || null,
-  }));
-};
-
-export const approveBusDriverSignup = async (id) => {
-  const item = await BusDriver.findById(id);
-  if (!item) {
-    throw new ApiError(404, 'Bus driver request not found');
-  }
-
-  item.approve = true;
-  item.status = 'approved';
-  item.active = true;
-  item.rejectionReason = '';
-  await item.save();
-
-  return {
-    _id: item._id,
-    id: item._id,
-    name: item.name || '',
-    phone: item.phone || '',
-    approve: item.approve,
-    status: item.status,
-  };
-};
-
-export const rejectBusDriverSignup = async (id, payload = {}) => {
-  const item = await BusDriver.findById(id);
-  if (!item) {
-    throw new ApiError(404, 'Bus driver request not found');
-  }
-
-  item.approve = false;
-  item.status = 'pending';
-  item.rejectionReason = String(payload?.rejectionReason || payload?.reason || 'Rejected by admin').trim();
-  await item.save();
-
-  return {
-    _id: item._id,
-    id: item._id,
-    name: item.name || '',
-    phone: item.phone || '',
-    approve: item.approve,
-    status: item.status,
-    rejectionReason: item.rejectionReason || '',
-  };
-};
-
 export const listRentalVehicleTypes = async () => {
-  await RentalVehicleType.updateMany(
-    { poolingEnabled: { $exists: false } },
-    { $set: { poolingEnabled: false } },
-  );
-
   const items = await RentalVehicleType.find().sort({ createdAt: -1 }).lean();
   return items.map((item) => serializeRentalVehicleType(item));
 };
@@ -10219,108 +8165,6 @@ export const updateRentalVehicleType = async (id, payload = {}) => {
 export const deleteRentalVehicleType = async (id) => {
   const item = await RentalVehicleType.findByIdAndDelete(id);
   if (!item) throw new ApiError(404, 'Rental vehicle type not found');
-  return true;
-};
-
-export const listPoolingRoutes = async () => {
-  const items = await PoolingRoute.find().sort({ createdAt: -1 }).lean();
-  const vehicleIds = [
-    ...new Set(
-      items
-        .flatMap((item) => (Array.isArray(item.assignedVehicleTypeIds) ? item.assignedVehicleTypeIds : []))
-        .map((value) => String(value || ''))
-        .filter(Boolean),
-    ),
-  ];
-
-  const vehicles = vehicleIds.length
-    ? await RentalVehicleType.find({ _id: { $in: vehicleIds } }).lean()
-    : [];
-  const vehicleMap = new Map(vehicles.map((item) => [String(item._id), item]));
-
-  return items.map((item) => serializePoolingRoute(item, vehicleMap));
-};
-
-export const createPoolingRoute = async (payload = {}) => {
-  const normalizedPayload = normalizePoolingPayload(payload);
-
-  if (!normalizedPayload.routeName) {
-    throw new ApiError(400, 'Pooling route name is required');
-  }
-
-  if (!normalizedPayload.originLabel) {
-    throw new ApiError(400, 'Origin location is required');
-  }
-
-  if (!normalizedPayload.destinationLabel) {
-    throw new ApiError(400, 'Destination location is required');
-  }
-
-  if (normalizedPayload.assignedVehicleTypeIds.length === 0) {
-    throw new ApiError(400, 'Please assign at least one pooling-enabled vehicle');
-  }
-
-  const item = await PoolingRoute.create({
-    ...normalizedPayload,
-    assignedVehicleTypeIds: normalizedPayload.assignedVehicleTypeIds.map((value) =>
-      toObjectId(value),
-    ),
-    active: normalizedPayload.status === 'active',
-  });
-
-  const vehicles = await RentalVehicleType.find({
-    _id: { $in: item.assignedVehicleTypeIds || [] },
-  }).lean();
-  const vehicleMap = new Map(vehicles.map((vehicle) => [String(vehicle._id), vehicle]));
-
-  return serializePoolingRoute(item.toObject(), vehicleMap);
-};
-
-export const updatePoolingRoute = async (id, payload = {}) => {
-  const existingItem = await PoolingRoute.findById(id);
-
-  if (!existingItem) {
-    throw new ApiError(404, 'Pooling route not found');
-  }
-
-  const normalizedPayload = normalizePoolingPayload(payload, existingItem.toObject());
-
-  if (!normalizedPayload.routeName) {
-    throw new ApiError(400, 'Pooling route name is required');
-  }
-
-  if (!normalizedPayload.originLabel) {
-    throw new ApiError(400, 'Origin location is required');
-  }
-
-  if (!normalizedPayload.destinationLabel) {
-    throw new ApiError(400, 'Destination location is required');
-  }
-
-  if (normalizedPayload.assignedVehicleTypeIds.length === 0) {
-    throw new ApiError(400, 'Please assign at least one pooling-enabled vehicle');
-  }
-
-  Object.assign(existingItem, {
-    ...normalizedPayload,
-    assignedVehicleTypeIds: normalizedPayload.assignedVehicleTypeIds.map((value) =>
-      toObjectId(value),
-    ),
-    active: normalizedPayload.status === 'active',
-  });
-  await existingItem.save();
-
-  const vehicles = await RentalVehicleType.find({
-    _id: { $in: existingItem.assignedVehicleTypeIds || [] },
-  }).lean();
-  const vehicleMap = new Map(vehicles.map((vehicle) => [String(vehicle._id), vehicle]));
-
-  return serializePoolingRoute(existingItem.toObject(), vehicleMap);
-};
-
-export const deletePoolingRoute = async (id) => {
-  const item = await PoolingRoute.findByIdAndDelete(id);
-  if (!item) throw new ApiError(404, 'Pooling route not found');
   return true;
 };
 
@@ -10859,21 +8703,6 @@ export const listDriverDocumentUploadFields = async ({ activeOnly = true } = {})
   );
 };
 
-export const listOwnerDocumentUploadFields = async ({ activeOnly = true } = {}) => {
-  const items = await listOwnerNeededDocuments();
-  const filteredItems = activeOnly ? items.filter((item) => item.active !== false) : items;
-
-  return filteredItems.flatMap((item) =>
-    buildOwnerDocumentFields(item).map((field) => ({
-      ...field,
-      template_id: item.id,
-      template_name: item.name,
-      image_type: item.image_type,
-      has_expiry_date: item.has_expiry_date,
-      has_identify_number: item.has_identify_number,
-    })),
-  );
-};
 
 export const createDriverNeededDocument = async (payload) => {
   if (!payload.name?.trim()) {
@@ -11077,66 +8906,6 @@ export const deleteDriverNeededDocument = async (id) => {
   return true;
 };
 
-
-export const listOwnerNeededDocuments = async () => {
-  const items = await OwnerNeededDocument.find().sort({ createdAt: -1 }).lean();
-  return items.map(serializeOwnerNeededDocument);
-};
-
-export const createOwnerNeededDocument = async (payload) => {
-  if (!payload.name?.trim()) {
-    throw new ApiError(400, 'Document name is required');
-  }
-
-  const item = await OwnerNeededDocument.create({
-    name: String(payload.name).trim(),
-    image_type: String(payload.image_type || 'front_back').trim(),
-    has_expiry_date: normalizeBoolean(payload.has_expiry_date),
-    has_identify_number: normalizeBoolean(payload.has_identify_number),
-    is_editable: normalizeBoolean(payload.is_editable),
-    is_required: normalizeBoolean(payload.is_required),
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
-  });
-
-  return serializeOwnerNeededDocument(item.toObject());
-};
-
-export const updateOwnerNeededDocument = async (id, payload) => {
-  const item = await OwnerNeededDocument.findById(id);
-  if (!item) throw new ApiError(404, 'Owner needed document not found');
-
-  if (payload.name !== undefined) {
-    item.name = String(payload.name || '').trim();
-  }
-  if (payload.image_type !== undefined) {
-    item.image_type = String(payload.image_type || 'front_back').trim();
-  }
-  if (payload.has_expiry_date !== undefined) {
-    item.has_expiry_date = normalizeBoolean(payload.has_expiry_date);
-  }
-  if (payload.has_identify_number !== undefined) {
-    item.has_identify_number = normalizeBoolean(payload.has_identify_number);
-  }
-  if (payload.is_editable !== undefined) {
-    item.is_editable = normalizeBoolean(payload.is_editable);
-  }
-  if (payload.is_required !== undefined) {
-    item.is_required = normalizeBoolean(payload.is_required);
-  }
-  if (payload.active !== undefined) {
-    item.active = normalizeBoolean(payload.active);
-  }
-
-  await item.save();
-  return serializeOwnerNeededDocument(item.toObject());
-};
-
-export const deleteOwnerNeededDocument = async (id) => {
-  const deleted = await OwnerNeededDocument.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Owner needed document not found');
-  return true;
-};
-
 export const listReferralTranslations = async () => {
   const [languages, translations] = await Promise.all([
     AppLanguage.find().sort({ default_status: -1, code: 1 }).lean(),
@@ -11256,8 +9025,6 @@ export const getReferralTranslationContent = async (languageCode = '') => {
   };
 };
 
-
-
 export const listLanguages = async () => AppLanguage.find().sort({ code: 1 }).lean();
 
 export const updateLanguageStatus = async (id, payload) => {
@@ -11312,8 +9079,6 @@ export const deleteRole = async (id) => {
   if (!deleted) throw new ApiError(404, 'Role not found');
   return true;
 };
-
-
 
 export const listNotificationChannels = async () => NotificationChannel.find().sort({ createdAt: 1 }).lean();
 
@@ -11546,8 +9311,6 @@ export const runRechargeApiTest = async () => {
   };
 };
 
-
-
 const buildDateFilter = (date_option, from_date, to_date) => {
   const filter = {};
   const now = new Date();
@@ -11710,30 +9473,6 @@ export const buildDriverDutyReport = async (query = {}) => {
   };
 };
 
-export const buildOwnerReport = async (query = {}) => {
-  const { service_location_id, status, date_option, from_date, to_date } = query;
-  const filter = {};
-
-  if (service_location_id) filter.service_location_id = service_location_id;
-  if (status === 'active') filter.active = true;
-  else if (status === 'inactive') filter.active = false;
-
-  const dateFilter = buildDateFilter(date_option, from_date, to_date);
-  if (dateFilter) filter.createdAt = dateFilter;
-
-  const owners = await listOwners(filter);
-  return {
-    headers: ['company_name', 'name', 'email', 'transport_type', 'active', 'createdAt'],
-    rows: owners.map((item) => ({
-      company_name: item.company_name,
-      name: item.name,
-      email: item.email,
-      transport_type: item.transport_type,
-      active: item.active,
-      createdAt: item.createdAt ? new Date(item.createdAt).toLocaleString() : ''
-    }))
-  };
-};
 
 export const buildFinanceReport = async (query = {}) => {
   const {
@@ -11823,18 +9562,6 @@ export const buildFinanceReport = async (query = {}) => {
   };
 };
 
-export const buildFleetFinanceReport = async () => {
-  const owners = await listOwners();
-  return {
-    headers: ['company_name', 'owner', 'transport_type', 'active'],
-    rows: owners.map((item) => ({
-      company_name: item.company_name,
-      owner: item.name,
-      transport_type: item.transport_type,
-      active: item.active,
-    }))
-  };
-};
 
 export const ensureBusinessSettings = async () => {
   let settings = await AdminBusinessSetting.findOne({ scope: 'default' });
@@ -11875,7 +9602,6 @@ const businessSettingsCategoryMap = {
   customize: 'customization',
   'transport-ride': 'transport_ride',
   'bid-ride': 'bid_ride',
-  'driver-subscription': 'driver_subscription',
   general: 'general',
   'user-home-management': 'user_home_settings',
 };
@@ -12192,7 +9918,7 @@ export const listOnboardingScreens = async (audience) => {
 
 export const createOnboardingScreen = async (payload = {}) => {
   const audience = String(payload.audience || payload.screen || 'user').trim().toLowerCase();
-  if (!['user', 'driver', 'owner'].includes(audience)) {
+  if (!['user', 'driver'].includes(audience)) {
     throw new ApiError(400, 'Valid onboarding audience is required');
   }
 
@@ -12218,7 +9944,7 @@ export const updateOnboardingScreen = async (id, payload = {}) => {
 
   if (payload.audience !== undefined || payload.screen !== undefined) {
     const audience = String(payload.audience || payload.screen || '').trim().toLowerCase();
-    if (!['user', 'driver', 'owner'].includes(audience)) {
+    if (!['user', 'driver'].includes(audience)) {
       throw new ApiError(400, 'Valid onboarding audience is required');
     }
     update.audience = audience;
@@ -12273,7 +9999,6 @@ export const seedTransportTypes = async () => {
   const defaults = [
     { name: 'taxi', display_name: 'Taxi' },
     { name: 'delivery', display_name: 'Delivery' },
-    { name: 'pooling', display_name: 'Pooling' },
     { name: 'both', display_name: 'Both' }
   ];
 
@@ -12535,25 +10260,14 @@ export const getAdminEarningDetails = async (query = {}) => {
     }
     case 'net-revenue': {
       const range = dateMatch(earnings.filters?.from ? new Date(earnings.filters.from) : null, earnings.filters?.to ? new Date(`${earnings.filters.to}T23:59:59.999`) : null);
-      const passes = await DriverSubscription.find({ paidAt: { $ne: null, ...range } })
-        .sort({ paidAt: -1 })
-        .populate('driverId', 'name phone')
-        .lean();
       const rows = [
         { item: 'Commission on completed trips', detail: `${rides.length} trips`, amount: money(summary.adminCommission) },
-        { item: 'Driver subscription passes', detail: `${summary.subscriptionCount || 0} passes sold`, amount: money(summary.subscriptionRevenue) },
         { item: 'Refunds to riders', detail: `${summary.refundCount || 0} refunds`, amount: -money(summary.refunds) },
-        ...passes.map((pass) => ({
-          item: `Pass: ${pass.planName || 'Subscription'}`,
-          detail: `${pass.driverId?.name || 'Driver'} · ${pass.paymentMethod || 'wallet'} · ${new Date(pass.paidAt).toLocaleString('en-IN')}`,
-          amount: money(pass.amount),
-          indent: true,
-        })),
       ];
       return {
         metric,
         title: 'Net platform revenue',
-        description: 'Commission plus driver subscription passes, less refunds. Zone and vehicle filters apply to commission only.',
+        description: 'Commission less refunds. Zone and vehicle filters apply to commission only.',
         columns: [
           { key: 'item', label: 'Item' },
           { key: 'detail', label: 'Detail' },

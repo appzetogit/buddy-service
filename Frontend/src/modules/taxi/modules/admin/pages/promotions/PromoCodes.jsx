@@ -29,11 +29,8 @@ const CREATE_PATH = '/admin/promotions/promo-codes/create';
 const Motion = motion;
 const PROMO_TRANSPORT_OPTIONS = [
   { value: 'all', label: 'All Modules' },
-  { value: 'self_drive', label: 'Self Drive' },
-  { value: 'bus', label: 'Bus' },
   { value: 'taxi', label: 'Taxi' },
   { value: 'delivery', label: 'Delivery' },
-  { value: 'pooling', label: 'Pooling' },
 ];
 
 const inputClass =
@@ -84,7 +81,6 @@ const getPromoLocationLabel = (promo) => {
 const normalizeTransportType = (value) => {
   const normalized = String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
   if (normalized === 'texi') return 'taxi';
-  if (normalized === 'selfdrive') return 'self_drive';
   return normalized;
 };
 

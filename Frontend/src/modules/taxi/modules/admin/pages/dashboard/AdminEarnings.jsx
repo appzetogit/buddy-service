@@ -258,7 +258,6 @@ const AdminEarnings = () => {
   const netPlatformRevenue = Number(summary.netPlatformRevenue || 0);
   const refundAmount = Number(summary.refunds || 0);
   const pendingSettlements = Number(summary.pendingSettlements || 0);
-  const subscriptionRevenue = Number(summary.subscriptionRevenue || 0);
   const driverWalletHeld = Number(summary.driverWalletHeld || 0);
   const withdrawalsPaid = Number(summary.withdrawalsPaid || 0);
   const withdrawalsFailed = Number(summary.withdrawalsFailed || 0);
@@ -665,17 +664,13 @@ const AdminEarnings = () => {
               <span className="text-base font-bold text-[#0B1220] block mt-0.5">{Number(summary.refundCount || 0)}</span>
             </div>
             <div>
-              <span className="text-slate-400 block uppercase font-semibold text-[9px] tracking-wider">Subscription Income</span>
-              <span className="text-base font-bold text-[#0B1220] block mt-0.5">{currency(subscriptionRevenue)}</span>
-            </div>
-            <div>
               <span className="text-slate-400 block uppercase font-semibold text-[9px] tracking-wider">Net Platform Revenue</span>
               <span className="text-base font-bold text-violet-600 block mt-0.5">{currency(netPlatformRevenue)}</span>
             </div>
           </div>
           <div className="bg-slate-50 border border-slate-100 rounded-lg p-2.5 flex justify-between items-center text-[10px] text-slate-500 font-semibold">
-            <span>Commission + passes − refunds</span>
-            <span className="text-[#0B1220] font-bold">{currency(totalCommission)} + {currency(subscriptionRevenue)} − {currency(refundAmount)}</span>
+            <span>Commission − refunds</span>
+            <span className="text-[#0B1220] font-bold">{currency(totalCommission)} − {currency(refundAmount)}</span>
           </div>
         </div>
 

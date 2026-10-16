@@ -8,7 +8,6 @@ import imgShared    from '@taxi/assets/3d images/AutoCab/taxi.png';
 import imgAirport   from '@taxi/assets/3d images/AutoCab/airoplan.png';
 import imgSpiritual from '@taxi/assets/3d images/AutoCab/temple.png';
 import imgOneWay    from '@taxi/assets/3d images/AutoCab/one way.png';
-import imgBus       from '@taxi/assets/3d images/AutoCab/bus.png';
 
 const isEnabledFlag = (value) => {
   if (typeof value === 'boolean') return value;
@@ -57,24 +56,12 @@ const services = [
     tag: 'No return charge',
     tagColor: 'bg-green-50 text-green-600 border-green-100',
   },
-  {
-    id: 'bus',
-    title: 'Bus Booking',
-    sub: 'Comfortable intercity buses',
-    img: imgBus,
-    path: '/bus',
-    accent: 'bg-[linear-gradient(135deg,#FFF1F2_0%,#FECDD3_100%)]',
-    tag: 'Sleeper & Seater',
-    tagColor: 'bg-rose-50 text-rose-600 border-rose-100',
-  },
 ];
 
 const CabHome = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { settings } = useSettings();
-  const showBusService = isEnabledFlag(settings.transportRide?.enable_bus_service);
-  const visibleServices = services.filter((service) => showBusService || service.id !== 'bus');
+  const visibleServices = services;
   const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
 
   return (

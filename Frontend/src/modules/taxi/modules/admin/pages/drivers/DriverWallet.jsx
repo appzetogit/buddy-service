@@ -34,7 +34,7 @@ const DriverWallet = () => {
     { id: 'TXN-101', driver: 'Rahul S.', type: 'Credit', category: 'Ride Earning', amount: '+₹420', date: 'Mar 31, 2024', status: 'Success' },
     { id: 'TXN-102', driver: 'Vijay P.', type: 'Debit', category: 'Admin Comm.', amount: '-₹42', date: 'Mar 31, 2024', status: 'Success' },
     { id: 'TXN-103', driver: 'Anil D.', type: 'Credit', category: 'Referral Bonus', amount: '+₹1,000', date: 'Mar 30, 2024', status: 'Success' },
-    { id: 'TXN-104', driver: 'Suresh K.', type: 'Debit', category: 'Subscription Fee', amount: '-₹999', date: 'Mar 30, 2024', status: 'Success' },
+    { id: 'TXN-104', driver: 'Suresh K.', type: 'Credit', category: 'Wallet Top-up', amount: '+₹999', date: 'Mar 30, 2024', status: 'Success' },
     { id: 'TXN-105', driver: 'Rajesh M.', type: 'Credit', category: 'Cash Trip Audit', amount: '+₹150', date: 'Mar 29, 2024', status: 'Failed' },
   ]);
 

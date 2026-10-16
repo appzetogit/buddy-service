@@ -2,12 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, FileText, Loader2, RefreshCw, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../../../shared/api/axiosInstance';
-import SubscriberReport from './SubscriberReport';
 import { TAXI_API_BASE, getAdminToken } from '@taxi/shared/api/session';
 
 /**
  * Every payment the platform takes, in one place: ride fares (cash, online,
- * wallet, subscription), driver subscription passes and wallet top-ups by
+ * wallet) and wallet top-ups by
  * drivers and riders - with an invoice or receipt PDF for each.
  *
  * Rides are listed by how they were actually paid, so a ride booked as cash
@@ -17,7 +16,6 @@ import { TAXI_API_BASE, getAdminToken } from '@taxi/shared/api/session';
 const KINDS = [
   { value: '', label: 'All payments' },
   { value: 'ride', label: 'Ride fares' },
-  { value: 'subscription', label: 'Driver subscriptions' },
   { value: 'driver_top_up', label: 'Driver wallet top-ups' },
   { value: 'rider_top_up', label: 'Rider wallet top-ups' },
 ];
@@ -27,14 +25,12 @@ const METHODS = [
   { value: 'online', label: 'Online' },
   { value: 'cash', label: 'Cash' },
   { value: 'wallet', label: 'Wallet' },
-  { value: 'subscription', label: 'Subscription' },
 ];
 
 const METHOD_STYLES = {
   online: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   cash: 'bg-green-50 text-green-700 border-green-200',
   wallet: 'bg-green-50 text-green-700 border-green-200',
-  subscription: 'bg-sky-50 text-sky-700 border-sky-200',
 };
 
 const STATUS_STYLES = {
@@ -71,8 +67,6 @@ const Payments = () => {
     q: '',
   });
   const [page, setPage] = useState(1);
-  // 'all': the payments ledger. 'subscribers': the daily-pass report.
-  const [tab, setTab] = useState('all');
   const [data, setData] = useState({ results: [], totals: {}, total: 0 });
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState('');
@@ -196,10 +190,10 @@ const Payments = () => {
         <div>
           <h1 className="text-xl font-bold text-[#1E293B]">Payments</h1>
           <p className="text-[11px] text-gray-500 mt-0.5">
-            Every ride fare, driver subscription and wallet top-up, with an invoice for each.
+            Every ride fare and wallet top-up, with an invoice for each.
           </p>
         </div>
-        <div className={`flex items-center gap-2 ${tab === 'all' ? '' : 'hidden'}`}>
+        <div className="flex items-center gap-2">
           <button
             onClick={load}
             className="flex items-center gap-1 text-[11px] font-semibold text-gray-600 hover:text-gray-900 px-2 py-1.5"
@@ -216,27 +210,7 @@ const Payments = () => {
         </div>
       </div>
 
-      <div className="flex gap-1 mb-3 border-b border-gray-200">
-        {[
-          { key: 'all', label: 'All payments' },
-          { key: 'subscribers', label: 'Subscribers' },
-        ].map((item) => (
-          <button
-            key={item.key}
-            onClick={() => setTab(item.key)}
-            className={`px-3 py-1.5 text-xs font-bold border-b-2 -mb-px transition-colors ${
-              tab === item.key ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'subscribers' ? (
-        <SubscriberReport />
-      ) : (
-        <>
+      <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {cards.map((card) => (
           <div key={card.label} className="bg-white border border-gray-100 rounded-lg p-3 shadow-sm">
@@ -374,8 +348,7 @@ const Payments = () => {
           </button>
         </div>
       </div>
-        </>
-      )}
+      </>
     </div>
   );
 };

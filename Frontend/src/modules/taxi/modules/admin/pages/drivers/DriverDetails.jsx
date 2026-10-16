@@ -565,7 +565,6 @@ const DriverDetails = () => {
     'Withdrawal History',
     'Review History',
     'Documents',
-    'Subscription',
   ];
 
   const fetchProfile = async () => {
@@ -697,7 +696,6 @@ const DriverDetails = () => {
       profile?.documents,
       profile?.onboarding?.documents,
       profile?.user_snapshot?.documents,
-      profile?.owner_snapshot?.documents,
     ].filter(Boolean);
 
     const normalized = candidateSources.flatMap((raw) => {
@@ -1711,11 +1709,6 @@ const DriverDetails = () => {
             </div>
           )}
 
-          {activeTab === 'Subscription' && (
-            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-500">
-              No subscription data available.
-            </div>
-          )}
         </>
       ) : (
         <>

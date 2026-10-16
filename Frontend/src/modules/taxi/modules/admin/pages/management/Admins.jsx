@@ -1551,7 +1551,7 @@ const Admins = () => {
         >
           <h3 className="text-xs text-[#0B1220] uppercase tracking-wider mb-3 font-bold">System Permission Directory</h3>
           <div className="flex flex-wrap gap-1.5">
-            {['Dashboard', 'Users', 'Drivers', 'Bookings', 'Finance', 'Taxi', 'Rental', 'Bus', 'Delivery', 'Support', 'Pricing', 'Promotion', 'Reports', 'Settings', 'Analytics'].map((mod, i) => (
+            {['Dashboard', 'Users', 'Drivers', 'Bookings', 'Finance', 'Taxi', 'Rental', 'Delivery', 'Support', 'Pricing', 'Promotion', 'Reports', 'Settings', 'Analytics'].map((mod, i) => (
               <span key={i} className="admin-badge admin-badge-info text-[9px] py-0.5 px-2 bg-slate-50 border border-slate-200 text-slate-600 rounded">
                 {mod}
               </span>

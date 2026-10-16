@@ -683,7 +683,7 @@ const GodsEye = () => {
                   <button className={btnPrimary + " w-full"}>
                      <Search size={14} /> Locate Vehicle
                   </button>
-                  <button onClick={() => navigate(`/admin/owner-management/manage-owners/${selectedDriver._id || selectedDriver.id}`)} className={btnSecondary + " w-full"}>
+                  <button onClick={() => navigate(`/admin/drivers/${selectedDriver._id || selectedDriver.id}`)} className={btnSecondary + " w-full"}>
                      <UserIcon size={14} /> View Driver Profile
                   </button>
                </div>

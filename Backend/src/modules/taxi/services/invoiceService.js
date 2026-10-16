@@ -417,7 +417,7 @@ export const sendRideInvoiceEmail = async ({ rideId }) => {
 };
 
 /**
- * Receipt for a payment that is not a ride - a driver's subscription pass or a
+ * Receipt for a payment that is not a ride - a driver's wallet top-up or a
  * wallet top-up - in the same style as the trip invoice. [payment] is a row
  * from paymentLedgerService.
  */

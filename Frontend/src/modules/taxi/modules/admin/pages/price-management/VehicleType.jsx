@@ -33,8 +33,6 @@ import PremiumIcon from '../../../../assets/icons/Premium.png';
 import SuvIcon from '../../../../assets/icons/SUV.png';
 import ScootyIcon from '../../../../assets/icons/scooty.png';
 import HatchbackIcon from '../../../../assets/icons/Hatchback.png';
-import BusIcon from '../../../../assets/icons/bus.png';
-import MiniBusIcon from '../../../../assets/icons/mini_bus.png';
 import MapBackground from '../../../../assets/map_image.png';
 import trucksImg from '@taxi/assets/images/delivery/trucks.png';
 import bikeImg from '@taxi/assets/images/delivery/bike.png';
@@ -58,8 +56,6 @@ const iconMap = {
   scooty: ScootyIcon,
   car_5_seater: HatchbackIcon,
   car_7_seater: SuvIcon,
-  bus: BusIcon,
-  mini_bus: MiniBusIcon,
 };
 
 const ICON_TYPE_ALIASES = {
@@ -67,8 +63,6 @@ const ICON_TYPE_ALIASES = {
   motorbike: 'bike',
   mini_truck: 'truck',
   'mini truck': 'truck',
-  pooling_truck: 'truck',
-  'pooling truck': 'truck',
   loader: 'truck',
   hcv: 'HCV',
   lcv: 'LCV',
@@ -77,8 +71,6 @@ const ICON_TYPE_ALIASES = {
   scooty: 'scooty',
   'car 5 seater': 'car_5_seater',
   'car 7 seater': 'car_7_seater',
-  bus: 'bus',
-  'mini bus': 'mini_bus',
 };
 
 const ICON_TYPE_LABELS = {
@@ -96,8 +88,6 @@ const ICON_TYPE_LABELS = {
   scooty: 'Scooty',
   car_5_seater: 'Car 5 Seater',
   car_7_seater: 'Car 7 Seater',
-  bus: 'Bus',
-  mini_bus: 'Mini Bus',
 };
 
 const normalizeIconType = (value = '') => {
@@ -114,7 +104,6 @@ const OBJECT_ID_PATTERN = /^[a-fA-F0-9]{24}$/;
 const normalizeTransportType = (value = '') => {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'delivery') return 'delivery';
-  if (normalized === 'pooling') return 'pooling';
   if (normalized === 'both' || normalized === 'all') return 'both';
   return 'taxi';
 };
@@ -122,7 +111,6 @@ const normalizeTransportType = (value = '') => {
 const normalizeTaxiMode = (value = '') => {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'delivery') return 'delivery';
-  if (normalized === 'pooling') return 'pooling';
   if (normalized === 'both' || normalized === 'all') return 'both';
   return 'taxi';
 };
@@ -181,8 +169,6 @@ const buildVehicleFormData = (selectedVehicle = {}) => ({
   service_tax: String(selectedVehicle.service_tax ?? 0),
   admin_commission_type_from_driver: String(selectedVehicle.admin_commission_type_from_driver ?? 1),
   admin_commission_from_driver: String(selectedVehicle.admin_commission_from_driver ?? 0),
-  admin_commission_type_for_owner: String(selectedVehicle.admin_commission_type_for_owner ?? 1),
-  admin_commission_for_owner: String(selectedVehicle.admin_commission_for_owner ?? 0),
   status: Number(selectedVehicle.status ?? (selectedVehicle.active !== false ? 1 : 0)),
   active: selectedVehicle.active !== false && Number(selectedVehicle.status ?? 1) !== 0,
   supported_other_vehicle_types: Array.isArray(selectedVehicle.supported_other_vehicle_types)
@@ -235,8 +221,6 @@ const defaultFormData = {
   service_tax: '0',
   admin_commission_type_from_driver: '1',
   admin_commission_from_driver: '0',
-  admin_commission_type_for_owner: '1',
-  admin_commission_for_owner: '0',
   status: 1,
   active: true,
   supported_other_vehicle_types: [],
@@ -413,7 +397,7 @@ const VehicleType = ({ mode: propMode }) => {
 
     [...TRANSPORT_TYPE_OPTIONS, ...(Array.isArray(transportTypes) ? transportTypes : [])].forEach((item) => {
       const value = normalizeTransportType(item?.name || item?.transport_type || item?.id || '');
-      if (!value || value === 'pooling') return;
+      if (!value) return;
 
       normalized.set(value, {
         id: item?.id || item?._id || value,
@@ -640,8 +624,6 @@ const VehicleType = ({ mode: propMode }) => {
         service_tax: showsDeliveryCategorySelector ? Number(formData.service_tax || 0) : 0,
         admin_commission_type_from_driver: Number(formData.admin_commission_type_from_driver || 1),
         admin_commission_from_driver: Number(formData.admin_commission_from_driver || 0),
-        admin_commission_type_for_owner: Number(formData.admin_commission_type_for_owner || 1),
-        admin_commission_for_owner: Number(formData.admin_commission_for_owner || 0),
         status: formData.active ? 1 : 0,
         active: formData.active,
         supported_other_vehicle_types: sanitizeObjectIdList(formData.supported_other_vehicle_types),
@@ -1268,29 +1250,7 @@ const VehicleType = ({ mode: propMode }) => {
                   />
                 </div>
 
-                <div>
-                  <label className={labelClass}>Admin Commission Type From Owner</label>
-                  <select
-                    value={formData.admin_commission_type_for_owner}
-                    onChange={(e) => updateForm('admin_commission_type_for_owner', e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="1">Percentage</option>
-                    <option value="2">Fixed</option>
-                  </select>
-                </div>
 
-                <div>
-                  <label className={labelClass}>Admin Commission From Owner</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.admin_commission_for_owner}
-                    onChange={(e) => updateForm('admin_commission_for_owner', clampNonNegativeInput(e.target.value))}
-                    className={inputClass}
-                    placeholder="0"
-                  />
-                </div>
               </div>
 
               <p className="mt-3 text-xs text-slate-500">

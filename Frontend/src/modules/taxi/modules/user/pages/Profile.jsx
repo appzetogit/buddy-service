@@ -42,7 +42,6 @@ const menuSections = [
     title: 'Financial & Rewards',
     items: [
       { icon: Wallet, title: 'My Wallet', sub: 'Balance & transactions', path: '/taxi/user/wallet', bg: 'bg-green-50', color: 'text-green-600' },
-      { icon: Package, title: 'Subscriptions', sub: 'Ride plans & credits', path: '/taxi/user/profile/subscriptions', bg: 'bg-green-50', color: 'text-green-600' },
       { icon: Gift, title: 'Refer & Earn', sub: 'Invite friends & get rewards', path: '/taxi/user/referral', bg: 'bg-rose-50', color: 'text-rose-600' },
     ]
   },

@@ -107,39 +107,4 @@ export const createDefaultBusinessSettings = () => ({
     user_bidding_amount_increase_or_decrease: '10',
     user_fare_increase_wait_minutes: '0',
   },
-
-  // A daily pass a driver buys instead of paying commission per trip.
-  //
-  // Every rule here is a switch rather than a decision baked into the code,
-  // because how a city is run changes: the same build has to support taking
-  // only commission, only the pass, or both at once.
-  //
-  // Off by default, so nothing changes until an admin turns it on.
-  driver_subscription: {
-    // off - commission only, as before
-    // subscription_only - a pass is required to receive rides
-    // both - a driver may work on commission or buy a pass
-    subscription_mode: 'off',
-    // Waive the per-trip commission while a pass is active. The rider's
-    // platform fee is not waived: that was never the driver's money.
-    waive_commission: '1',
-    // Waive the wallet minimum balance while a pass is active - the whole
-    // point of a daily pass is not having to keep the wallet topped up.
-    waive_wallet_minimum: '1',
-    // A driver registered for several vehicle types: 'highest' charges the
-    // dearest plan that covers any of them and lets them take every kind of
-    // trip; 'driver_choice' lets them buy the cheaper pass and only receive
-    // the vehicle types that pass covers.
-    multi_vehicle_rule: 'highest',
-    // How a driver may pay: wallet balance, the payment gateway, or both.
-    payment_methods: 'wallet,gateway',
-    // At the end of a cycle with no renewal: 'commission' puts the driver
-    // back on the commission model, 'block' stops sending them rides.
-    on_expiry: 'commission',
-    // The cycle is a fixed clock window, not 24 hours from payment: buy at
-    // noon and it still ends at 6am. Hour is local to the timezone below;
-    // the servers run on UTC, so this is read explicitly rather than assumed.
-    cycle_start_hour: '6',
-    cycle_timezone: 'Asia/Kolkata',
-  },
 });

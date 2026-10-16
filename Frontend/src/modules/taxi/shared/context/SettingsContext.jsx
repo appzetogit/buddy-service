@@ -34,7 +34,6 @@ const DEFAULT_SETTINGS_CONTEXT = {
       currency_symbol: '',
     },
     transportRide: {
-      enable_bus_service: '0',
     },
     bidRide: {
       bidding_low_percentage: '10',
@@ -81,7 +80,6 @@ const normalizeBooleanSetting = (value, fallback = '0') => {
 
 const normalizeTransportRideSettings = (settings = {}) => ({
   ...settings,
-  enable_bus_service: normalizeBooleanSetting(settings?.enable_bus_service, '0'),
 });
 
 const normalizeHexColor = (value, fallback = '') => {

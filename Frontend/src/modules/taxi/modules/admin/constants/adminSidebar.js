@@ -1,6 +1,5 @@
 import {
   Briefcase,
-  Bus,
   Car,
   Clock,
   FileText,
@@ -72,14 +71,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
       },
       { icon: Gavel, label: 'Bidding', path: '/admin/settings/business/bid-ride', permission: 'settings.view' },
       {
-        icon: IndianRupee,
-        label: 'Driver Subscription',
-        subItems: [
-          { label: 'Analytics', path: '/admin/driver-subscription/analytics', permission: 'earnings.view' },
-          { label: 'Plans & Settings', path: '/admin/settings/business/driver-subscription', permission: 'settings.view' },
-        ],
-      },
-      {
         icon: TrendingUp,
         label: 'Price Hike',
         subItems: [
@@ -115,7 +106,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
         label: 'Customer Management',
         subItems: [
           { label: 'User List', path: '/admin/users', permission: 'users.view' },
-          { label: 'Subscription Management', path: '/admin/users/subscriptions', permission: 'users.view' },
           { label: 'Delete Request Users', path: '/admin/users/delete-requests', permission: 'users.view' },
           { label: 'User Bulk Upload', path: '/admin/users/bulk-upload', permission: 'users.view' },
         ],
@@ -128,7 +118,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
           { label: 'Pending Drivers', path: '/admin/drivers/pending', permission: 'drivers.view' },
           { label: 'Approved Drivers', path: '/admin/drivers', permission: 'drivers.view' },
           { label: 'Active Drivers', path: '/admin/drivers/active', permission: 'drivers.view' },
-          //cd front{ label: 'Subscription', path: '/admin/drivers/subscription', permission: 'drivers.view' },
           { label: 'Drivers Ratings', path: '/admin/drivers/ratings', permission: 'drivers.view' },
           {
             label: 'Driver Wallet',
@@ -207,7 +196,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
         permission: 'settings.view',
         subItems: [
           { label: 'General Settings', path: '/admin/settings/business/general', permission: 'settings.view' },
-          { label: 'Customization Settings', path: '/admin/settings/business/customization', permission: 'settings.view' },
           { label: 'Transport Ride Settings', path: '/admin/settings/business/transport-ride', permission: 'settings.view' },
         ],
       },

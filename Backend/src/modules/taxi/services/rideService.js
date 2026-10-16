@@ -18,7 +18,6 @@ import { RideBid } from '../user/models/RideBid.js';
 import { Ride } from '../user/models/Ride.js';
 import { User } from '../user/models/User.js';
 import { UserWallet } from '../user/models/UserWallet.js';
-import { consumeUserSubscriptionRide, resolveApplicableUserSubscription } from '../user/services/subscriptionService.js';
 import { applyPromoToRideInTransaction } from './promoService.js';
 import { ABSOLUTE_MAX_MULTIPLIER, getSurgeAt, getSurgeProfiles, surgeForVehicle } from './surgeService.js';
 import { classifyTrip } from './tripCategoryService.js';
@@ -1100,7 +1099,7 @@ export const createRideRecord = async ({
 
   const primaryVehicleTypeId = dispatchVehicleTypeIds[0] || null;
   const primaryVehicle = primaryVehicleTypeId
-    ? await Vehicle.findById(primaryVehicleTypeId).select('name icon_types category vehicle_type icon map_icon image dispatch_type admin_commission_type_from_driver admin_commission_from_driver admin_commission_type_for_owner admin_commission_for_owner').lean()
+    ? await Vehicle.findById(primaryVehicleTypeId).select('name icon_types category vehicle_type icon map_icon image dispatch_type admin_commission_type_from_driver admin_commission_from_driver').lean()
     : null;
   const resolvedVehicleIconUrl = String(
     vehicleIconUrl || primaryVehicle?.image || primaryVehicle?.map_icon || primaryVehicle?.icon || '',
@@ -1239,8 +1238,6 @@ export const createRideRecord = async ({
       ? {
           admin_commission_type_from_driver: Number(primaryVehicle?.admin_commission_type_from_driver ?? 1),
           admin_commission_from_driver: Number(primaryVehicle?.admin_commission_from_driver ?? 0),
-          admin_commission_type_for_owner: Number(primaryVehicle?.admin_commission_type_for_owner ?? 1),
-          admin_commission_for_owner: Number(primaryVehicle?.admin_commission_for_owner ?? 0),
         }
       : null;
   // The per-ride fee the rider was charged on top of the trip, kept apart so
@@ -1259,8 +1256,6 @@ export const createRideRecord = async ({
     setPriceId: pricingRule?._id || null,
     admin_commission_type_from_driver: Number(pricingRule?.admin_commission_type_from_driver ?? parcelCommissionFallback?.admin_commission_type_from_driver ?? 1),
     admin_commission_from_driver: Number(pricingRule?.admin_commission_from_driver ?? parcelCommissionFallback?.admin_commission_from_driver ?? 0),
-    admin_commission_type_for_owner: Number(pricingRule?.admin_commission_type_for_owner ?? parcelCommissionFallback?.admin_commission_type_for_owner ?? 1),
-    admin_commission_for_owner: Number(pricingRule?.admin_commission_for_owner ?? parcelCommissionFallback?.admin_commission_for_owner ?? 0),
     waiting_charge: Number(pricingRule?.waiting_charge ?? 0),
     free_waiting_before: Number(pricingRule?.free_waiting_before ?? 0),
     free_waiting_after: Number(pricingRule?.free_waiting_after ?? 0),
@@ -1306,58 +1301,9 @@ export const createRideRecord = async ({
 
   const promoCode = typeof promo_code === 'string' ? promo_code.trim() : '';
   const normalizedScheduledAt = normalizeScheduledAt(scheduledAt);
-  const applicableSubscription = primaryVehicleTypeId
-    ? await resolveApplicableUserSubscription({
-        userId,
-        vehicleTypeId: primaryVehicleTypeId,
-      })
-    : null;
-  const isSubscriptionCovered = Boolean(applicableSubscription?._id);
-  const subscriptionBenefitType = String(applicableSubscription?.benefit_type || '').trim().toLowerCase() === 'unlimited'
-    ? 'unlimited'
-    : 'limited';
-  const subscriptionRideLimit = Math.max(0, Number(applicableSubscription?.ride_limit || 0));
-  const subscriptionRidesUsed = Math.max(0, Number(applicableSubscription?.rides_used || 0));
-  const subscriptionRidesRemaining = subscriptionBenefitType === 'unlimited'
-    ? null
-    : Math.max(0, subscriptionRideLimit - subscriptionRidesUsed);
-  const effectiveDriverPaymentCollection = isSubscriptionCovered
-    ? {
-        provider: 'subscription',
-        providerId: String(applicableSubscription._id),
-        providerOrderId: '',
-        providerPaymentId: '',
-        providerMode: 'subscription_wallet',
-        source: 'user_subscription',
-        status: 'paid',
-        amount: safeFare,
-        currency: 'INR',
-        linkUrl: '',
-        paidAt: new Date(),
-        updatedAt: new Date(),
-      }
-    : undefined;
-  const effectivePaymentMethod = isSubscriptionCovered ? 'online' : resolvedRequestedPaymentMethod;
-  const effectiveSubscriptionUsage = isSubscriptionCovered
-    ? {
-        covered: true,
-        subscriptionId: applicableSubscription._id,
-        planId: applicableSubscription.planId || null,
-        planName: applicableSubscription.name || '',
-        vehicleTypeId: applicableSubscription.vehicle_type_id || primaryVehicleTypeId,
-        benefitType: subscriptionBenefitType,
-        fareCovered: safeFare,
-        ridesUsedBefore: subscriptionRidesUsed,
-        ridesRemainingBefore: subscriptionRidesRemaining,
-      }
-    : undefined;
 
   if (scheduledAt && !normalizedScheduledAt) {
     throw new ApiError(400, 'scheduledAt is invalid');
-  }
-
-  if (isSubscriptionCovered && promoCode) {
-    throw new ApiError(400, 'Promo codes cannot be combined with subscription rides');
   }
 
   // Never fatal: `resolveRideRoute` swallows its own failures and returns null,
@@ -1408,9 +1354,7 @@ export const createRideRecord = async ({
       nextFareIncreaseAt,
       estimatedDistanceMeters: routedDistanceMeters,
       estimatedDurationMinutes: routedDurationMinutes,
-      paymentMethod: effectivePaymentMethod,
-      driverPaymentCollection: effectiveDriverPaymentCollection,
-      subscriptionUsage: effectiveSubscriptionUsage,
+      paymentMethod: resolvedRequestedPaymentMethod,
       otp: riderOtp,
       service_location_id: resolvedServiceLocationId,
       transport_type: normalizedTransportType,
@@ -1472,9 +1416,7 @@ export const createRideRecord = async ({
             nextFareIncreaseAt,
             estimatedDistanceMeters: routedDistanceMeters,
             estimatedDurationMinutes: routedDurationMinutes,
-            paymentMethod: effectivePaymentMethod,
-            driverPaymentCollection: effectiveDriverPaymentCollection,
-            subscriptionUsage: effectiveSubscriptionUsage,
+            paymentMethod: resolvedRequestedPaymentMethod,
             otp: riderOtp,
             service_location_id: resolvedServiceLocationId,
             transport_type: normalizedTransportType,
@@ -1625,27 +1567,6 @@ export const serializeRideRealtime = (ride) => ({
       payeeName: ride.driverId?.name || '',
     };
   })(),
-  subscriptionUsage: ride.subscriptionUsage?.covered
-    ? {
-        covered: true,
-        subscriptionId: ride.subscriptionUsage.subscriptionId ? String(ride.subscriptionUsage.subscriptionId) : '',
-        planId: ride.subscriptionUsage.planId ? String(ride.subscriptionUsage.planId) : '',
-        planName: ride.subscriptionUsage.planName || '',
-        vehicleTypeId: ride.subscriptionUsage.vehicleTypeId ? String(ride.subscriptionUsage.vehicleTypeId) : '',
-        benefitType: ride.subscriptionUsage.benefitType || '',
-        fareCovered: Number(ride.subscriptionUsage.fareCovered || 0),
-        ridesUsedBefore: Number(ride.subscriptionUsage.ridesUsedBefore || 0),
-        ridesRemainingBefore: ride.subscriptionUsage.ridesRemainingBefore === null
-          ? null
-          : Number(ride.subscriptionUsage.ridesRemainingBefore || 0),
-        ridesUsedAfter: ride.subscriptionUsage.ridesUsedAfter === null
-          ? null
-          : Number(ride.subscriptionUsage.ridesUsedAfter || 0),
-        ridesRemainingAfter: ride.subscriptionUsage.ridesRemainingAfter === null
-          ? null
-          : Number(ride.subscriptionUsage.ridesRemainingAfter || 0),
-      }
-    : null,
   driverPaymentCollection: ride.driverPaymentCollection
     ? {
         provider: ride.driverPaymentCollection.provider || '',
@@ -1673,8 +1594,6 @@ export const serializeRideRealtime = (ride) => ({
         setPriceId: ride.pricingSnapshot.setPriceId || null,
         admin_commission_type_from_driver: Number(ride.pricingSnapshot.admin_commission_type_from_driver ?? 1),
         admin_commission_from_driver: Number(ride.pricingSnapshot.admin_commission_from_driver ?? 0),
-        admin_commission_type_for_owner: Number(ride.pricingSnapshot.admin_commission_type_for_owner ?? 1),
-        admin_commission_for_owner: Number(ride.pricingSnapshot.admin_commission_for_owner ?? 0),
         waiting_charge: Number(ride.pricingSnapshot.waiting_charge ?? 0),
         free_waiting_before: Number(ride.pricingSnapshot.free_waiting_before ?? 0),
         free_waiting_after: Number(ride.pricingSnapshot.free_waiting_after ?? 0),
@@ -2176,7 +2095,6 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymen
     ]);
 
     walletUpdate = await settleCompletedRideWallet({ rideId: ride._id });
-    await consumeUserSubscriptionRide({ ride });
     const settledRide = await Ride.findById(ride._id).select('completedAt driverEarnings estimatedDistanceMeters');
 
     await incrementDriverTodaySummaryForCompletedRide({

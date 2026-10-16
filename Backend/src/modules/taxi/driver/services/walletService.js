@@ -6,13 +6,24 @@ import { Vehicle } from '../../admin/models/Vehicle.js';
 import { Driver } from '../models/Driver.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
 import { Ride } from '../../user/models/Ride.js';
-import { DriverSubscription } from '../models/DriverSubscription.js';
 import { getWalletSettings } from '../../services/appSettingsService.js';
-import {
-  getActiveDriverSubscription,
-  getDriverVehicleClasses,
-  resolveDriverSubscriptionSettings,
-} from './driverSubscriptionService.js';
+
+/**
+ * Which classes of vehicle a driver drives, from the catalog rather than the
+ * free-text vehicleType on their record.
+ */
+const getDriverVehicleClasses = async (driver) => {
+  const ids = [driver.vehicleTypeId, ...(driver.vehicleTypeIds || [])]
+    .map((id) => String(id || '').trim())
+    .filter((id) => /^[a-f\d]{24}$/i.test(id));
+
+  if (ids.length === 0) return [String(driver.vehicleType || '').trim().toLowerCase()].filter(Boolean);
+
+  const vehicles = await Vehicle.find({ _id: { $in: ids } }, { category: 1, name: 1 }).lean();
+  const classes = vehicles.map((vehicle) => String(vehicle.category || '').trim().toLowerCase()).filter(Boolean);
+
+  return [...new Set(classes)];
+};
 
 const normalizeAmount = (value, fieldName = 'amount') => {
   const amount = Number(value);
@@ -168,19 +179,9 @@ const getWalletSnapshot = async (driver) => {
   };
 };
 
-// Whether a paid pass is covering this driver right now, in which case the
-// wallet minimum is not asked of them. Always on: a pass is mandatory.
-const isCoveredBySubscription = async (driverId, { session } = {}) => {
-  const settings = await resolveDriverSubscriptionSettings();
-  if (!settings.waiveWalletMinimum) return false;
-  return Boolean(await getActiveDriverSubscription(driverId, { session }));
-};
-
 export const serializeDriverWallet = async (driver) => {
   const wallet = await getWalletSnapshot(driver);
   const isBelowMinimumBalance = wallet.balance < wallet.minimumBalanceForOrders;
-  const covered = await isCoveredBySubscription(driver._id);
-
   return {
     balance: wallet.balance,
     cashLimit: wallet.cashLimit,
@@ -190,7 +191,7 @@ export const serializeDriverWallet = async (driver) => {
     isTransferEnabled: wallet.rules.isTransferEnabled,
     minimumTopUpAmount: wallet.rules.minimumTopUpAmount,
     minimumTransferAmount: wallet.rules.minimumTransferAmount,
-    isBlocked: !wallet.rules.isWalletEnabled || ((wallet.isBlocked || isBelowMinimumBalance) && !covered),
+    isBlocked: !wallet.rules.isWalletEnabled || (wallet.isBlocked || isBelowMinimumBalance),
   };
 };
 
@@ -224,11 +225,8 @@ export const applyDriverWalletAdjustment = async ({
 
   const before = await getWalletSnapshot(driver);
   const balanceAfter = Math.round((before.balance + normalizedAmount) * 100) / 100;
-  // The subscription row is created before the debit that pays for it (same
-  // session), so a pass bought or granted right now already counts here.
-  const covered = await isCoveredBySubscription(driverId, { session });
   const isBlockedAfter =
-    !before.rules.isWalletEnabled || (balanceAfter < before.minimumBalanceForOrders && !covered);
+    !before.rules.isWalletEnabled || balanceAfter < before.minimumBalanceForOrders;
 
   const updatedDriver = await Driver.findByIdAndUpdate(
     driverId,
@@ -293,27 +291,6 @@ const resolveJoiningBonus = async (driverId) => {
   }
 
   return { amount: normalizeAmount(env.driverWallet.joiningBonus), classes };
-};
-
-/**
- * Recomputes the stored wallet-blocked flag from the driver's balance and
- * whether a pass is covering them. Run when a pass starts or ends, since the
- * flag is otherwise only rewritten when money moves.
- */
-export const syncDriverWalletBlockedFlag = async (driverId) => {
-  const driver = await Driver.findById(driverId);
-  if (!driver) return null;
-
-  const wallet = await getWalletSnapshot(driver);
-  const covered = await isCoveredBySubscription(driver._id);
-  const isBlocked =
-    !wallet.rules.isWalletEnabled || (wallet.balance < wallet.minimumBalanceForOrders && !covered);
-
-  if (Boolean(driver.wallet?.isBlocked) !== isBlocked) {
-    await Driver.updateOne({ _id: driver._id }, { $set: { 'wallet.isBlocked': isBlocked } });
-  }
-
-  return isBlocked;
 };
 
 export const grantDriverJoiningBonus = async ({ driverId, grantedBy = null }) => {
@@ -437,27 +414,7 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
     // exactly as before. Read here, before the snapshot is replaced below.
     const platformFee = Math.min(Math.max(0, Number(ride.pricingSnapshot?.rider_platform_fee) || 0), fare);
 
-    // A driver on a daily pass keeps the fare: the pass is what Buddy earned
-    // from them today. The rider's platform fee is still not theirs, so it is
-    // the one part that survives the waiver.
-    //
-    // Read against the ride's completion rather than now, so a trip finished
-    // at 5:55am is settled under the pass that covered it even if settlement
-    // runs after 6am.
-    const subscriptionSettings = await resolveDriverSubscriptionSettings();
-    const coveringSubscription = subscriptionSettings.waiveCommission
-      ? await DriverSubscription.findOne({
-        driverId: ride.driverId,
-        status: 'active',
-        paidAt: { $ne: null },
-        startsAt: { $lte: ride.completedAt || ride.updatedAt || new Date() },
-        expiresAt: { $gt: ride.completedAt || ride.updatedAt || new Date() },
-      }).session(session).lean()
-      : null;
-
-    const waivedCommission = coveringSubscription ? tripCommission : 0;
-    const chargeableCommission = coveringSubscription ? 0 : tripCommission;
-    const commissionAmount = Math.min(Math.round((chargeableCommission + platformFee) * 100) / 100, fare);
+    const commissionAmount = Math.min(Math.round((tripCommission + platformFee) * 100) / 100, fare);
     const paymentMethod = normalizePaymentMethod(ride.paymentMethod);
     const driverEarnings = Math.max(Math.round((fare - commissionAmount) * 100) / 100, 0);
     const amount = paymentMethod === 'cash' ? -commissionAmount : driverEarnings;
@@ -474,16 +431,6 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
       resolvedAt: ride.pricingSnapshot?.resolvedAt || new Date(),
     };
     await ride.save({ session });
-
-    // What the pass was worth today, for the driver's own screen and the
-    // admin history. Counted per settled ride, so it cannot double-count.
-    if (coveringSubscription) {
-      await DriverSubscription.updateOne(
-        { _id: coveringSubscription._id },
-        { $inc: { tripsCovered: 1, commissionWaived: Math.round(waivedCommission * 100) / 100 } },
-        { session },
-      );
-    }
 
     if (!amount) {
       await session.commitTransaction();

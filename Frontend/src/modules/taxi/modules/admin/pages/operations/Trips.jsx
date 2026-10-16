@@ -18,7 +18,6 @@ const PAYMENT_STYLES = {
   CARD: 'bg-gray-100 text-gray-800 border border-gray-200',
   WALLET: 'bg-green-50 text-green-700 border border-green-200',
   ONLINE: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  SUBSCRIPTION: 'bg-sky-50 text-sky-700 border border-sky-200',
 };
 
 const TAB_SET = ['All', 'Completed', 'Cancelled', 'Upcoming', 'On Trip'];
@@ -506,7 +505,6 @@ const Trips = () => {
                     <option value="taxi">Taxi</option>
                     <option value="auto">Auto</option>
                     <option value="bike">Bike</option>
-                    <option value="bus">Bus</option>
                   </select>
                 </div>
 
@@ -521,7 +519,6 @@ const Trips = () => {
                     <option value="cash">Cash</option>
                     <option value="online">Online</option>
                     <option value="wallet">Wallet</option>
-                    <option value="subscription">Subscription</option>
                   </select>
                 </div>
 

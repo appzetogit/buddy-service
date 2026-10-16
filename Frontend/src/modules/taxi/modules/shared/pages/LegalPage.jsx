@@ -21,7 +21,7 @@ const legalContent = {
     title: 'Terms & Conditions',
     icon: ScrollText,
     intro:
-      'These terms apply to everyone who uses Buddy - riders booking rides and parcel deliveries, and drivers and vehicle owners providing them.',
+      'These terms apply to everyone who uses Buddy - riders booking rides and parcel deliveries, and drivers providing them.',
     rawText: termsRawText,
   },
   privacy: {

@@ -38,7 +38,6 @@ const UserDetails = () => {
   const [requests, setRequests] = useState([]);
   const [walletHistory, setWalletHistory] = useState([]);
   const [reviews, setReviews] = useState([]);
-  const [subscriptions, setSubscriptions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -93,7 +92,6 @@ const UserDetails = () => {
               spend: 0,
               balance: u.wallet_balance || u.user_id?.wallet_balance || 0
             },
-            subscriptionSummary: u.subscriptionSummary || { activeCount: 0, activePlans: [] },
           });
         }
 
@@ -111,14 +109,6 @@ const UserDetails = () => {
             driver_id: review.driver_id || null,
           })),
         );
-      }
-
-      const subscriptionRes = await fetch(`${TAXI_API_BASE}/admin/users/${id}/subscriptions`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const subscriptionData = await subscriptionRes.json();
-      if (subscriptionData.success) {
-        setSubscriptions(Array.isArray(subscriptionData.data?.results) ? subscriptionData.data.results : []);
       }
 
       // Fetch Requests
@@ -331,7 +321,7 @@ const UserDetails = () => {
 
         {/* PILL TABS */}
         <div className="mt-6 flex items-center gap-2 overflow-x-auto whitespace-nowrap hide-scrollbar border-t border-gray-100 pt-5">
-          {['Request List', 'User Payment History', 'Review History', 'Subscriptions'].map(tab => (
+          {['Request List', 'User Payment History', 'Review History'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -606,74 +596,6 @@ const UserDetails = () => {
           </div>
         )}
 
-        {activeTab === 'Subscriptions' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center text-center">
-                <p className="text-xs font-medium text-gray-500 mb-1">Active Plans</p>
-                <p className="text-2xl font-bold text-gray-900">{subscriptions.filter((item) => item.active && item.status === 'active').length}</p>
-              </div>
-              <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center text-center">
-                <p className="text-xs font-medium text-gray-500 mb-1">Unlimited Plans</p>
-                <p className="text-2xl font-bold text-gray-900">{subscriptions.filter((item) => item.benefit_type === 'unlimited' && item.active).length}</p>
-              </div>
-              <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center text-center">
-                <p className="text-xs font-medium text-gray-500 mb-1">Limited Ride Credits</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {subscriptions
-                    .filter((item) => item.active && item.benefit_type !== 'unlimited')
-                    .reduce((sum, item) => sum + Number(item.rides_remaining || 0), 0)}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {subscriptions.length > 0 ? subscriptions.map((item) => (
-                <div key={item.id} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm hover:border-gray-300 transition-colors flex flex-col h-full">
-                  <div className="flex items-start justify-between gap-3 mb-4">
-                    <div>
-                      <p className="text-base font-bold text-gray-900 leading-tight">{item.name}</p>
-                      <p className="mt-1 text-xs font-medium text-gray-500">{item.vehicle_type?.name || 'Vehicle plan'} • {item.transport_type}</p>
-                    </div>
-                    <span className={`shrink-0 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${item.status === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
-                      {item.status}
-                    </span>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 mt-auto">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-gray-400 uppercase">Price</span>
-                      <span className="font-bold text-gray-900">₹{Number(item.amount || 0).toFixed(2)}</span>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-gray-400 uppercase">Benefit</span>
-                      <span className="font-bold text-gray-900">{item.benefit_type === 'unlimited' ? 'Unlimited' : `${item.ride_limit} rides`}</span>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-gray-400 uppercase">Used</span>
-                      <span className="font-bold text-gray-900">{item.rides_used}</span>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] text-gray-400 uppercase">Remaining</span>
-                      <span className="font-bold text-gray-900">{item.rides_remaining === null ? 'Unlimited' : item.rides_remaining}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 pt-3 border-t border-gray-100 text-[11px] font-medium text-gray-400 flex items-center gap-1.5">
-                    <Clock size={12} /> Expires {item.expiresAt ? new Date(item.expiresAt).toLocaleDateString('en-IN') : 'Never'}
-                  </div>
-                </div>
-              )) : (
-                <div className="col-span-full py-12 bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center text-center">
-                  <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-3">
-                    <Ticket size={24} />
-                  </div>
-                  <p className="text-sm font-medium text-gray-500">No subscriptions found for this user</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* WALLET MODAL */}

@@ -11,7 +11,6 @@ import {
   AdminChat,
   AdminCountryManagement,
   AdminCreatePackagePrice,
-  AdminCustomizationSettings,
   AdminDashboard,
   AdminDeleteRequestUsers,
   AdminDeliveries,
@@ -31,10 +30,6 @@ import {
   AdminDriverRatings,
   AdminDriverReferralSettings,
   AdminDriverReport,
-  AdminDriverSubscriptionAnalytics,
-  AdminDriverSubscriptionCreate,
-  AdminDriverSubscriptionSettings,
-  AdminDriverSubscriptions,
   AdminDriverWallet,
   AdminEarnings,
   AdminEarningsDetail,
@@ -88,8 +83,6 @@ import {
   AdminUserList,
   AdminUserReferralSettings,
   AdminUserReport,
-  AdminUserSubscriptionCreate,
-  AdminUserSubscriptions,
   AdminVehicleType,
   AdminWalletPayment,
   AdminWalletSettings,
@@ -154,7 +147,6 @@ export default function TaxiAdminRoutes() {
       <Route path="earnings" element={<AdminEarnings />} />
       <Route path="earnings/:metric" element={<AdminEarningsDetail />} />
       <Route path="payments" element={<AdminPayments />} />
-      <Route path="driver-subscription/analytics" element={<AdminDriverSubscriptionAnalytics />} />
       <Route path="chat" element={<AdminChat />} />
       <Route path="trips" element={<AdminTrips />} />
       <Route path="deliveries" element={<AdminDeliveries />} />
@@ -162,8 +154,6 @@ export default function TaxiAdminRoutes() {
       <Route path="wallet/payment" element={<AdminWalletPayment />} />
       <Route path="users" element={<AdminUserList />} />
       <Route path="users/create" element={<AdminUserCreate />} />
-      <Route path="users/subscriptions" element={<AdminUserSubscriptions />} />
-      <Route path="users/subscriptions/create" element={<AdminUserSubscriptionCreate />} />
       <Route path="users/:id" element={<AdminUserDetails />} />
       <Route path="users/delete-requests" element={<AdminDeleteRequestUsers />} />
       <Route path="users/bulk-upload" element={<AdminUserBulkUpload />} />
@@ -175,8 +165,6 @@ export default function TaxiAdminRoutes() {
       <Route path="drivers/edit/:id" element={<AdminDriverEdit />} />
       <Route path="drivers/:id" element={<AdminDriverDetails />} />
       <Route path="drivers/pending" element={<AdminPendingDrivers />} />
-      <Route path="drivers/subscription" element={<AdminDriverSubscriptions />} />
-      <Route path="drivers/subscription/create" element={<AdminDriverSubscriptionCreate />} />
       <Route path="drivers/ratings" element={<AdminDriverRatings />} />
       <Route path="drivers/ratings/:id" element={<AdminDriverRatingDetail />} />
       <Route path="drivers/wallet" element={<AdminDriverWallet />} />
@@ -283,10 +271,8 @@ export default function TaxiAdminRoutes() {
       <Route path="masters/roles" element={<Navigate to="/admin/management/admins" replace />} />
 
       <Route path="settings/business/general" element={<AdminGeneralSettings />} />
-      <Route path="settings/business/customization" element={<AdminCustomizationSettings />} />
       <Route path="settings/business/transport-ride" element={<AdminTransportRideSettings />} />
       <Route path="settings/business/bid-ride" element={<AdminBidRideSettings />} />
-      <Route path="settings/business/driver-subscription" element={<AdminDriverSubscriptionSettings />} />
 
       <Route path="settings/app/wallet" element={<AdminWalletSettings />} />
       <Route path="settings/app/tip" element={<AdminTipSettings />} />

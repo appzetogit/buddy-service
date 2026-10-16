@@ -16,7 +16,6 @@ import bikeFallback from '../../../assets/user-app/bike.png';
 import deliveryFallback from '../../../assets/user-app/delivery.png';
 import parcelFallback from '../../../assets/user-app/parcel.png';
 import truckFallback from '../../../assets/user-app/truck.png';
-import busFallback from '../../../assets/user-app/bus.png';
 import fallbackCar from '../../../assets/user-app/fallback-car.png';
 import yellowTaxiImg from '../../../assets/user-app/yellow-taxi.jpg';
 import indiaGateRealImg from '@taxi/assets/india_gate_real.png';
@@ -218,10 +217,6 @@ const getCurrentRideIcon = (ride) => {
 
   if (iconType.includes('auto')) {
     return taxiFallback;
-  }
-
-  if (serviceType === 'bus') {
-    return busFallback;
   }
 
   return taxiFallback;

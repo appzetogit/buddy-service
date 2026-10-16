@@ -1,7 +1,6 @@
 import { asyncHandler } from "../../../../utils/asyncHandler.js";
 import * as adminService from "../services/adminService.js";
 import { getPayment, listPayments } from '../../services/paymentLedgerService.js';
-import { getSubscriberReport, getSubscriptionAnalytics } from '../../services/subscriberReportService.js';
 import { buildPaymentInvoicePdf } from '../../services/invoiceService.js';
 import { hasAdminPermission } from "../services/adminAccessService.js";
 import * as landingContentService from "../services/landingContentService.js";
@@ -14,7 +13,6 @@ import { getMailConfigStatus, sendEmail } from '../../services/mailService.js';
 // instead of the intended 4xx.
 import mongoose from 'mongoose';
 import { User } from '../../user/models/User.js';
-import { BusService, BusBooking, BusSeatHold } from '../models/UnportedFeatures.js';
 import { ApiError } from '../../../../utils/ApiError.js';
 
 const PUBLIC_BOOTSTRAP_CACHE_TTL_MS = 30_000;
@@ -43,281 +41,12 @@ const ok = (res, data, extra = {}) =>
 
 const toCleanString = (value = '') => String(value || '').trim();
 
-const normalizeBusTravelDate = (value) => {
-  const rawValue = toCleanString(value);
-  if (!rawValue) {
-    return '';
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(rawValue)) {
-    return rawValue;
-  }
-
-  const leadingDateMatch = rawValue.match(/^(\d{4}-\d{2}-\d{2})(?:[T\s].*)?$/);
-  if (leadingDateMatch) {
-    return leadingDateMatch[1];
-  }
-
-  const parsed = new Date(rawValue);
-  if (!Number.isNaN(parsed.getTime())) {
-    const year = parsed.getFullYear();
-    const month = String(parsed.getMonth() + 1).padStart(2, '0');
-    const day = String(parsed.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
-  return '';
-};
-
-const flattenBusBlueprintSeats = (blueprint = {}) =>
-  ['lowerDeck', 'upperDeck']
-    .flatMap((deckKey) => (Array.isArray(blueprint?.[deckKey]) ? blueprint[deckKey] : []))
-    .flatMap((row) => (Array.isArray(row) ? row : []))
-    .filter((cell) => cell?.kind === 'seat' && cell?.id);
-
-const resolveBusSeatPrice = (busService = {}, seat = {}) => {
-  const variantPricing = busService?.variantPricing || {};
-  const defaultPrice = Number(busService?.seatPrice || 0);
-  const variantKey = String(seat?.variant || 'seat').trim().toLowerCase();
-  const resolvedPrice = variantPricing?.[variantKey] ?? variantPricing?.seat ?? defaultPrice;
-
-  return Number.isFinite(Number(resolvedPrice)) ? Number(resolvedPrice) : defaultPrice;
-};
-
 const normalizePhone = (value) => {
   const digits = toCleanString(value).replace(/\D/g, '');
   return digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
 };
 
 const normalizeEmail = (value) => toCleanString(value).toLowerCase();
-
-const validateBusPassengerName = (name) => {
-  if (!name || name.length < 2 || name.length > 80) {
-    throw new Error('Passenger name must be between 2 and 80 characters');
-  }
-};
-
-const validateBusPassengerPhone = (phone) => {
-  if (!/^\d{10}$/.test(phone)) {
-    throw new Error('Passenger phone must be a valid 10-digit number');
-  }
-};
-
-const validateBusPassengerEmail = (email) => {
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error('Passenger email must be a valid email address');
-  }
-};
-
-const getBusTravelDayLabel = (travelDate) => {
-  const parsed = new Date(`${travelDate}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
-  }
-
-  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][parsed.getUTCDay()];
-};
-
-const findBusSchedule = (busService, scheduleId) =>
-  (Array.isArray(busService?.schedules) ? busService.schedules : []).find(
-    (item) => String(item?.id || '') === String(scheduleId || ''),
-  );
-
-const isScheduleAvailableOnDate = (schedule, travelDate) => {
-  if (!schedule || String(schedule.status || 'active') !== 'active') {
-    return false;
-  }
-
-  const activeDays = Array.isArray(schedule.activeDays) ? schedule.activeDays : [];
-  if (activeDays.length === 0) {
-    return true;
-  }
-
-  return activeDays.includes(getBusTravelDayLabel(travelDate));
-};
-
-const buildAdminBusSeatLayout = async ({ busService, scheduleId, travelDate }) => {
-  const seatLayout = JSON.parse(JSON.stringify(busService?.blueprint || { lowerDeck: [], upperDeck: [] }));
-  const holds = await BusSeatHold.find({
-    busServiceId: busService._id,
-    scheduleId,
-    travelDate,
-    status: { $in: ['held', 'booked'] },
-  }).lean();
-
-  const holdMap = new Map();
-  holds.forEach((hold) => {
-    holdMap.set(String(hold.seatId || ''), hold);
-  });
-
-  ['lowerDeck', 'upperDeck'].forEach((deckKey) => {
-    seatLayout[deckKey] = (Array.isArray(seatLayout[deckKey]) ? seatLayout[deckKey] : []).map((row) =>
-      (Array.isArray(row) ? row : []).map((cell) => {
-        if (cell?.kind !== 'seat') {
-          return cell;
-        }
-
-        const hold = holdMap.get(String(cell.id || ''));
-        if (hold) {
-          return {
-            ...cell,
-            status: 'booked',
-          };
-        }
-
-        return cell;
-      }),
-    );
-  });
-
-  return seatLayout;
-};
-
-const resolveAdminBusBookingUser = async (passenger = {}) => {
-  const name = toCleanString(passenger.name);
-  const phone = normalizePhone(passenger.phone);
-  const email = normalizeEmail(passenger.email);
-  const gender = toCleanString(passenger.gender).toLowerCase();
-
-  validateBusPassengerName(name);
-  validateBusPassengerPhone(phone);
-  validateBusPassengerEmail(email);
-
-  const allowedGenders = new Set(['male', 'female', 'other', 'prefer-not-to-say', '']);
-  const normalizedGender = allowedGenders.has(gender) ? gender : 'prefer-not-to-say';
-
-  let user = await User.findOne({ phone });
-  if (!user && email) {
-    user = await User.findOne({ email });
-  }
-
-  if (user) {
-    let dirty = false;
-    if (!toCleanString(user.name) && name) {
-      user.name = name;
-      dirty = true;
-    }
-    if (!toCleanString(user.email) && email) {
-      user.email = email;
-      dirty = true;
-    }
-    if (!toCleanString(user.gender) && normalizedGender) {
-      user.gender = normalizedGender;
-      dirty = true;
-    }
-    if (dirty) {
-      await user.save();
-    }
-    return user;
-  }
-
-  return User.create({
-    name,
-    phone,
-    email,
-    gender: normalizedGender,
-    countryCode: '+91',
-    isVerified: true,
-    active: true,
-  });
-};
-
-const serializeAdminBusBooking = (booking = {}) => {
-  const cancelledSeats = Array.isArray(booking.cancelledSeats) ? booking.cancelledSeats : [];
-  const cancelledSeatIdSet = new Set(
-    cancelledSeats.map((item) => toCleanString(item?.seatId)).filter(Boolean),
-  );
-  const originalSeatIds = Array.isArray(booking.seatIds) ? booking.seatIds : [];
-  const originalSeatLabels = Array.isArray(booking.seatLabels) ? booking.seatLabels : [];
-  const activeSeats = originalSeatIds
-    .map((seatId, index) => ({
-      seatId,
-      seatLabel: originalSeatLabels[index] || seatId,
-    }))
-    .filter((item) => !cancelledSeatIdSet.has(toCleanString(item.seatId)));
-
-  return {
-    id: String(booking._id || ''),
-    bookingCode: booking.bookingCode || '',
-    status: booking.status || 'pending',
-    bookingSource: booking.bookingSource || 'user',
-    travelDate: booking.travelDate || '',
-    scheduleId: booking.scheduleId || '',
-    amount: Number(booking.amount || 0),
-    currency: booking.currency || 'INR',
-    createdAt: booking.createdAt || null,
-    updatedAt: booking.updatedAt || null,
-    passenger: booking.passenger || {},
-    payment: {
-      provider: booking.payment?.provider || '',
-      orderId: booking.payment?.orderId || '',
-      paymentId: booking.payment?.paymentId || '',
-      status: booking.payment?.status || 'pending',
-      paidAt: booking.payment?.paidAt || null,
-    },
-    routeSnapshot: booking.routeSnapshot || {},
-    user: booking.userId
-      ? {
-          id: String(booking.userId?._id || booking.userId),
-          name: booking.userId?.name || '',
-          phone: booking.userId?.phone || '',
-          email: booking.userId?.email || '',
-        }
-      : null,
-    busService: booking.busServiceId
-      ? {
-          id: String(booking.busServiceId?._id || booking.busServiceId),
-          busName: booking.busServiceId?.busName || booking.routeSnapshot?.busName || '',
-          operatorName: booking.busServiceId?.operatorName || booking.routeSnapshot?.operatorName || '',
-          serviceNumber: booking.busServiceId?.serviceNumber || '',
-          coachType: booking.busServiceId?.coachType || booking.routeSnapshot?.coachType || '',
-          busCategory: booking.busServiceId?.busCategory || booking.routeSnapshot?.busCategory || '',
-          route: booking.busServiceId?.route || null,
-        }
-      : null,
-    seatSummary: {
-      total: originalSeatIds.length,
-      active: activeSeats.length,
-      cancelled: cancelledSeats.length,
-    },
-    activeSeats,
-    cancelledSeats: cancelledSeats.map((item) => ({
-      seatId: item?.seatId || '',
-      seatLabel: item?.seatLabel || '',
-      cancelledAt: item?.cancelledAt || null,
-      refundAmount: Number(item?.refundAmount || 0),
-      chargeAmount: Number(item?.chargeAmount || 0),
-      refundStatus: item?.refundStatus || '',
-      notes: item?.notes || '',
-    })),
-  };
-};
-
-const buildAdminBusMonthWindow = (value) => {
-  const normalizedMonth = toCleanString(value);
-  if (/^\d{4}-\d{2}$/.test(normalizedMonth)) {
-    const [year, month] = normalizedMonth.split('-').map(Number);
-    const start = new Date(Date.UTC(year, month - 1, 1));
-    const end = new Date(Date.UTC(year, month, 1));
-    return {
-      month: normalizedMonth,
-      startDate: start.toISOString().slice(0, 10),
-      endDateExclusive: end.toISOString().slice(0, 10),
-    };
-  }
-
-  const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth();
-  const start = new Date(Date.UTC(year, month, 1));
-  const end = new Date(Date.UTC(year, month + 1, 1));
-
-  return {
-    month: `${year}-${String(month + 1).padStart(2, '0')}`,
-    startDate: start.toISOString().slice(0, 10),
-    endDateExclusive: end.toISOString().slice(0, 10),
-  };
-};
 
 const sendFile = async (res, filename, reportData, format) => {
   const { headers, rows } = reportData;
@@ -489,14 +218,6 @@ export const listDriverWalletHistory = asyncHandler(async (req, res) =>
   ok(res, await adminService.listDriverWalletHistory(req.params.id)),
 );
 
-export const adjustOwnerWallet = asyncHandler(async (req, res) =>
-  ok(res, await adminService.adjustOwnerWallet(req.params.id, req.body)),
-);
-
-export const listOwnerWalletHistory = asyncHandler(async (req, res) =>
-  ok(res, await adminService.listOwnerWalletHistory(req.params.id)),
-);
-
 export const getNegativeBalanceDrivers = asyncHandler(async (req, res) =>
   ok(res, await adminService.listNegativeBalanceDrivers(req.query)),
 );
@@ -596,38 +317,6 @@ export const deleteDriver = asyncHandler(async (req, res) => {
 
 export const adjustDriverWallet = asyncHandler(async (req, res) =>
   ok(res, await adminService.adjustDriverWallet(req.params.id, req.body)),
-);
-
-export const getSubscriptionPlans = asyncHandler(async (_req, res) =>
-  ok(res, { results: await adminService.listSubscriptionPlans() }),
-);
-export const createSubscriptionPlan = asyncHandler(async (req, res) =>
-  ok(res, await adminService.createSubscriptionPlan(req.body)),
-);
-export const updateSubscriptionPlan = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateSubscriptionPlan(req.params.id, req.body)),
-);
-export const deleteSubscriptionPlan = asyncHandler(async (req, res) =>
-  ok(res, await adminService.deleteSubscriptionPlan(req.params.id)),
-);
-export const getDriverSubscriptionPayments = asyncHandler(async (req, res) =>
-  ok(res, await adminService.listDriverSubscriptionPayments(req.query)),
-);
-export const getCustomerSubscriptionPlans = asyncHandler(async (_req, res) =>
-  ok(res, { results: await adminService.listCustomerSubscriptionPlans() }),
-);
-export const createCustomerSubscriptionPlan = asyncHandler(async (req, res) =>
-  ok(res, await adminService.createCustomerSubscriptionPlan(req.body)),
-);
-export const getUserSubscriptions = asyncHandler(async (req, res) =>
-  ok(res, await adminService.listUserSubscriptionsByUserId(req.params.id)),
-);
-
-export const getSubscriptionSettings = asyncHandler(async (_req, res) =>
-  ok(res, await adminService.getSubscriptionSettings()),
-);
-export const updateSubscriptionSettings = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateSubscriptionSettings(req.body)),
 );
 
 export const getReferralSettings = asyncHandler(async (req, res) =>
@@ -750,62 +439,8 @@ export const deleteVehicleType = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
-export const getOwners = asyncHandler(async (req, res) =>
-  ok(res, { results: await adminService.listOwners(req.query, req.auth?.admin) }),
-);
-export const getOwner = asyncHandler(async (req, res) =>
-  ok(res, await adminService.getOwnerById(req.params.id, req.auth?.admin)),
-);
-export const createOwner = asyncHandler(async (req, res) =>
-  ok(res, await adminService.createOwner(req.body)),
-);
-export const updateOwner = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateOwner(req.params.id, req.body)),
-);
-export const approveOwner = asyncHandler(async (req, res) =>
-  ok(res, await adminService.approveOwner(req.params.id, req.body)),
-);
-export const approveOwnerSignupFromDriver = asyncHandler(async (req, res) =>
-  ok(res, await adminService.approveOwnerSignupFromDriver(req.params.driverId)),
-);
-export const deleteOwner = asyncHandler(async (req, res) => {
-  await adminService.deleteOwner(req.params.id);
-  ok(res, { deleted: true });
-});
-
-export const getFleetVehicles = asyncHandler(async (_req, res) =>
-  ok(res, await adminService.listFleetVehicles()),
-);
-export const createFleetVehicle = asyncHandler(async (req, res) =>
-  ok(res, await adminService.createFleetVehicle(req.body)),
-);
-export const updateFleetVehicle = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateFleetVehicle(req.params.id, req.body)),
-);
-export const deleteFleetVehicle = asyncHandler(async (req, res) => {
-  await adminService.deleteFleetVehicle(req.params.id);
-  ok(res, { deleted: true });
-});
-
-export const getOwnerBookings = asyncHandler(async (_req, res) =>
-  ok(res, { results: await adminService.listOwnerBookings() }),
-);
-export const createOwnerBooking = asyncHandler(async (req, res) =>
-  ok(res, await adminService.createOwnerBooking(req.body)),
-);
-export const updateOwnerBooking = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateOwnerBooking(req.params.id, req.body)),
-);
-export const deleteOwnerBooking = asyncHandler(async (req, res) => {
-  await adminService.deleteOwnerBooking(req.params.id);
-  ok(res, { deleted: true });
-});
-
 export const getDashboardData = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getDashboardData()),
-);
-export const getOwnerDashboardData = asyncHandler(async (_req, res) =>
-  ok(res, await adminService.getOwnerDashboardData()),
 );
 export const getOverallEarnings = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getOverallEarnings()),
@@ -876,490 +511,6 @@ export const deleteAirport = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
-export const getBusServices = asyncHandler(async (_req, res) =>
-  ok(res, { results: await adminService.listBusServices() }),
-);
-export const getPendingBusDriverSignups = asyncHandler(async (_req, res) =>
-  ok(res, { results: await adminService.listPendingBusDriverSignups() }),
-);
-export const createBusService = asyncHandler(async (req, res) =>
-  ok(res, await adminService.createBusService(req.body)),
-);
-export const updateBusService = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateBusService(req.params.id, req.body)),
-);
-export const deleteBusService = asyncHandler(async (req, res) => {
-  await adminService.deleteBusService(req.params.id);
-  ok(res, { deleted: true });
-});
-export const approveBusDriverSignup = asyncHandler(async (req, res) =>
-  ok(res, await adminService.approveBusDriverSignup(req.params.id)),
-);
-export const rejectBusDriverSignup = asyncHandler(async (req, res) =>
-  ok(res, await adminService.rejectBusDriverSignup(req.params.id, req.body)),
-);
-
-export const getAdminBusBookings = asyncHandler(async (req, res) => {
-  const busServiceId = toCleanString(req.query?.busServiceId);
-  const travelDate = normalizeBusTravelDate(req.query?.travelDate || req.query?.date);
-  const scheduleId = toCleanString(req.query?.scheduleId);
-  const status = toCleanString(req.query?.status).toLowerCase();
-  const search = toCleanString(req.query?.search).toLowerCase();
-
-  const query = {};
-  if (busServiceId) {
-    query.busServiceId = busServiceId;
-  }
-  if (travelDate) {
-    query.travelDate = travelDate;
-  }
-  if (scheduleId) {
-    query.scheduleId = scheduleId;
-  }
-  if (status && status !== 'all') {
-    query.status = status;
-  }
-
-  const [buses, rawBookings] = await Promise.all([
-    BusService.find()
-      .sort({ operatorName: 1, busName: 1 })
-      .select('_id busName operatorName serviceNumber coachType busCategory status route schedules blueprint seatPrice variantPricing fareCurrency')
-      .lean(),
-    BusBooking.find(query)
-      .populate('userId', 'name phone email')
-      .populate('busServiceId', 'busName operatorName serviceNumber coachType busCategory route schedules blueprint')
-      .sort({ travelDate: 1, createdAt: -1 })
-      .lean(),
-  ]);
-
-  const bookings = rawBookings
-    .filter((booking) => {
-      if (!search) return true;
-      const haystack = [
-        booking.bookingCode,
-        booking.passenger?.name,
-        booking.passenger?.phone,
-        booking.userId?.name,
-        booking.userId?.phone,
-        booking.userId?.email,
-        booking.routeSnapshot?.busName,
-        booking.routeSnapshot?.operatorName,
-        booking.travelDate,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-
-      return haystack.includes(search);
-    })
-    .map(serializeAdminBusBooking);
-
-  const selectedBus =
-    (busServiceId
-      ? buses.find((item) => String(item._id) === String(busServiceId))
-      : rawBookings[0]?.busServiceId) || null;
-
-  const selectedSchedules = Array.isArray(selectedBus?.schedules) ? selectedBus.schedules : [];
-  const filteredSeatBookings = bookings.filter(
-    (item) =>
-      (!busServiceId || item.busService?.id === String(busServiceId)) &&
-      (!travelDate || item.travelDate === travelDate) &&
-      (!scheduleId || item.scheduleId === scheduleId) &&
-      item.status !== 'failed' &&
-      item.status !== 'expired' &&
-      item.status !== 'cancelled',
-  );
-
-  const seatBookingMap = new Map();
-  filteredSeatBookings.forEach((booking) => {
-    booking.activeSeats.forEach((seat) => {
-      seatBookingMap.set(seat.seatId, {
-        bookingId: booking.id,
-        bookingCode: booking.bookingCode,
-        status: booking.status,
-        passengerName: booking.passenger?.name || booking.user?.name || '',
-        seatLabel: seat.seatLabel || seat.seatId,
-      });
-    });
-  });
-
-  const seatLayout = selectedBus
-    ? flattenBusBlueprintSeats(selectedBus.blueprint).map((seat) => {
-        const booked = seatBookingMap.get(String(seat.id || ''));
-        return {
-          seatId: seat.id || '',
-          seatLabel: seat.label || seat.id || '',
-          variant: seat.variant || 'seat',
-          price: resolveBusSeatPrice(selectedBus, seat),
-          baseStatus: seat.status || 'available',
-          liveStatus: booked ? 'booked' : seat.status === 'blocked' ? 'blocked' : 'available',
-          booking: booked || null,
-        };
-      })
-    : [];
-
-  const summary = bookings.reduce(
-    (acc, booking) => {
-      acc.totalBookings += 1;
-      acc.totalAmount += Number(booking.amount || 0);
-      acc.totalSeats += Number(booking.seatSummary?.active || 0);
-
-      const bucketKey = `${booking.status || 'pending'}Bookings`;
-      if (Object.prototype.hasOwnProperty.call(acc, bucketKey)) {
-        acc[bucketKey] += 1;
-      }
-
-      return acc;
-    },
-    {
-      totalBookings: 0,
-      totalAmount: 0,
-      totalSeats: 0,
-      confirmedBookings: 0,
-      pendingBookings: 0,
-      cancelledBookings: 0,
-      failedBookings: 0,
-      expiredBookings: 0,
-    },
-  );
-
-  ok(res, {
-    filters: {
-      busServiceId,
-      travelDate,
-      scheduleId,
-      status: status || 'all',
-      search,
-    },
-    buses: buses.map((bus) => ({
-      id: String(bus._id),
-      busName: bus.busName || '',
-      operatorName: bus.operatorName || '',
-      serviceNumber: bus.serviceNumber || '',
-      coachType: bus.coachType || '',
-      busCategory: bus.busCategory || '',
-      status: bus.status || 'draft',
-      route: bus.route || {},
-      seatPrice: Number(bus.seatPrice || 0),
-      variantPricing: bus.variantPricing || null,
-      fareCurrency: bus.fareCurrency || 'INR',
-      schedules: Array.isArray(bus.schedules) ? bus.schedules : [],
-    })),
-    selectedBus: selectedBus
-      ? {
-          id: String(selectedBus._id),
-          busName: selectedBus.busName || '',
-          operatorName: selectedBus.operatorName || '',
-          serviceNumber: selectedBus.serviceNumber || '',
-          route: selectedBus.route || {},
-          schedules: selectedSchedules,
-        }
-      : null,
-    schedules: selectedSchedules,
-    summary,
-    seatLayout,
-    bookings,
-  });
-});
-
-export const getAdminBusBookingCalendar = asyncHandler(async (req, res) => {
-  const busServiceId = toCleanString(req.query?.busServiceId);
-  const scheduleId = toCleanString(req.query?.scheduleId);
-  const monthWindow = buildAdminBusMonthWindow(req.query?.month);
-
-  const query = {
-    travelDate: {
-      $gte: monthWindow.startDate,
-      $lt: monthWindow.endDateExclusive,
-    },
-  };
-
-  if (busServiceId) {
-    query.busServiceId = busServiceId;
-  }
-
-  if (scheduleId) {
-    query.scheduleId = scheduleId;
-  }
-
-  const items = await BusBooking.find(query)
-    .select('travelDate status seatIds cancelledSeats amount scheduleId busServiceId')
-    .sort({ travelDate: 1, createdAt: -1 })
-    .lean();
-
-  const calendarMap = new Map();
-  items.forEach((item) => {
-    const dateKey = item.travelDate || '';
-    if (!dateKey) return;
-
-    if (!calendarMap.has(dateKey)) {
-      calendarMap.set(dateKey, {
-        date: dateKey,
-        totalBookings: 0,
-        totalSeats: 0,
-        totalAmount: 0,
-        confirmedBookings: 0,
-        pendingBookings: 0,
-        cancelledBookings: 0,
-        failedBookings: 0,
-        expiredBookings: 0,
-      });
-    }
-
-    const day = calendarMap.get(dateKey);
-    const cancelledSeatIdSet = new Set(
-      (Array.isArray(item.cancelledSeats) ? item.cancelledSeats : [])
-        .map((seat) => toCleanString(seat?.seatId))
-        .filter(Boolean),
-    );
-    const totalActiveSeats = (Array.isArray(item.seatIds) ? item.seatIds : []).filter(
-      (seatId) => !cancelledSeatIdSet.has(toCleanString(seatId)),
-    ).length;
-
-    day.totalBookings += 1;
-    day.totalSeats += totalActiveSeats;
-    day.totalAmount += Number(item.amount || 0);
-
-    const bucketKey = `${item.status || 'pending'}Bookings`;
-    if (Object.prototype.hasOwnProperty.call(day, bucketKey)) {
-      day[bucketKey] += 1;
-    }
-  });
-
-  ok(res, {
-    month: monthWindow.month,
-    startDate: monthWindow.startDate,
-    endDateExclusive: monthWindow.endDateExclusive,
-    days: Array.from(calendarMap.values()),
-  });
-});
-
-export const createAdminBusBooking = asyncHandler(async (req, res) => {
-  const busServiceId = toCleanString(req.body?.busServiceId);
-  const scheduleId = toCleanString(req.body?.scheduleId);
-  const travelDate = normalizeBusTravelDate(req.body?.travelDate || req.body?.date);
-  const seatIds = Array.isArray(req.body?.seatIds)
-    ? [...new Set(req.body.seatIds.map((item) => toCleanString(item)).filter(Boolean))]
-    : [];
-  const ageNumber = Number(req.body?.passenger?.age || 0);
-  const notes = toCleanString(req.body?.notes);
-
-  if (!mongoose.Types.ObjectId.isValid(busServiceId)) {
-    throw new ApiError(400, 'Valid bus service is required');
-  }
-  if (!scheduleId || seatIds.length === 0) {
-    throw new ApiError(400, 'scheduleId and seatIds are required');
-  }
-  if (!travelDate) {
-    throw new ApiError(400, 'travelDate is required');
-  }
-
-  const busService = await BusService.findById(busServiceId).lean();
-  if (!busService || String(busService.status || '') !== 'active') {
-    throw new ApiError(404, 'Active bus service not found');
-  }
-
-  const schedule = findBusSchedule(busService, scheduleId);
-  if (!isScheduleAvailableOnDate(schedule, travelDate)) {
-    throw new ApiError(404, 'Bus schedule not found for the selected date');
-  }
-
-  const user = await resolveAdminBusBookingUser(req.body?.passenger || {});
-  const passenger = {
-    name: toCleanString(req.body?.passenger?.name),
-    age: Number.isFinite(ageNumber) && ageNumber > 0 ? ageNumber : null,
-    gender: toCleanString(req.body?.passenger?.gender),
-    phone: normalizePhone(req.body?.passenger?.phone),
-    email: normalizeEmail(req.body?.passenger?.email),
-  };
-
-  const seatLayout = await buildAdminBusSeatLayout({ busService, scheduleId, travelDate });
-  const availableSeatMap = new Map(
-    flattenBusBlueprintSeats(seatLayout)
-      .filter((seat) => String(seat.status || 'available') === 'available')
-      .map((seat) => [String(seat.id || ''), seat]),
-  );
-
-  const invalidSeat = seatIds.find((seatId) => !availableSeatMap.has(seatId));
-  if (invalidSeat) {
-    throw new ApiError(409, `Seat ${invalidSeat} is not available`);
-  }
-
-  const amount = Math.round(
-    seatIds.reduce((sum, seatId) => sum + resolveBusSeatPrice(busService, availableSeatMap.get(seatId)), 0) * 100,
-  ) / 100;
-  const booking = await BusBooking.create({
-    userId: user._id,
-    busServiceId: busService._id,
-    bookingCode: `BAD${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
-    scheduleId,
-    travelDate,
-    seatIds,
-    seatLabels: seatIds.map((seatId) => availableSeatMap.get(seatId)?.label || seatId),
-    passenger,
-    amount,
-    bookingSource: 'admin',
-    currency: busService.fareCurrency || 'INR',
-    status: 'confirmed',
-    expiresAt: null,
-    routeSnapshot: {
-      originCity: busService.route?.originCity || '',
-      destinationCity: busService.route?.destinationCity || '',
-      departureTime: schedule?.departureTime || '',
-      arrivalTime: schedule?.arrivalTime || '',
-      durationHours: busService.route?.durationHours || '',
-      busName: busService.busName || '',
-      operatorName: busService.operatorName || '',
-      coachType: busService.coachType || '',
-      busCategory: busService.busCategory || '',
-    },
-    payment: {
-      provider: 'manual',
-      orderId: '',
-      paymentId: '',
-      signature: '',
-      status: 'manual_reserved',
-      paidAt: new Date(),
-    },
-    notes,
-  });
-
-  try {
-    await BusSeatHold.insertMany(
-      seatIds.map((seatId) => ({
-        busServiceId: busService._id,
-        bookingId: booking._id,
-        userId: user._id,
-        scheduleId,
-        travelDate,
-        seatId,
-        holdToken: booking.bookingCode,
-        status: 'booked',
-        expiresAt: null,
-      })),
-      { ordered: true },
-    );
-  } catch (error) {
-    await BusBooking.deleteOne({ _id: booking._id });
-    if (error?.code === 11000) {
-      throw new ApiError(409, 'One or more selected seats were just booked');
-    }
-    throw error;
-  }
-
-  const hydratedBooking = await BusBooking.findById(booking._id)
-    .populate('userId', 'name phone email')
-    .populate('busServiceId', 'busName operatorName serviceNumber coachType busCategory route schedules blueprint')
-    .lean();
-
-  res.status(201).json({
-    success: true,
-    data: serializeAdminBusBooking(hydratedBooking),
-    message: 'Seat booked successfully from admin panel',
-  });
-});
-
-export const cancelAdminBusBookingSeats = asyncHandler(async (req, res) => {
-  const bookingId = toCleanString(req.params?.id);
-  const selectedSeatIds = Array.isArray(req.body?.seatIds)
-    ? [...new Set(req.body.seatIds.map((item) => toCleanString(item)).filter(Boolean))]
-    : [];
-  const adminNote = toCleanString(req.body?.notes || req.body?.adminNote || 'Cancelled by admin panel');
-
-  if (!mongoose.Types.ObjectId.isValid(bookingId)) {
-    throw new ApiError(400, 'Valid booking id is required');
-  }
-
-  const booking = await BusBooking.findById(bookingId);
-  if (!booking) {
-    throw new ApiError(404, 'Bus booking not found');
-  }
-
-  if (String(booking.status || '') !== 'confirmed') {
-    throw new ApiError(409, 'Only confirmed bus bookings can be unbooked from admin');
-  }
-
-  const originalSeatIds = Array.isArray(booking.seatIds) ? booking.seatIds : [];
-  const originalSeatLabels = Array.isArray(booking.seatLabels) ? booking.seatLabels : [];
-  const cancelledSeats = Array.isArray(booking.cancelledSeats) ? booking.cancelledSeats : [];
-  const cancelledSeatIds = new Set(
-    cancelledSeats.map((item) => toCleanString(item?.seatId)).filter(Boolean),
-  );
-  const activeSeats = originalSeatIds
-    .map((seatId, index) => ({
-      seatId: toCleanString(seatId),
-      seatLabel: originalSeatLabels[index] || seatId,
-    }))
-    .filter((item) => item.seatId && !cancelledSeatIds.has(item.seatId));
-
-  const seatsToCancel = selectedSeatIds.length > 0
-    ? activeSeats.filter((item) => selectedSeatIds.includes(item.seatId))
-    : activeSeats;
-
-  if (seatsToCancel.length === 0) {
-    throw new ApiError(400, 'Select at least one active seat to unbook');
-  }
-
-  if (selectedSeatIds.length > 0 && seatsToCancel.length !== selectedSeatIds.length) {
-    throw new ApiError(409, 'Some selected seats are already cancelled or not part of this booking');
-  }
-
-  const cancelledAt = new Date();
-  booking.cancelledSeats = [
-    ...cancelledSeats,
-    ...seatsToCancel.map((item) => ({
-      seatId: item.seatId,
-      seatLabel: item.seatLabel,
-      cancelledAt,
-      refundAmount: 0,
-      chargeAmount: 0,
-      refundStatus: 'admin_cancelled',
-      refundId: '',
-      refundProcessedAt: cancelledAt,
-      notes: adminNote,
-    })),
-  ];
-
-  const remainingActiveSeatCount = activeSeats.length - seatsToCancel.length;
-  booking.status = remainingActiveSeatCount <= 0 ? 'cancelled' : 'confirmed';
-  booking.cancelledAt = remainingActiveSeatCount <= 0 ? cancelledAt : null;
-  booking.cancellation = {
-    allowed: remainingActiveSeatCount > 0,
-    appliedRuleId: '',
-    appliedRuleLabel: 'Admin seat release',
-    refundType: 'none',
-    refundValue: 0,
-    hoursBeforeDeparture: 0,
-    refundAmount: 0,
-    chargeAmount: 0,
-    notes: adminNote,
-  };
-  if (!booking.notes?.includes(adminNote)) {
-    booking.notes = [booking.notes, adminNote].filter(Boolean).join(' | ');
-  }
-  await booking.save();
-
-  await BusSeatHold.deleteMany({
-    bookingId: booking._id,
-    status: { $in: ['held', 'booked'] },
-    seatId: { $in: seatsToCancel.map((item) => item.seatId) },
-  });
-
-  const hydratedBooking = await BusBooking.findById(booking._id)
-    .populate('userId', 'name phone email')
-    .populate('busServiceId', 'busName operatorName serviceNumber coachType busCategory route schedules blueprint')
-    .lean();
-
-  res.status(200).json({
-    success: true,
-    data: serializeAdminBusBooking(hydratedBooking),
-    message:
-      remainingActiveSeatCount <= 0
-        ? 'Booking cancelled and seats released successfully'
-        : 'Selected seats unbooked successfully',
-  });
-});
-
 export const getRentalVehicleTypes = asyncHandler(async (_req, res) =>
   ok(res, { results: await adminService.listRentalVehicleTypes() }),
 );
@@ -1374,19 +525,6 @@ export const deleteRentalVehicleType = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
-export const getPoolingRoutes = asyncHandler(async (_req, res) =>
-  ok(res, { results: await adminService.listPoolingRoutes() }),
-);
-export const createPoolingRoute = asyncHandler(async (req, res) =>
-  ok(res, await adminService.createPoolingRoute(req.body)),
-);
-export const updatePoolingRoute = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updatePoolingRoute(req.params.id, req.body)),
-);
-export const deletePoolingRoute = asyncHandler(async (req, res) => {
-  await adminService.deletePoolingRoute(req.params.id);
-  ok(res, { deleted: true });
-});
 export const getRentalQuoteRequests = asyncHandler(async (_req, res) =>
   ok(res, { results: await adminService.listRentalQuoteRequests() }),
 );
@@ -1431,9 +569,6 @@ export const deleteRentalPackageType = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
-export const getOwnerNeededDocuments = asyncHandler(async (_req, res) =>
-  ok(res, { results: await adminService.listOwnerNeededDocuments() }),
-);
 export const getDriverNeededDocuments = asyncHandler(async (req, res) =>
   ok(res, {
     results: await adminService.listDriverNeededDocuments({
@@ -1461,19 +596,6 @@ export const getReferralTranslations = asyncHandler(async (_req, res) =>
 export const updateReferralTranslation = asyncHandler(async (req, res) =>
   ok(res, await adminService.updateReferralTranslation(req.params.languageCode, req.body)),
 );
-export const createOwnerNeededDocument = asyncHandler(async (req, res) =>
-  ok(res, await adminService.createOwnerNeededDocument(req.body)),
-);
-export const updateOwnerNeededDocument = asyncHandler(async (req, res) =>
-  ok(
-    res,
-    await adminService.updateOwnerNeededDocument(req.params.id, req.body),
-  ),
-);
-export const deleteOwnerNeededDocument = asyncHandler(async (req, res) => {
-  await adminService.deleteOwnerNeededDocument(req.params.id);
-  ok(res, { deleted: true });
-});
 
 export const getLanguages = asyncHandler(async (_req, res) => {
   const items = await adminService.listLanguages();
@@ -1677,12 +799,6 @@ export const getDriverOnboarding = asyncHandler(async (_req, res) =>
     results: await adminService.listOnboardingScreens("driver"),
   }),
 );
-export const getOwnerOnboarding = asyncHandler(async (_req, res) =>
-  res.json({
-    success: true,
-    results: await adminService.listOnboardingScreens("owner"),
-  }),
-);
 export const createOnboardingScreen = asyncHandler(async (req, res) =>
   ok(res, await adminService.createOnboardingScreen(req.body)),
 );
@@ -1711,11 +827,6 @@ export const downloadDriverDutyReport = asyncHandler(async (req, res) => {
   await sendFile(res, "driver-duty-report", data, format);
 });
 
-export const downloadOwnerReport = asyncHandler(async (req, res) => {
-  const format = req.query.file_format || 'csv';
-  const data = await adminService.buildOwnerReport(req.query);
-  await sendFile(res, "owner-report", data, format);
-});
 
 export const downloadFinanceReport = asyncHandler(async (req, res) => {
   const format = req.query.file_format || 'csv';
@@ -1723,11 +834,6 @@ export const downloadFinanceReport = asyncHandler(async (req, res) => {
   await sendFile(res, "finance-report", data, format);
 });
 
-export const downloadFleetFinanceReport = asyncHandler(async (req, res) => {
-  const format = req.query.file_format || 'csv';
-  const data = await adminService.buildFleetFinanceReport(req.query);
-  await sendFile(res, "fleet-finance-report", data, format);
-});
 export const getGeneralSettingsCategory = asyncHandler(async (req, res) => {
   const category = String(req.params.category || '').trim().toLowerCase();
   const data = await getOrLoadCachedValue(
@@ -1866,16 +972,6 @@ export const getPayments = asyncHandler(async (req, res) =>
   ok(res, await listPayments(req.query || {})),
 );
 
-/// Daily-pass subscribers for one pass day (6 AM to 6 AM IST): totals, the
-/// 6 PM closing, vehicle-, service- and plan-wise splits, and the list.
-/// Filters: date (YYYY-MM-DD), vehicle_class, vehicle_type_id.
-export const getPaymentSubscribers = asyncHandler(async (req, res) =>
-  ok(res, await getSubscriberReport({
-    date: req.query?.date,
-    vehicleClass: req.query?.vehicle_class,
-    vehicleTypeId: req.query?.vehicle_type_id,
-  })),
-);
 
 /// The invoice (rides) or receipt (everything else) for one payment, as a PDF.
 export const getPaymentInvoice = asyncHandler(async (req, res) => {
@@ -1890,8 +986,3 @@ export const getPaymentInvoice = asyncHandler(async (req, res) => {
   res.send(buffer);
 });
 
-/// Driver Subscription Analytics: cards per vehicle class, trend, list,
-/// renewals for a range of pass days (?from&to&vehicleClass&method&status&q).
-export const getDriverSubscriptionAnalytics = asyncHandler(async (req, res) =>
-  ok(res, await getSubscriptionAnalytics(req.query || {})),
-);

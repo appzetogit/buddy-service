@@ -7,7 +7,6 @@ import {
   AirportCab,
   AirportCabConfirm,
   CabHome,
-  CabSharing,
   Chat,
   ComingSoon,
   DeleteAccount,
@@ -31,9 +30,6 @@ import {
   SelectLocation,
   SelectVehicle,
   SenderReceiverDetails,
-  SharedTaxi,
-  SharedTaxiConfirm,
-  SharedTaxiSeats,
   SpiritualTrip,
   SpiritualTripConfirm,
   SpiritualTripVehicle,
@@ -43,7 +39,6 @@ import {
   UserAppLayout,
   UserNotifications,
   UserReferral,
-  UserSubscriptions,
   Wallet,
 } from './lazyPages';
 
@@ -89,11 +84,7 @@ export default function TaxiUserRoutes() {
       <Route path="/user/intercity/vehicle" element={<IntercityVehicle />} />
       <Route path="/user/intercity/details" element={<IntercityDetails />} />
       <Route path="/user/intercity/confirm" element={<IntercityConfirm />} />
-      <Route path="/user/cab-sharing" element={<CabSharing />} />
       <Route path="/user/cab" element={<CabHome />} />
-      <Route path="/user/cab/shared" element={<SharedTaxi />} />
-      <Route path="/user/cab/shared/seats" element={<SharedTaxiSeats />} />
-      <Route path="/user/cab/shared/confirm" element={<SharedTaxiConfirm />} />
       <Route path="/user/cab/airport" element={<AirportCab />} />
       <Route path="/user/cab/airport-confirm" element={<AirportCabConfirm />} />
       <Route path="/user/cab/spiritual" element={<SpiritualTrip />} />
@@ -106,7 +97,6 @@ export default function TaxiUserRoutes() {
       <Route path="/user/profile/settings" element={<ProfileSettings />} />
       <Route path="/user/profile/payments" element={<PaymentSettings />} />
       <Route path="/user/profile/addresses" element={<AddressSettings />} />
-      <Route path="/user/profile/subscriptions" element={<UserSubscriptions />} />
       <Route path="/user/profile/notifications" element={<UserNotifications />} />
       <Route path="/user/profile/delete-account" element={<DeleteAccount />} />
       <Route path="/user/safety/sos" element={<SOSContacts />} />

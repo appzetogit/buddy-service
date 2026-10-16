@@ -39,9 +39,6 @@ export const withUserAuth = (config = {}) => {
 export const userAuthService = {
   updateCurrentUser: (payload) => api.patch('/users/me', payload, withUserAuth()),
   getCurrentUser: () => api.get('/users/me', withUserAuth()),
-  getSubscriptionPlans: () => api.get('/users/subscriptions/plans', withUserAuth()),
-  getMySubscriptions: () => api.get('/users/subscriptions/me', withUserAuth()),
-  buySubscription: (planId) => api.post('/users/subscriptions/purchase', { planId }, withUserAuth()),
   getWallet: () => api.get('/users/wallet', withUserAuth()),
   transferWallet: (phone, amount) => api.post('/users/wallet/transfer', { phone, amount }, withUserAuth()),
   transferWalletToDriver: (phone, amount) => api.post('/users/wallet/transfer/driver', { phone, amount }, withUserAuth()),
