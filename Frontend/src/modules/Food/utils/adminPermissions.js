@@ -10,6 +10,17 @@ const normalizePermissions = (permissions) => {
   return permissions;
 };
 
+// The root admin must be recognised however the session user was loaded. The stored profile says
+// role "ADMIN", the auth-context profile can say "admin" or carry no role at all, and a profile
+// with no sub-admin role attached is the root admin. Without this, screens that read the context
+// user (e.g. Quick Commerce Zone Setup) hid Add / Edit / Delete from the main admin.
+const isRootAdminRole = (user) => {
+  const role = String(user?.role || "").toUpperCase();
+  if (role === "ADMIN") return true;
+  if (String(user?.admin_type || "").toLowerCase() === "superadmin") return true;
+  return !role && !user?.adminRoleId;
+};
+
 const ACTIONS = ["view", "create", "edit", "delete"];
 
 const normalizeAction = (action = "view") =>
@@ -28,7 +39,7 @@ export const extractAdminRoleId = (user) => {
 };
 
 export const extractAdminPermissions = (user) => {
-  if (!user || user.role === "ADMIN") return {};
+  if (!user || isRootAdminRole(user)) return {};
 
   const directPermissions = normalizePermissions(user.permissions);
   if (Object.keys(directPermissions).length > 0) return directPermissions;
@@ -46,7 +57,7 @@ export const fetchAdminRolePermissions = async (roleId) => {
 };
 
 export const resolveAdminPermissionsForUser = async (user) => {
-  if (!user || user.role === "ADMIN") return {};
+  if (!user || isRootAdminRole(user)) return {};
 
   const existingPermissions = extractAdminPermissions(user);
   if (Object.keys(existingPermissions).length > 0) {
@@ -192,7 +203,7 @@ export const getFirstAccessibleAdminPath = (menuList, permissions, parentKey) =>
 
 export const getDefaultAdminLandingPath = (user, permissions = {}) => {
   if (!user) return "/admin/food";
-  if (user.role === "ADMIN") return "/admin/food";
+  if (isRootAdminRole(user)) return "/admin/food";
 
   const moduleConfigs = [
     { rootKey: "food", menu: adminSidebarMenu },
@@ -245,7 +256,7 @@ export const inferAdminActionFromPath = (pathname, match) => {
 };
 
 export const canPerformAdminPermissionAction = (user, permissions, permissionKey, action = "view") => {
-  if (!user || user.role === "ADMIN") return true;
+  if (!user || isRootAdminRole(user)) return true;
 
   const rootKey = String(permissionKey || "").split("::")[0];
   if (!rootKey || !hasAnyRootAccess(permissions, rootKey)) return false;
@@ -254,7 +265,7 @@ export const canPerformAdminPermissionAction = (user, permissions, permissionKey
 };
 
 export const canAccessAdminPath = (user, permissions, pathname) => {
-  if (!user || user.role === "ADMIN") return true;
+  if (!user || isRootAdminRole(user)) return true;
 
   const { rootKey, menu } = getAdminModuleConfig(pathname);
   if (!hasAnyRootAccess(permissions, rootKey)) return false;

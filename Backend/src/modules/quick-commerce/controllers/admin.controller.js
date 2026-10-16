@@ -1701,23 +1701,15 @@ export const createCategory = async (req, res) => {
       ? businessType
       : 'quick_commerce';
 
-    // Header categories use icon library only — no custom image upload.
-    if (normalizedType === 'header') {
-      if (req.file) {
-        return res.status(400).json({
-          success: false,
-          message: 'Header categories use icons only. Custom image upload is not allowed.',
-        });
-      }
-      if (!String(iconId || '').trim()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Please select an icon for the header category',
-        });
-      }
+    // Header categories are shown with an uploaded image (the old icon library is still honoured
+    // for headers that already have an icon), so a new header needs one or the other.
+    const image = await getCategoryImage(req);
+    if (normalizedType === 'header' && !image && !String(iconId || '').trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please upload an image for the header category',
+      });
     }
-
-    const image = normalizedType === 'header' ? '' : await getCategoryImage(req);
 
     const createPayload = {
       name: String(name).trim(),
@@ -1833,21 +1825,15 @@ export const updateCategory = async (req, res) => {
 
     const effectiveType = category.type || nextType;
     if (effectiveType === 'header') {
-      if (req.file) {
-        return res.status(400).json({
-          success: false,
-          message: 'Header categories use icons only. Custom image upload is not allowed.',
-        });
-      }
+      const image = await getCategoryImage(req);
+      if (image) category.image = image;
       const nextIconId = iconId !== undefined ? iconId : category.iconId;
-      if (!String(nextIconId || '').trim()) {
+      if (!category.image && !String(nextIconId || '').trim()) {
         return res.status(400).json({
           success: false,
-          message: 'Please select an icon for the header category',
+          message: 'Please upload an image for the header category',
         });
       }
-      // Drop any legacy custom image so icons remain the only visual source.
-      category.image = '';
     } else {
       const image = await getCategoryImage(req);
       if (image) category.image = image;

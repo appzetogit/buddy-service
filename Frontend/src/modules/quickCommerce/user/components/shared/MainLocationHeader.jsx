@@ -126,6 +126,7 @@ const CategoryNavColumn = React.memo(function CategoryNavColumn({
   }, [onCategorySelect, cat]);
 
   const IconComponent = cat.icon;
+  const headerImage = String(cat.image?.url || cat.image || "").trim();
 
   return (
     <motion.div
@@ -140,7 +141,16 @@ const CategoryNavColumn = React.memo(function CategoryNavColumn({
       )}
     >
       <div className="relative z-10 flex h-9 w-9 items-center justify-center md:h-11 md:w-11">
-        {typeof IconComponent === "function" || (typeof IconComponent === "object" && IconComponent?.$$typeof) ? (
+        {headerImage ? (
+          // The admin uploads an image for each header category; it is the visual when present.
+          <img
+            src={headerImage}
+            alt={cat.name}
+            className="h-8 w-8 rounded-full object-cover md:h-10 md:w-10"
+            style={{ opacity: isActive ? 1 : 0.92 }}
+            loading="lazy"
+          />
+        ) : typeof IconComponent === "function" || (typeof IconComponent === "object" && IconComponent?.$$typeof) ? (
           <IconComponent
             sx={{
               fontSize: { xs: 20, md: 24 },

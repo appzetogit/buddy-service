@@ -16,7 +16,7 @@ const defaultAdminFields = () => ({
     active: true,
     status: 'active',
     isVerified: true,
-    servicesAccess: ['food'],
+    servicesAccess: ['food', 'quickCommerce', 'taxi'],
 });
 
 /** Seed or repair the default admin in the unified admins collection. */

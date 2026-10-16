@@ -37,3 +37,4 @@ Thumbs.db
 # Runtime logs
 *.log
 server_run.log
+scripts/seed/.cache/

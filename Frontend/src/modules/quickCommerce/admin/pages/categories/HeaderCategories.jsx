@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Card from "@shared/components/ui/Card";
 import Badge from "@shared/components/ui/Badge";
 import {
@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { adminApi } from "../../services/adminApi";
 import { toast } from "sonner";
-import IconSelector from "@shared/components/IconSelector";
 import Pagination from "@shared/components/ui/Pagination";
 import { PAGINATION_CONFIG } from "@/shared/constants/pagination";
 import { getIconSvg } from "@shared/constants/categoryIcons";
@@ -25,6 +24,7 @@ import { getCurrentUser } from "@food/utils/auth";
 import { canPerformAdminPermissionAction, extractAdminPermissions, extractAdminRoleId, fetchAdminRolePermissions } from "@food/utils/adminPermissions";
 import {
   buildCategoryFormData,
+  validateCategoryImage,
   bulkDeleteCategories,
   describeCategoryCascade,
   describeCategoryDelete,
@@ -106,7 +106,10 @@ const HeaderCategories = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isIconSelectorOpen, setIsIconSelectorOpen] = useState(false);
+  // Header categories are shown with an uploaded image.
+  const [imageFile, setImageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const fileInputRef = useRef(null);
   const [editingItem, setEditingItem] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -190,14 +193,30 @@ const HeaderCategories = () => {
     }
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const imageError = validateCategoryImage(file);
+    if (imageError) {
+      toast.error(imageError);
+      e.target.value = "";
+      return;
+    }
+
+    setImageFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+  };
+
   const handleSave = async () => {
     if (!formData.name || !formData.slug) {
       toast.error("Name and slug are required");
       return;
     }
 
-    if (!formData.iconId) {
-      toast.error("Please select an icon");
+    // An existing header may still be on its old icon; a new one needs an image.
+    if (!imageFile && !previewUrl && !formData.iconId) {
+      toast.error("Please upload an image for the header category");
       return;
     }
 
@@ -224,7 +243,7 @@ const HeaderCategories = () => {
           returnWindowHours: returnWindowDaysToHours(returnWindowDays),
         },
         "header",
-        null,
+        imageFile,
       );
 
       if (editingItem) {
@@ -263,6 +282,8 @@ const HeaderCategories = () => {
   const openAddModal = () => {
     setEditingItem(null);
     setFormData({ ...EMPTY_HEADER_FORM });
+    setImageFile(null);
+    setPreviewUrl(null);
     setIsAddModalOpen(true);
   };
 
@@ -284,6 +305,8 @@ const HeaderCategories = () => {
       returnsEnabled: item.returnsEnabled !== false,
       returnWindowDays: hoursToReturnWindowDays(item.returnWindowHours),
     });
+    setImageFile(null);
+    setPreviewUrl(item.image?.url || item.image || null);
     setIsAddModalOpen(true);
   };
 
@@ -403,7 +426,13 @@ const HeaderCategories = () => {
                     </td>
                     <td className="py-3 px-4">
                       <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center border border-gray-200">
-                        {cat.iconId && iconComponents[cat.iconId] ? (
+                        {cat.image?.url || cat.image ? (
+                          <img
+                            src={cat.image?.url || cat.image}
+                            alt={cat.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : cat.iconId && iconComponents[cat.iconId] ? (
                           <div className="w-6 h-6 text-indigo-600 flex items-center justify-center">
                             {(() => {
                               const IconComp = iconComponents[cat.iconId];
@@ -416,12 +445,6 @@ const HeaderCategories = () => {
                             dangerouslySetInnerHTML={{
                               __html: getIconSvg(cat.iconId),
                             }}
-                          />
-                        ) : cat.image?.url || cat.image ? (
-                          <img
-                            src={cat.image?.url || cat.image}
-                            alt={cat.name}
-                            className="w-full h-full object-cover"
                           />
                         ) : (
                           <Image className="w-5 h-5 text-gray-400" />
@@ -526,37 +549,43 @@ const HeaderCategories = () => {
                 onWheel={(e) => e.stopPropagation()}
                 onTouchMove={(e) => e.stopPropagation()}
               >
-                {/* Icon Selection */}
-                <div className="flex flex-col items-center gap-4">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-24 h-24 rounded-full bg-linear-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 flex items-center justify-center">
-                      {formData.iconId && iconComponents[formData.iconId] ? (
-                        <div className="w-12 h-12 text-indigo-600 flex items-center justify-center">
-                          {(() => {
-                            const IconComp = iconComponents[formData.iconId];
-                            return <IconComp fontSize="large" />;
-                          })()}
-                        </div>
-                      ) : formData.iconId && getIconSvg(formData.iconId) ? (
-                        <div
-                          className="w-12 h-12 text-indigo-600"
-                          dangerouslySetInnerHTML={{
-                            __html: getIconSvg(formData.iconId),
-                          }}
-                        />
-                      ) : (
-                        <Sparkles className="w-10 h-10 text-indigo-300" />
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsIconSelectorOpen(true)}
-                      className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
-                      {formData.iconId ? "Change Icon" : "Select Icon"}
-                    </button>
+                {/* Image */}
+                <div className="flex flex-col items-center gap-3">
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-24 h-24 rounded-full bg-gray-50 border-2 border-dashed border-indigo-200 flex items-center justify-center cursor-pointer hover:border-indigo-500 overflow-hidden transition-colors"
+                  >
+                    {previewUrl ? (
+                      <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                    ) : formData.iconId && iconComponents[formData.iconId] ? (
+                      <div className="w-12 h-12 text-indigo-600 flex items-center justify-center">
+                        {(() => {
+                          const IconComp = iconComponents[formData.iconId];
+                          return <IconComp fontSize="large" />;
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <Image className="w-8 h-8 text-gray-400 mx-auto" />
+                        <span className="text-xs text-gray-500 mt-1">Upload</span>
+                      </div>
+                    )}
                   </div>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleImageChange}
+                    accept="image/*"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                    {previewUrl ? "Change Image" : "Upload Image"}
+                  </button>
                   <p className="text-xs text-gray-500 text-center">
-                    Choose an SVG icon for this header category
+                    Upload the image shown for this header category in the app
                   </p>
                 </div>
 
@@ -785,20 +814,6 @@ const HeaderCategories = () => {
               </div>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
-
-      {/* Icon Selector Modal */}
-      <AnimatePresence>
-        {isIconSelectorOpen && (
-          <IconSelector
-            selectedIcon={formData.iconId}
-            onSelect={(iconId) => {
-              setFormData({ ...formData, iconId });
-              setIsIconSelectorOpen(false);
-            }}
-            onClose={() => setIsIconSelectorOpen(false)}
-          />
         )}
       </AnimatePresence>
 
