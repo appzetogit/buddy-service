@@ -2141,9 +2141,13 @@ function Cart() {
           onClick={() => setSpeedOptionInfo(null)}
         >
           <div
-            className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-white dark:bg-[#1a1a1a] shadow-2xl border border-gray-100 dark:border-gray-800 p-5"
+            className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-white dark:bg-[#1a1a1a] shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
+            {speedOptionInfo.image && (
+              <img src={speedOptionInfo.image} alt="" className="w-full h-40 object-cover" />
+            )}
+            <div className="p-5">
             <div className="flex items-start justify-between gap-3 mb-2">
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
                 {speedOptionInfo.detailTitle}
@@ -2167,6 +2171,7 @@ function Cart() {
             >
               Got it
             </button>
+            </div>
           </div>
         </div>,
         document.body,

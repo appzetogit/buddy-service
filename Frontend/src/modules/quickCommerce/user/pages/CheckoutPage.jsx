@@ -2162,6 +2162,9 @@ const CheckoutPage = () => {
 
       <Dialog open={Boolean(speedOptionInfo)} onOpenChange={(open) => !open && setSpeedOptionInfo(null)}>
         <DialogContent className="max-w-sm">
+          {speedOptionInfo?.image && (
+            <img src={speedOptionInfo.image} alt="" className="-mx-6 -mt-6 w-[calc(100%+3rem)] h-40 object-cover" />
+          )}
           <DialogHeader>
             <DialogTitle>{speedOptionInfo?.detailTitle}</DialogTitle>
           </DialogHeader>

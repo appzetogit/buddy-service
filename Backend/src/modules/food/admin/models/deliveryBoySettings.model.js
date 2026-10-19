@@ -30,6 +30,8 @@ const deliverySpeedOptionSchema = new mongoose.Schema(
          * popup body. Empty = no info icon shown for that option.
          */
         detailTitle: { type: String, default: '', trim: true },
+        /** Illustration shown at the top of the info popup (Cloudinary URL). Optional. */
+        image: { type: String, default: '', trim: true },
         icon: { type: String, enum: ['bike', 'leaf', 'zap', 'truck', 'clock'], default: 'bike' },
         isEnabled: { type: Boolean, default: true },
         isDefault: { type: Boolean, default: false },

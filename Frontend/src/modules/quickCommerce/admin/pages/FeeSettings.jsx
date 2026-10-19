@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Save, Loader2, IndianRupee, Plus, Trash2,
-  Bike, Leaf, Zap, Truck, Clock, ChevronUp, ChevronDown, Eye, Gauge,
+  Bike, Leaf, Zap, Truck, Clock, ChevronUp, ChevronDown, Eye, Gauge, ImagePlus, X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@shared/components/ui/Toast";
@@ -88,6 +88,7 @@ export default function FeeSettings() {
   });
   const [deliverySettings, setDeliverySettings] = useState(null);
   const [activePeakHourSurcharge, setActivePeakHourSurcharge] = useState(null);
+  const [uploadingImageIndex, setUploadingImageIndex] = useState(null);
 
   const fetchActivePeakHourSurcharge = async () => {
     try {
@@ -166,6 +167,7 @@ export default function FeeSettings() {
         driverShareAmount: 0,
         description: "",
         detailTitle: "",
+        image: "",
         icon: "bike",
         isEnabled: true,
         isDefault: options.length === 0,
@@ -177,6 +179,32 @@ export default function FeeSettings() {
 
   const removeOption = (index) => {
     updateDelivery({ deliverySpeedOptions: options.filter((_, i) => i !== index) });
+  };
+
+  const handleOptionImageSelect = async (index, file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showToast("Please select an image file", "error");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Image must be 5MB or smaller", "error");
+      return;
+    }
+    try {
+      setUploadingImageIndex(index);
+      const response = await adminApi.uploadMedia(file, { folder: "quick-commerce/delivery-speed-options" });
+      const url = response?.data?.data?.url || "";
+      if (url) {
+        updateOption(index, "image", url);
+      } else {
+        showToast("Upload failed — no URL returned", "error");
+      }
+    } catch (error) {
+      showToast(error?.response?.data?.message || "Failed to upload image", "error");
+    } finally {
+      setUploadingImageIndex(null);
+    }
   };
 
   const moveOption = (index, direction) => {
@@ -458,6 +486,39 @@ export default function FeeSettings() {
                             Zero fee — no rider/admin split to configure.
                           </div>
                         )}
+                        <Field label="Info popup image" hint="Shown at the top of the info popup. Optional.">
+                          {option.image ? (
+                            <div className="relative inline-block">
+                              <img src={option.image} alt="" className="h-24 w-24 rounded-lg object-cover border border-slate-200" />
+                              <button
+                                type="button"
+                                onClick={() => updateOption(index, "image", "")}
+                                className="absolute -top-2 -right-2 p-1 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-red-600 shadow-sm"
+                                aria-label="Remove image"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-200 text-slate-400 cursor-pointer hover:border-primary hover:text-primary">
+                              {uploadingImageIndex === index ? (
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                              ) : (
+                                <>
+                                  <ImagePlus className="w-5 h-5" />
+                                  <span className="text-[10px]">Upload</span>
+                                </>
+                              )}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                disabled={uploadingImageIndex === index}
+                                onChange={(e) => handleOptionImageSelect(index, e.target.files?.[0])}
+                              />
+                            </label>
+                          )}
+                        </Field>
                         <Field label="Info popup title" hint="Shown as the heading when a customer taps the info icon on this option. Leave blank to hide the info icon.">
                           <input type="text" value={option.detailTitle || ""} onChange={(e) => updateOption(index, "detailTitle", e.target.value)} placeholder="e.g. What is Priority Delivery?" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary outline-none" />
                         </Field>

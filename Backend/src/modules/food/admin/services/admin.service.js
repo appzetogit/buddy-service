@@ -6726,6 +6726,7 @@ export function sanitizeDeliverySpeedOptions(list) {
                 })(),
                 description: String(o?.description || '').trim(),
                 detailTitle: String(o?.detailTitle || '').trim(),
+                image: String(o?.image || '').trim(),
                 icon: ALLOWED_SPEED_ICONS.has(o?.icon) ? o.icon : 'bike',
                 isEnabled: o?.isEnabled !== false,
                 isDefault: Boolean(o?.isDefault),

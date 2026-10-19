@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react"
 import { useSearchParams } from "react-router-dom"
 import {
   Save, Loader2, DollarSign, Plus, Trash2,
-  Bike, Leaf, Zap, Truck, Clock, ChevronUp, ChevronDown, Eye, Gauge,
+  Bike, Leaf, Zap, Truck, Clock, ChevronUp, ChevronDown, Eye, Gauge, ImagePlus, X,
 } from "lucide-react"
 import { Button } from "@food/components/ui/button"
 import { adminAPI } from "@food/api"
@@ -69,6 +69,7 @@ export default function FeeSettings() {
   const [saving, setSaving] = useState(false)
   const [togglingPartner, setTogglingPartner] = useState(false)
   const [activePeakHourSurcharge, setActivePeakHourSurcharge] = useState(null)
+  const [uploadingImageIndex, setUploadingImageIndex] = useState(null)
 
   const fetchActivePeakHourSurcharge = async () => {
     try {
@@ -237,6 +238,7 @@ export default function FeeSettings() {
         driverShareAmount: 0,
         description: "",
         detailTitle: "",
+        image: "",
         icon: "bike",
         isEnabled: true,
         isDefault: prev.length === 0,
@@ -278,6 +280,32 @@ export default function FeeSettings() {
 
   const removeSpeedOption = (index) => {
     setDeliverySpeedOptions((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleSpeedOptionImageSelect = async (index, file) => {
+    if (!file) return
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file")
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be 5MB or smaller")
+      return
+    }
+    try {
+      setUploadingImageIndex(index)
+      const response = await adminAPI.uploadMedia(file, { folder: "food/delivery-speed-options" })
+      const url = response?.data?.data?.url || ""
+      if (url) {
+        updateSpeedOption(index, "image", url)
+      } else {
+        toast.error("Upload failed — no URL returned")
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to upload image")
+    } finally {
+      setUploadingImageIndex(null)
+    }
   }
 
   const moveSpeedOption = (index, direction) => {
@@ -566,6 +594,41 @@ export default function FeeSettings() {
                             Zero fee — no driver/admin split to configure.
                           </div>
                         )}
+                        <div>
+                          <label className="block text-xs font-medium text-slate-500 mb-1">Info popup image</label>
+                          {option.image ? (
+                            <div className="relative inline-block">
+                              <img src={option.image} alt="" className="h-24 w-24 rounded-lg object-cover border border-slate-200" />
+                              <button
+                                type="button"
+                                onClick={() => updateSpeedOption(index, "image", "")}
+                                className="absolute -top-2 -right-2 p-1 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-red-600 shadow-sm"
+                                aria-label="Remove image"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-200 text-slate-400 cursor-pointer hover:border-green-400 hover:text-green-600">
+                              {uploadingImageIndex === index ? (
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                              ) : (
+                                <>
+                                  <ImagePlus className="w-5 h-5" />
+                                  <span className="text-[10px]">Upload</span>
+                                </>
+                              )}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                disabled={uploadingImageIndex === index}
+                                onChange={(e) => handleSpeedOptionImageSelect(index, e.target.files?.[0])}
+                              />
+                            </label>
+                          )}
+                          <p className="text-[11px] text-slate-400 mt-1">Shown at the top of the info popup. Optional.</p>
+                        </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-500 mb-1">Info popup title</label>
                           <input type="text" value={option.detailTitle || ""} onChange={(e) => updateSpeedOption(index, "detailTitle", e.target.value)} placeholder="e.g. What is Priority Delivery?" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none" />

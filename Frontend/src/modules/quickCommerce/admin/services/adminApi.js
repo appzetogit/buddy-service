@@ -314,6 +314,17 @@ export const adminApi = {
     }),
   getActivePeakHourSurcharge: () => axiosInstance.get('/quick-commerce/peak-hour-rules/active'),
 
+  /** Upload a single image file (Cloudinary-backed). */
+  uploadMedia: (file, options = {}) => {
+    if (!file) return Promise.reject(new Error('File is required for upload'));
+    const formData = new FormData();
+    formData.append('file', file);
+    if (options.folder) formData.append('folder', options.folder);
+    return axiosInstance.post('/uploads/image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
   getPlatformSettings: () => axiosInstance.get('/quick-commerce/admin/fee-settings'),
   updatePlatformSettings: (body) =>
     axiosInstance.put('/quick-commerce/admin/fee-settings', body ?? {}),
