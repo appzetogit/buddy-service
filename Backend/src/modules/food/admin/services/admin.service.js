@@ -2083,7 +2083,10 @@ export async function createPeakHourRule(body) {
     const count = await FoodPeakHourRule.countDocuments({});
     const created = await FoodPeakHourRule.create({
         name: body.name || '',
+        dateMode: body.dateMode || 'recurring',
         days: body.days || [],
+        startDate: body.startDate ?? null,
+        endDate: body.endDate ?? null,
         startTime: body.startTime,
         endTime: body.endTime,
         charge: body.charge,
@@ -2100,7 +2103,10 @@ export async function updatePeakHourRule(id, body) {
         {
             $set: {
                 name: body.name || '',
+                dateMode: body.dateMode || 'recurring',
                 days: body.days || [],
+                startDate: body.startDate ?? null,
+                endDate: body.endDate ?? null,
                 startTime: body.startTime,
                 endTime: body.endTime,
                 charge: body.charge,

@@ -786,13 +786,18 @@ const toMinutes = (value) => {
 };
 
 /**
- * Wall-clock weekday and minute-of-day in the given timezone. Mirrors Taxi's
- * priceHikeService.nowInZone — Intl does the DST/offset work.
+ * Wall-clock date, weekday and minute-of-day in the given timezone. Mirrors
+ * Taxi's priceHikeService.nowInZone — Intl does the DST/offset work. Exported
+ * so Quick Commerce's own peak-hour resolver can share the exact same clock
+ * instead of re-deriving it.
  */
-const nowInZone = (timezone) => {
+export const nowInZone = (timezone) => {
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone || 'Asia/Kolkata',
     weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
@@ -802,28 +807,57 @@ const nowInZone = (timezone) => {
   );
   const weekdays = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   const hour = Number(parts.hour) % 24;
-  return { day: weekdays[parts.weekday] ?? 0, minutes: hour * 60 + Number(parts.minute) };
+  return {
+    day: weekdays[parts.weekday] ?? 0,
+    minutes: hour * 60 + Number(parts.minute),
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+  };
+};
+
+/**
+ * Yesterday's "YYYY-MM-DD" in the given timezone — used when an overnight
+ * window (e.g. 22:00-02:00) is being checked in the small hours, so the
+ * date-range gate looks at the day the window actually started.
+ */
+const yesterdayInZone = (timezone) => {
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: timezone || 'Asia/Kolkata' });
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  return formatter.format(yesterday);
 };
 
 /** Pure window test, split out from the clock so it can be unit tested directly. */
-export function isPeakHourRuleActiveAt(rule, { day, minutes }) {
+export function isPeakHourRuleActiveAt(rule, { day, minutes, date }) {
   const start = toMinutes(rule.startTime);
   const end = toMinutes(rule.endTime);
   if (start === null || end === null || start === end) return false;
 
   const days = Array.isArray(rule.days) ? rule.days : [];
+  const isDateMode = rule.dateMode === 'dates';
 
   // A window like 22:00-02:00 wraps past midnight. In the small hours we are
-  // inside yesterday's window, so the day check uses yesterday.
+  // inside yesterday's window, so the day/date check uses yesterday.
   if (end < start) {
     const inWindow = minutes >= start || minutes < end;
     if (!inWindow) return false;
+    if (isDateMode) {
+      const owningDate = minutes < end ? yesterdayInZone(rule.timezone) : date;
+      return isDateWithinRange(owningDate, rule.startDate, rule.endDate);
+    }
     const owningDay = minutes < end ? (day + 6) % 7 : day;
     return days.length === 0 || days.includes(owningDay);
   }
 
   if (minutes < start || minutes >= end) return false;
+  if (isDateMode) return isDateWithinRange(date, rule.startDate, rule.endDate);
   return days.length === 0 || days.includes(day);
+}
+
+/** Inclusive "YYYY-MM-DD" range check; a missing bound is treated as unbounded on that side. */
+function isDateWithinRange(date, startDate, endDate) {
+  if (!date) return false;
+  if (startDate && date < startDate) return false;
+  if (endDate && date > endDate) return false;
+  return Boolean(startDate || endDate);
 }
 
 /**
@@ -834,7 +868,7 @@ export function isPeakHourRuleActiveAt(rule, { day, minutes }) {
  */
 export async function resolveActivePeakHourSurcharge() {
   const rules = await FoodPeakHourRule.find({ status: true })
-    .select('name days startTime endTime timezone charge')
+    .select('name dateMode days startDate endDate startTime endTime timezone charge')
     .lean();
   if (!rules.length) return null;
 

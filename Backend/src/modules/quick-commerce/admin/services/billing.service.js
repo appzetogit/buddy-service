@@ -3,7 +3,10 @@ import { ValidationError } from '../../../../core/auth/errors.js';
 import { QuickFeeSettings } from '../models/feeSettings.model.js';
 import { QuickCategory } from '../../models/category.model.js';
 import { calculateHeaderGstAmount } from './commission.service.js';
-import { getQuickDeliverySettings } from '../../services/quickDeliverySettings.service.js';
+import {
+  getQuickDeliverySettings,
+  resolveActiveQuickPeakHourSurcharge,
+} from '../../services/quickDeliverySettings.service.js';
 import {
   applyDeliverySurcharges,
   resolveSpeedOption,
@@ -297,9 +300,14 @@ export async function calculateQuickPricing({
     ? { speedShareAdmin: 0, speedShareDriver: 0, adminBearsNegative: false }
     : splitSpeedFeeShares(speedFeeModifier, { driverShareAmount: matchedSpeedOption?.driverShareAmount });
 
+  // Peak Hour surcharge: a flat admin-kept charge during admin-configured recurring windows or
+  // festival date ranges. Not split with the rider, and waived whenever delivery is waived.
+  const peakHourSurcharge = deliveryWaived ? null : await resolveActiveQuickPeakHourSurcharge();
+  const peakHourCharge = peakHourSurcharge ? Number(peakHourSurcharge.charge) || 0 : 0;
+
   let deliveryFee = deliveryWaived
     ? baseCustomerDeliveryFee
-    : Math.max(0, baseCustomerDeliveryFee + speedFeeModifier);
+    : Math.max(0, baseCustomerDeliveryFee + speedFeeModifier + peakHourCharge);
 
   const baseRiderFee = calculateRiderEarning(feeSettings, distanceKm);
   const riderSurcharge = applyDeliverySurcharges(baseRiderFee, {
@@ -325,6 +333,9 @@ export async function calculateQuickPricing({
     speedSkippedBecauseFreeDelivery: deliveryWaived,
     speedShareAdmin: speedShares.speedShareAdmin,
     speedShareDriver: speedShares.speedShareDriver,
+    peakHourCharge,
+    peakHourRuleId: peakHourSurcharge?.ruleId || null,
+    peakHourRuleName: peakHourSurcharge?.name || null,
     baseFee: baseDeliveryFee,
     fee: deliveryFee,
     deliveryBoyFee: baseRiderFee,
@@ -372,6 +383,8 @@ export async function calculateQuickPricing({
       total,
       currency: 'INR',
       deliveryFeeBreakdown,
+      peakHourCharge,
+      peakHourSurcharge,
     },
     deliveryMeta: {
       riderFee,

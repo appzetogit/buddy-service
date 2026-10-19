@@ -1595,6 +1595,8 @@ const CheckoutPage = () => {
             couponCode: result.couponCode || null,
             couponType: result.couponType || '',
             couponError: result.couponError || null,
+            peakHourCharge: Number(result.peakHourCharge || 0),
+            peakHourRuleName: result.peakHourSurcharge?.name || null,
           });
         } else {
           const result = calculateQuickCheckoutPricing({
@@ -1964,6 +1966,17 @@ const CheckoutPage = () => {
                   <span className="text-slate-500 font-medium text-[12px]">Delivery Fee</span>
                   <span className="font-medium text-[13px] tabular-nums tracking-normal text-slate-800">₹{deliveryFee}</span>
                 </div>
+                {Number(pricingPreview?.peakHourCharge) > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-amber-700 font-medium text-[12px] flex items-center gap-1">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      {pricingPreview.peakHourRuleName || "Peak hour charge"}
+                    </span>
+                    <span className="font-medium text-[13px] tabular-nums tracking-normal text-amber-700">
+                      +₹{Number(pricingPreview.peakHourCharge).toFixed(2)}
+                    </span>
+                  </div>
+                )}
                 {pricingPreview && typeof pricingPreview.distanceKmActual === "number" && (
                   <div className="-mt-1 flex items-center justify-between text-[11px] font-medium text-slate-400">
                     <span className="tabular-nums">

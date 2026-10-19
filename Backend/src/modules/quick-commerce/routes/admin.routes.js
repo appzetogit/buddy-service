@@ -3,6 +3,11 @@ import { upload } from "../../../middleware/upload.js";
 import {
   getAdminQuickDeliverySettings,
   updateAdminQuickDeliverySettings,
+  getPeakHourRulesController,
+  createPeakHourRuleController,
+  updatePeakHourRuleController,
+  deletePeakHourRuleController,
+  togglePeakHourRuleStatusController,
 } from "../controllers/quickDeliverySettings.controller.js";
 import {
   assignAdminQuickRider,
@@ -225,6 +230,11 @@ router.get("/fee-settings", getFeeSettings);
 router.get("/delivery-settings", getAdminQuickDeliverySettings);
 router.put("/delivery-settings", updateAdminQuickDeliverySettings);
 router.put("/fee-settings", createOrUpdateFeeSettings);
+router.get("/peak-hour-rules", getPeakHourRulesController);
+router.post("/peak-hour-rules", createPeakHourRuleController);
+router.patch("/peak-hour-rules/:id", updatePeakHourRuleController);
+router.delete("/peak-hour-rules/:id", deletePeakHourRuleController);
+router.patch("/peak-hour-rules/:id/status", togglePeakHourRuleStatusController);
 
 // Seller coupon requests + coupons
 router.get("/seller-coupon-requests", getAdminSellerCouponRequests);

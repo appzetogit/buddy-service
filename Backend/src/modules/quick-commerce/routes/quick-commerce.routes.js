@@ -1,5 +1,8 @@
 import express from "express";
-import { getPublicQuickDeliveryOptionsController } from "../controllers/quickDeliverySettings.controller.js";
+import {
+  getPublicQuickDeliveryOptionsController,
+  getActivePeakHourSurchargeController,
+} from "../controllers/quickDeliverySettings.controller.js";
 import { getPublicFaqs } from "../controllers/faq.controller.js";
 import { upload } from "../../../middleware/upload.js";
 import {
@@ -220,6 +223,7 @@ router.delete("/cart/remove/:productId", optionalAuth, removeCartItem);
 router.delete("/cart/clear", optionalAuth, clearCart);
 
 router.get("/delivery-options", getPublicQuickDeliveryOptionsController);
+router.get("/peak-hour-rules/active", getActivePeakHourSurchargeController);
 router.post("/orders", optionalAuth, placeOrder);
 router.post("/checkout/verify-payment", optionalAuth, verifyQuickCheckout);
 router.post("/checkout/cancel", optionalAuth, cancelQuickCheckout);

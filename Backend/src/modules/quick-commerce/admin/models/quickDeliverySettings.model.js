@@ -27,6 +27,32 @@ const deliverySpeedOptionSchema = new mongoose.Schema(
   { _id: false },
 );
 
+/**
+ * A time window during which a flat extra charge is added to the customer's
+ * delivery fee — mirrors Food's FoodPeakHourRule (and Taxi's PriceHike)
+ * adapted to a flat ₹ amount. Kept entirely by the platform, not split with
+ * the rider. See `resolveActiveQuickPeakHourSurcharge` for the match logic.
+ *
+ * "recurring" repeats on the given days of week (empty = every day); "dates"
+ * applies only within a fixed calendar range (a festival) and ignores days.
+ */
+const peakHourRuleSchema = new mongoose.Schema(
+  {
+    name: { type: String, trim: true, default: '' },
+    dateMode: { type: String, enum: ['recurring', 'dates'], default: 'recurring' },
+    days: { type: [Number], default: [] },
+    startDate: { type: String, default: null, trim: true },
+    endDate: { type: String, default: null, trim: true },
+    startTime: { type: String, default: '00:00', trim: true },
+    endTime: { type: String, default: '00:00', trim: true },
+    timezone: { type: String, default: 'Asia/Kolkata', trim: true },
+    charge: { type: Number, default: 0, min: 0 },
+    status: { type: Boolean, default: true },
+    sortOrder: { type: Number, default: 0, min: 0 },
+  },
+  { _id: true },
+);
+
 const quickDeliverySettingsSchema = new mongoose.Schema(
   {
     // ---- Payments ----
@@ -67,6 +93,9 @@ const quickDeliverySettingsSchema = new mongoose.Schema(
 
     // ---- Cart delivery speed ----
     deliverySpeedOptions: { type: [deliverySpeedOptionSchema], default: [] },
+
+    // ---- Peak hour / festival surcharges ----
+    peakHourRules: { type: [peakHourRuleSchema], default: [] },
 
     isActive: { type: Boolean, default: true },
   },

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { Search, Edit, Trash2, Clock, Loader2 } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@food/components/ui/dialog"
+import AmPmTimePicker from "@shared/components/ui/AmPmTimePicker"
 import { adminAPI } from "@food/api"
 import { toast } from "sonner"
 
@@ -16,7 +17,10 @@ const DAYS = [
 
 const emptyForm = {
   name: "",
+  dateMode: "recurring",
   days: [],
+  startDate: "",
+  endDate: "",
   startTime: "12:00",
   endTime: "15:00",
   charge: "",
@@ -31,8 +35,25 @@ function formatDays(days) {
     .join(", ")
 }
 
+function formatTime12Hour(value) {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value || "")
+  if (!match) return value || ""
+  const hour24 = Number(match[1])
+  const minute = match[2]
+  const period = hour24 >= 12 ? "PM" : "AM"
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12
+  return `${hour12}:${minute} ${period}`
+}
+
 function formatTimeRange(startTime, endTime) {
-  return `${startTime} - ${endTime}`
+  return `${formatTime12Hour(startTime)} - ${formatTime12Hour(endTime)}`
+}
+
+function formatDateRange(startDate, endDate) {
+  if (startDate && endDate) return `${startDate} to ${endDate}`
+  if (startDate) return `From ${startDate}`
+  if (endDate) return `Until ${endDate}`
+  return "—"
 }
 
 export default function PeakHoursSection() {
@@ -97,7 +118,10 @@ export default function PeakHoursSection() {
     setSelectedRule(rule)
     setFormData({
       name: rule.name || "",
+      dateMode: rule.dateMode === "dates" ? "dates" : "recurring",
       days: Array.isArray(rule.days) ? rule.days : [],
+      startDate: rule.startDate || "",
+      endDate: rule.endDate || "",
       startTime: rule.startTime || "12:00",
       endTime: rule.endTime || "15:00",
       charge: String(rule.charge ?? ""),
@@ -136,14 +160,16 @@ export default function PeakHoursSection() {
 
   const validateForm = () => {
     const errors = {}
-    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(formData.startTime)) {
-      errors.startTime = "Enter a valid time (HH:MM)"
-    }
-    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(formData.endTime)) {
-      errors.endTime = "Enter a valid time (HH:MM)"
-    }
     if (formData.startTime === formData.endTime) {
       errors.endTime = "End time must be different from start time"
+    }
+    if (formData.dateMode === "dates") {
+      if (!formData.startDate && !formData.endDate) {
+        errors.startDate = "Pick a start date, an end date, or both"
+      }
+      if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
+        errors.endDate = "End date must be on or after the start date"
+      }
     }
     if (formData.charge === "" || parseFloat(formData.charge) < 0) {
       errors.charge = "Charge must be 0 or greater"
@@ -156,9 +182,13 @@ export default function PeakHoursSection() {
     if (!validateForm()) return
     try {
       setSaving(true)
+      const isDatesMode = formData.dateMode === "dates"
       const ruleData = {
         name: formData.name.trim() || formatTimeRange(formData.startTime, formData.endTime),
-        days: formData.days,
+        dateMode: formData.dateMode,
+        days: isDatesMode ? [] : formData.days,
+        startDate: isDatesMode ? (formData.startDate || null) : null,
+        endDate: isDatesMode ? (formData.endDate || null) : null,
         startTime: formData.startTime,
         endTime: formData.endTime,
         charge: parseFloat(formData.charge),
@@ -193,12 +223,14 @@ export default function PeakHoursSection() {
     }
   }
 
+  const isDatesMode = formData.dateMode === "dates"
+
   return (
     <>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Peak Hours</h2>
-          <p className="text-sm text-slate-500 mt-0.5">Extra charge during busy time windows</p>
+          <p className="text-sm text-slate-500 mt-0.5">Extra charge during busy time windows or festival days</p>
         </div>
         <button type="button" onClick={handleAdd} className="px-4 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold shadow-sm">
           Add Peak Hour Rule
@@ -209,12 +241,13 @@ export default function PeakHoursSection() {
         <div className="flex items-start gap-3">
           <Clock className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
           <div className="text-sm text-slate-700">
-            <p className="font-semibold text-amber-900 mb-1">Flat extra charge during a recurring window</p>
+            <p className="font-semibold text-amber-900 mb-1">Flat extra charge during a window</p>
             <p className="text-slate-600">
-              When the current time falls inside an enabled rule&apos;s days and hours, this amount is added to the
-              customer&apos;s delivery fee and shown on their cart. The whole charge is kept by the platform — it is
-              not split with the delivery partner. If no days are picked, the rule applies every day. When two
-              windows overlap, only the higher charge applies (not both).
+              A <strong>Recurring</strong> rule repeats on the days you pick (or every day) between the start and end
+              time. A <strong>Festival dates</strong> rule applies only within a fixed calendar range, every day in
+              that range, during the same time window. Either way, the charge is added to the customer&apos;s delivery
+              fee and shown on their cart, and kept entirely by the platform — not split with the delivery partner.
+              When two windows overlap, only the higher charge applies.
             </p>
           </div>
         </div>
@@ -236,7 +269,7 @@ export default function PeakHoursSection() {
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
               <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase">Name</th>
-              <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase">Days</th>
+              <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase">Days / Dates</th>
               <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase">Time Window</th>
               <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase">Charge (₹)</th>
               <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase">Status</th>
@@ -261,7 +294,16 @@ export default function PeakHoursSection() {
               filteredRules.map((rule) => (
                 <tr key={rule._id} className="hover:bg-slate-50">
                   <td className="px-6 py-4 text-sm font-medium text-slate-900">{rule.name}</td>
-                  <td className="px-6 py-4 text-sm text-slate-700">{formatDays(rule.days)}</td>
+                  <td className="px-6 py-4 text-sm text-slate-700">
+                    {rule.dateMode === "dates" ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100">FESTIVAL</span>
+                        {formatDateRange(rule.startDate, rule.endDate)}
+                      </span>
+                    ) : (
+                      formatDays(rule.days)
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-sm font-medium text-slate-900">{formatTimeRange(rule.startTime, rule.endTime)}</td>
                   <td className="px-6 py-4 text-sm font-semibold text-green-700">₹{rule.charge}</td>
                   <td className="px-6 py-4">
@@ -290,39 +332,79 @@ export default function PeakHoursSection() {
           <div className="px-6 pb-6 space-y-4">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Rule Name</label>
-              <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none" placeholder="e.g., Lunch Rush" />
+              <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none" placeholder="e.g., Lunch Rush or Diwali" />
             </div>
+
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Days</label>
-              <div className="flex flex-wrap gap-2">
-                {DAYS.map((day) => (
-                  <button
-                    key={day.value}
-                    type="button"
-                    onClick={() => toggleDay(day.value)}
-                    className={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${
-                      formData.days.includes(day.value) ? "border-green-600 bg-green-50 text-green-700" : "border-slate-200 text-slate-600"
-                    }`}
-                  >
-                    {day.label}
-                  </button>
-                ))}
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Rule Type</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, dateMode: "recurring" })}
+                  className={`px-3 py-2 rounded-lg border text-sm font-semibold ${
+                    !isDatesMode ? "border-green-600 bg-green-50 text-green-700" : "border-slate-200 text-slate-600"
+                  }`}
+                >
+                  Recurring
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, dateMode: "dates" })}
+                  className={`px-3 py-2 rounded-lg border text-sm font-semibold ${
+                    isDatesMode ? "border-green-600 bg-green-50 text-green-700" : "border-slate-200 text-slate-600"
+                  }`}
+                >
+                  Festival dates
+                </button>
               </div>
-              <p className="text-xs text-slate-500 mt-1">Leave all unselected to apply every day</p>
             </div>
+
+            {isDatesMode ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Start Date</label>
+                  <input type="date" value={formData.startDate} onChange={(e) => setFormData({ ...formData, startDate: e.target.value })} className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none ${formErrors.startDate ? "border-red-500" : "border-slate-200"}`} />
+                  {formErrors.startDate && <p className="text-xs text-red-500 mt-1">{formErrors.startDate}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">End Date</label>
+                  <input type="date" value={formData.endDate} onChange={(e) => setFormData({ ...formData, endDate: e.target.value })} className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none ${formErrors.endDate ? "border-red-500" : "border-slate-200"}`} />
+                  {formErrors.endDate && <p className="text-xs text-red-500 mt-1">{formErrors.endDate}</p>}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Days</label>
+                <div className="flex flex-wrap gap-2">
+                  {DAYS.map((day) => (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => toggleDay(day.value)}
+                      className={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${
+                        formData.days.includes(day.value) ? "border-green-600 bg-green-50 text-green-700" : "border-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Leave all unselected to apply every day</p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Start Time *</label>
-                <input type="time" value={formData.startTime} onChange={(e) => setFormData({ ...formData, startTime: e.target.value })} className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none ${formErrors.startTime ? "border-red-500" : "border-slate-200"}`} />
-                {formErrors.startTime && <p className="text-xs text-red-500 mt-1">{formErrors.startTime}</p>}
+                <AmPmTimePicker value={formData.startTime} onChange={(v) => setFormData({ ...formData, startTime: v })} error={formErrors.startTime} />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">End Time *</label>
-                <input type="time" value={formData.endTime} onChange={(e) => setFormData({ ...formData, endTime: e.target.value })} className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none ${formErrors.endTime ? "border-red-500" : "border-slate-200"}`} />
-                {formErrors.endTime && <p className="text-xs text-red-500 mt-1">{formErrors.endTime}</p>}
+                <AmPmTimePicker value={formData.endTime} onChange={(v) => setFormData({ ...formData, endTime: v })} error={formErrors.endTime} />
               </div>
             </div>
-            <p className="text-xs text-slate-500 -mt-2">An end time earlier than the start time (e.g. 22:00–02:00) wraps past midnight.</p>
+            <p className="text-xs text-slate-500 -mt-2">An end time earlier than the start time (e.g. 10:00 PM–2:00 AM) wraps past midnight.</p>
+
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Extra Charge (₹) *</label>
               <input type="number" step="1" min="0" value={formData.charge} onChange={(e) => setFormData({ ...formData, charge: e.target.value })} className={`w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none ${formErrors.charge ? "border-red-500" : "border-slate-200"}`} placeholder="Added to delivery fee" />

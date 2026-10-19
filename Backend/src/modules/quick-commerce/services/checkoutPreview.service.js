@@ -355,6 +355,8 @@ export async function buildQuickCheckoutPreview({
     currency: 'INR',
     source: 'server',
     deliveryFeeBreakdown: pricing?.deliveryFeeBreakdown || null,
+    peakHourCharge: Number(pricing?.peakHourCharge || 0),
+    peakHourSurcharge: pricing?.peakHourSurcharge || null,
     isSplitOrder: Boolean(deliveryMeta?.isSplitOrder),
     isMultiSeller: Boolean(deliveryMeta?.isMultiSeller),
     ...(discountError ? { couponError: discountError } : {}),

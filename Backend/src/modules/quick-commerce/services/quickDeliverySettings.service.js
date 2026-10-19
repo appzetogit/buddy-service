@@ -1,5 +1,6 @@
 import { QuickDeliverySettings } from '../admin/models/quickDeliverySettings.model.js';
 import { sanitizeDeliverySpeedOptions } from '../../food/admin/services/admin.service.js';
+import { isPeakHourRuleActiveAt, nowInZone } from '../../food/orders/services/order.helpers.js';
 
 /** Values used until an admin saves the settings page (and as the fallback for missing fields). */
 export const QUICK_DELIVERY_SETTINGS_DEFAULTS = Object.freeze({
@@ -66,6 +67,9 @@ const normalize = (raw = {}) => {
     multiOrderAdditionalCharge: Math.max(0, Number(raw.multiOrderAdditionalCharge) || 0),
     maxSellersPerOrder: Math.round(clamp(raw.maxSellersPerOrder, 2, 3, d.maxSellersPerOrder)),
     deliverySpeedOptions: sanitizeDeliverySpeedOptions(raw.deliverySpeedOptions),
+    // Peak hour rules have their own CRUD (add/update/delete/toggle below) — preserved here
+    // untouched so a scalar-settings save never clobbers them.
+    peakHourRules: Array.isArray(raw.peakHourRules) ? raw.peakHourRules : [],
   };
 };
 
@@ -91,6 +95,108 @@ export async function upsertQuickDeliverySettings(body = {}) {
     : (await QuickDeliverySettings.create({ ...merged, isActive: true })).toObject();
   clearQuickDeliverySettingsCache();
   return normalize(saved);
+}
+
+/** Loads (creating if missing) the single active QuickDeliverySettings document as a live Mongoose doc. */
+async function getOrCreateSettingsDoc() {
+  let doc = await QuickDeliverySettings.findOne({ isActive: true }).sort({ createdAt: -1 });
+  if (!doc) {
+    doc = await QuickDeliverySettings.create({ isActive: true });
+  }
+  return doc;
+}
+
+export async function getPeakHourRules() {
+  const doc = await QuickDeliverySettings.findOne({ isActive: true })
+    .sort({ createdAt: -1 })
+    .select('peakHourRules')
+    .lean();
+  const list = Array.isArray(doc?.peakHourRules) ? doc.peakHourRules : [];
+  const sorted = [...list].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  return { rules: sorted.map((r, index) => ({ ...r, sl: index + 1 })) };
+}
+
+export async function createPeakHourRule(body) {
+  const doc = await getOrCreateSettingsDoc();
+  const sortOrder = doc.peakHourRules.length;
+  doc.peakHourRules.push({
+    name: body.name || '',
+    dateMode: body.dateMode || 'recurring',
+    days: body.days || [],
+    startDate: body.startDate ?? null,
+    endDate: body.endDate ?? null,
+    startTime: body.startTime,
+    endTime: body.endTime,
+    charge: body.charge,
+    status: body.status ?? true,
+    sortOrder,
+  });
+  await doc.save();
+  clearQuickDeliverySettingsCache();
+  return doc.peakHourRules[doc.peakHourRules.length - 1].toObject();
+}
+
+export async function updatePeakHourRule(id, body) {
+  const doc = await getOrCreateSettingsDoc();
+  const rule = doc.peakHourRules.id(id);
+  if (!rule) return null;
+  rule.name = body.name || '';
+  rule.dateMode = body.dateMode || 'recurring';
+  rule.days = body.days || [];
+  rule.startDate = body.startDate ?? null;
+  rule.endDate = body.endDate ?? null;
+  rule.startTime = body.startTime;
+  rule.endTime = body.endTime;
+  rule.charge = body.charge;
+  await doc.save();
+  clearQuickDeliverySettingsCache();
+  return rule.toObject();
+}
+
+export async function deletePeakHourRule(id) {
+  const doc = await getOrCreateSettingsDoc();
+  const rule = doc.peakHourRules.id(id);
+  if (!rule) return null;
+  rule.deleteOne();
+  await doc.save();
+  clearQuickDeliverySettingsCache();
+  return { id };
+}
+
+export async function togglePeakHourRuleStatus(id, status) {
+  const doc = await getOrCreateSettingsDoc();
+  const rule = doc.peakHourRules.id(id);
+  if (!rule) return null;
+  rule.status = Boolean(status);
+  await doc.save();
+  clearQuickDeliverySettingsCache();
+  return rule.toObject();
+}
+
+/**
+ * The active peak-hour rule right now for Quick Commerce (highest charge wins on overlap), or
+ * null when none apply. Shares Food's time-window matcher (isPeakHourRuleActiveAt / nowInZone)
+ * so both verticals agree on how a window — including overnight wraparound and festival date
+ * ranges — is evaluated.
+ */
+export async function resolveActiveQuickPeakHourSurcharge() {
+  const settings = await getQuickDeliverySettings();
+  const rules = Array.isArray(settings.peakHourRules) ? settings.peakHourRules : [];
+  const activeRules = rules.filter((r) => r && r.status !== false);
+  if (!activeRules.length) return null;
+
+  const active = activeRules.filter((rule) => isPeakHourRuleActiveAt(rule, nowInZone(rule.timezone)));
+  if (!active.length) return null;
+
+  const best = active.reduce((max, rule) => {
+    const charge = Number(rule.charge) || 0;
+    return charge > (Number(max?.charge) || 0) ? rule : max;
+  }, active[0]);
+
+  const charge = Number(best.charge) || 0;
+  if (charge <= 0) return null;
+
+  return { ruleId: best._id, name: best.name || 'Peak Hour', charge };
 }
 
 /** Settings the customer app needs: COD availability, schedule rules, speed options, multi-store rules. */

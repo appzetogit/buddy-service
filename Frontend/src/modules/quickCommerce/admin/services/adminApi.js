@@ -301,6 +301,18 @@ export const adminApi = {
   updateFeeSettings: (body) =>
     axiosInstance.put('/quick-commerce/admin/fee-settings', body ?? {}),
 
+  getPeakHourRules: () => axiosInstance.get('/quick-commerce/admin/peak-hour-rules'),
+  createPeakHourRule: (body) =>
+    axiosInstance.post('/quick-commerce/admin/peak-hour-rules', body ?? {}),
+  updatePeakHourRule: (id, body) =>
+    axiosInstance.patch(`/quick-commerce/admin/peak-hour-rules/${String(id)}`, body ?? {}),
+  deletePeakHourRule: (id) =>
+    axiosInstance.delete(`/quick-commerce/admin/peak-hour-rules/${String(id)}`),
+  togglePeakHourRuleStatus: (id, status) =>
+    axiosInstance.patch(`/quick-commerce/admin/peak-hour-rules/${String(id)}/status`, {
+      status: Boolean(status),
+    }),
+
   getPlatformSettings: () => axiosInstance.get('/quick-commerce/admin/fee-settings'),
   updatePlatformSettings: (body) =>
     axiosInstance.put('/quick-commerce/admin/fee-settings', body ?? {}),

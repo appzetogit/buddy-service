@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@shared/components/ui/Toast";
 import { adminApi } from "../services/adminApi";
 import DistanceRulesSection from "./billing/DistanceRulesSection";
+import PeakHoursSection from "./billing/PeakHoursSection";
 
 const SPEED_ICONS = [
   { id: "bike", label: "Bike", Icon: Bike },
@@ -31,6 +32,7 @@ const PAGE_TABS = [
   { id: "speed", label: "Cart Delivery Speed" },
   { id: "partner", label: "Partner Settings" },
   { id: "rules", label: "Distance Rules" },
+  { id: "peak", label: "Peak Hours" },
 ];
 
 const getSpeedIcon = (iconId) => SPEED_ICONS.find((i) => i.id === iconId)?.Icon || Bike;
@@ -273,7 +275,7 @@ export default function FeeSettings() {
               <p className="text-xs text-slate-500">Fees, delivery speed, partner & distance rules</p>
             </div>
           </div>
-          {pageTab !== "rules" && (
+          {pageTab !== "rules" && pageTab !== "peak" && (
             <button
               type="button"
               onClick={handleSaveFeesAndSpeed}
@@ -600,6 +602,8 @@ export default function FeeSettings() {
           </div>
         ) : pageTab === "rules" ? (
           <DistanceRulesSection ranges={feeSettings.deliveryFeeRanges} onSave={saveDistanceRules} saving={rulesSaving} />
+        ) : pageTab === "peak" ? (
+          <PeakHoursSection />
         ) : null}
       </div>
     </div>
