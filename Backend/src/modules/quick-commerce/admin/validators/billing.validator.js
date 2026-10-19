@@ -16,11 +16,13 @@ export const validateOptionalStatusDto = (body) => {
 
 
 const rangeSchema = z.object({
+  name: z.string().optional().default(''),
   min: z.number().min(0),
   max: z.number().min(0),
   fee: z.number().min(0),
   deliveryBoyPerKm: z.number().min(0).optional().default(0),
-  deliveryBoyBasePay: z.number().min(0).optional().default(0)
+  deliveryBoyBasePay: z.number().min(0).optional().default(0),
+  status: z.boolean().optional().default(true)
 });
 
 const feeSettingsUpsertSchema = z.object({
@@ -36,11 +38,13 @@ export const validateFeeSettingsUpsertDto = (body) => {
   const normalized = {
     deliveryFeeRanges: Array.isArray(body?.deliveryFeeRanges)
       ? body.deliveryFeeRanges.map((r) => ({
+          name: r?.name != null ? String(r.name) : '',
           min: Number(r?.min),
           max: Number(r?.max),
           fee: Number(r?.fee),
           deliveryBoyPerKm: Number(r?.deliveryBoyPerKm || 0),
-          deliveryBoyBasePay: Number(r?.deliveryBoyBasePay || 0)
+          deliveryBoyBasePay: Number(r?.deliveryBoyBasePay || 0),
+          status: r?.status !== false
         }))
       : undefined,
     platformFee:
@@ -79,20 +83,34 @@ export const validateFeeSettingsUpsertDto = (body) => {
     ? result.data.deliveryFeeRanges
     : undefined;
   if (ranges) {
-    const sorted = [...ranges].sort((a, b) => a.min - b.min);
-    for (const r of sorted) {
+    for (const r of ranges) {
       if (r.min >= r.max) {
         throw new ValidationError('Each range must have min less than max');
       }
     }
-    for (let i = 1; i < sorted.length; i += 1) {
-      const prev = sorted[i - 1];
-      const cur = sorted[i];
+
+    const active = ranges.filter((r) => r.status !== false);
+    const baseSlabs = active.filter((r) => Number(r.min) === 0);
+    if (active.length > 0 && baseSlabs.length === 0) {
+      throw new ValidationError('A base slab with min distance = 0 is required');
+    }
+    if (baseSlabs.length > 1) {
+      throw new ValidationError('Only one base slab (min distance = 0) is allowed. Please update the existing one instead.');
+    }
+
+    const sortedActive = [...active].sort((a, b) => a.min - b.min);
+    for (let i = 1; i < sortedActive.length; i += 1) {
+      const prev = sortedActive[i - 1];
+      const cur = sortedActive[i];
+      if (cur.min === prev.min) {
+        throw new ValidationError(`Duplicate range found for distance ${cur.min} km. Please edit the existing range instead.`);
+      }
       if (cur.min < prev.max) {
         throw new ValidationError('Delivery fee ranges must not overlap');
       }
     }
-    result.data.deliveryFeeRanges = sorted;
+
+    result.data.deliveryFeeRanges = [...ranges].sort((a, b) => a.min - b.min);
   }
 
   const minWd = result.data.minWithdrawalAmount;

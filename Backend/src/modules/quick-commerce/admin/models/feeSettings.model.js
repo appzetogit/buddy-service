@@ -2,11 +2,13 @@ import mongoose from 'mongoose';
 
 const deliveryFeeRangeSchema = new mongoose.Schema(
   {
+    name: { type: String, trim: true, default: '' },
     min: { type: Number, required: true, min: 0 },
     max: { type: Number, required: true, min: 0 },
     fee: { type: Number, required: true, min: 0 },
     deliveryBoyPerKm: { type: Number, min: 0, default: 0 },
     deliveryBoyBasePay: { type: Number, min: 0, default: 0 },
+    status: { type: Boolean, default: true },
   },
   { _id: false },
 );

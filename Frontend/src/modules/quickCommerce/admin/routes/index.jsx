@@ -32,8 +32,7 @@ const NotificationComposer = React.lazy(() => import("../pages/NotificationCompo
 const OfferSectionsManagement = React.lazy(() => import("../pages/OfferSectionsManagement"))
 const FastFavManagement = React.lazy(() => import("../pages/FastFavManagement"))
 const ShopByStoreManagement = React.lazy(() => import("../pages/ShopByStoreManagement"))
-const BillingCharges = React.lazy(() => import("../pages/BillingCharges"))
-const DeliverySettings = React.lazy(() => import("../pages/DeliverySettings"))
+const FeeSettings = React.lazy(() => import("../pages/FeeSettings"))
 const QuickZoneSetup = React.lazy(() => import("../pages/ZoneSetup"))
 const QuickAddZone = React.lazy(() => import("../pages/AddZone"))
 const QuickViewZone = React.lazy(() => import("../pages/ViewZone"))
@@ -80,8 +79,8 @@ function QuickCommerceAdminRoutesInner() {
       <Route path="/faqs" element={<FAQManagement />} />
       <Route path="/orders/:status" element={<OrdersList />} />
       <Route path="/orders/view/:orderId" element={<OrderDetail />} />
-      <Route path="/billing" element={<BillingCharges />} />
-      <Route path="/delivery-settings" element={<DeliverySettings />} />
+      <Route path="/billing" element={<FeeSettings />} />
+      <Route path="/delivery-settings" element={<FeeSettings />} />
       <Route path="/seller-coupon-request" element={<SellerCouponRequest />} />
       <Route path="*" element={<Navigate to="/admin/quick-commerce" replace />} />
     </Routes>

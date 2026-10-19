@@ -126,7 +126,8 @@ export async function calculateHandlingFeeFromProducts(products = []) {
 
 export function matchFeeRange(ranges, distance, resolver) {
   if (!Array.isArray(ranges) || ranges.length === 0) return 0;
-  const sorted = [...ranges].sort((a, b) => Number(a.min) - Number(b.min));
+  const active = ranges.filter((r) => r && r.status !== false);
+  const sorted = [...active].sort((a, b) => Number(a.min) - Number(b.min));
   let matched = null;
   for (let i = 0; i < sorted.length; i += 1) {
     const range = sorted[i] || {};
@@ -178,10 +179,11 @@ export function calculateRiderEarningBreakdown(feeSettings = {}, distanceKm) {
   if (!Number.isFinite(distance) || distance < 0) return empty;
 
   const ranges = Array.isArray(feeSettings.deliveryFeeRanges) ? feeSettings.deliveryFeeRanges : [];
-  if (!ranges.length) return empty;
+  const active = ranges.filter((r) => r && r.status !== false);
+  if (!active.length) return empty;
 
   let matched = null;
-  const sorted = [...ranges].sort((a, b) => Number(a.min) - Number(b.min));
+  const sorted = [...active].sort((a, b) => Number(a.min) - Number(b.min));
   for (let i = 0; i < sorted.length; i += 1) {
     const range = sorted[i] || {};
     const min = Number(range.min);

@@ -8,7 +8,8 @@ export const matchDeliveryFeeRange = (ranges = [], distanceKm = 0) => {
   if (!Number.isFinite(distance) || distance < 0) return 0;
   if (!Array.isArray(ranges) || ranges.length === 0) return 0;
 
-  const sorted = [...ranges].sort((a, b) => Number(a.min) - Number(b.min));
+  const active = ranges.filter((r) => r && r.status !== false);
+  const sorted = [...active].sort((a, b) => Number(a.min) - Number(b.min));
   for (let i = 0; i < sorted.length; i += 1) {
     const range = sorted[i] || {};
     const min = Number(range.min);
