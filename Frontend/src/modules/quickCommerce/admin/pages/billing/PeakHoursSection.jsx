@@ -61,7 +61,7 @@ function formatDateRange(startDate, endDate) {
  * QuickDeliverySettings.peakHourRules (array sub-documents, own CRUD routes) instead
  * of a separate FoodPeakHourRule collection, since QC's database is at its collection limit.
  */
-export default function PeakHoursSection() {
+export default function PeakHoursSection({ onRuleChange }) {
   const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [rules, setRules] = useState([]);
@@ -108,6 +108,7 @@ export default function PeakHoursSection() {
       await adminApi.togglePeakHourRuleStatus(rule._id, newStatus);
       setRules(rules.map((r) => (r._id === rule._id ? { ...r, status: newStatus } : r)));
       showToast("Rule status updated", "success");
+      onRuleChange?.();
     } catch (error) {
       showToast(error?.response?.data?.message || "Failed to update status", "error");
     }
@@ -150,6 +151,7 @@ export default function PeakHoursSection() {
       setIsDeleteOpen(false);
       setSelectedRule(null);
       showToast("Rule deleted", "success");
+      onRuleChange?.();
     } catch (error) {
       showToast(error?.response?.data?.message || "Failed to delete rule", "error");
     } finally {
@@ -222,6 +224,7 @@ export default function PeakHoursSection() {
       setFormData({ ...emptyForm });
       setSelectedRule(null);
       await fetchRules();
+      onRuleChange?.();
     } catch (error) {
       showToast(error?.response?.data?.message || "Failed to save rule", "error");
     } finally {

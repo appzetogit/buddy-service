@@ -87,6 +87,16 @@ export default function FeeSettings() {
     deliveryFeeRanges: [],
   });
   const [deliverySettings, setDeliverySettings] = useState(null);
+  const [activePeakHourSurcharge, setActivePeakHourSurcharge] = useState(null);
+
+  const fetchActivePeakHourSurcharge = async () => {
+    try {
+      const res = await adminApi.getActivePeakHourSurcharge();
+      setActivePeakHourSurcharge(res?.data?.data?.surcharge || null);
+    } catch {
+      setActivePeakHourSurcharge(null);
+    }
+  };
 
   const load = async () => {
     try {
@@ -100,6 +110,7 @@ export default function FeeSettings() {
       });
       const ds = deliveryRes?.data?.data?.settings || deliveryRes?.data?.settings || {};
       setDeliverySettings(ds);
+      fetchActivePeakHourSurcharge();
     } catch (error) {
       showToast(error?.response?.data?.message || "Failed to load settings", "error");
     } finally {
@@ -182,6 +193,8 @@ export default function FeeSettings() {
     const parsed = Number(baseRange?.fee);
     return Number.isFinite(parsed) ? parsed : 25;
   }, [feeSettings.deliveryFeeRanges]);
+
+  const activePeakHourCharge = Number(activePeakHourSurcharge?.charge) || 0;
 
   const handleSaveFeesAndSpeed = async () => {
     try {
@@ -505,8 +518,16 @@ export default function FeeSettings() {
                   <h3 className="font-bold text-slate-900 text-sm">Cart preview</h3>
                 </div>
                 <p className="text-[10px] text-slate-500 mb-2">
-                  Sample delivery fee uses the base distance slab fee (₹{sampleDeliveryBaseFee}) plus each option&apos;s modifier. Actual user cart may differ by distance and order rules.
+                  Sample delivery fee uses the base distance slab fee (₹{sampleDeliveryBaseFee}){activePeakHourCharge > 0 ? ` + active Peak Hour charge (₹${activePeakHourCharge})` : ""} plus each option&apos;s modifier. Actual user cart may differ by distance and order rules.
                 </p>
+                {activePeakHourCharge > 0 && (
+                  <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[10px] text-amber-800 flex items-center gap-1.5">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                    <span>
+                      <strong>{activePeakHourSurcharge?.name || "Peak Hour"}</strong> is live right now — +₹{activePeakHourCharge} is included below.
+                    </span>
+                  </div>
+                )}
                 <div className="rounded-xl border border-gray-100 p-3 bg-slate-50">
                   <p className="text-xs font-bold text-gray-700 mb-2">Delivery Speed Options</p>
                   {enabledOptions.length > 0 ? (
@@ -514,7 +535,7 @@ export default function FeeSettings() {
                       {enabledOptions.map((option) => {
                         const isDefault = Boolean(option.isDefault);
                         const PreviewIcon = getSpeedIcon(option.icon);
-                        const previewFee = Math.max(0, sampleDeliveryBaseFee + Number(option.feeModifier || 0));
+                        const previewFee = Math.max(0, sampleDeliveryBaseFee + Number(option.feeModifier || 0) + activePeakHourCharge);
                         return (
                           <div
                             key={option.id}
@@ -603,7 +624,7 @@ export default function FeeSettings() {
         ) : pageTab === "rules" ? (
           <DistanceRulesSection ranges={feeSettings.deliveryFeeRanges} onSave={saveDistanceRules} saving={rulesSaving} />
         ) : pageTab === "peak" ? (
-          <PeakHoursSection />
+          <PeakHoursSection onRuleChange={fetchActivePeakHourSurcharge} />
         ) : null}
       </div>
     </div>

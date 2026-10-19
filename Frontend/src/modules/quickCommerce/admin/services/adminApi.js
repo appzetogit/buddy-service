@@ -312,6 +312,7 @@ export const adminApi = {
     axiosInstance.patch(`/quick-commerce/admin/peak-hour-rules/${String(id)}/status`, {
       status: Boolean(status),
     }),
+  getActivePeakHourSurcharge: () => axiosInstance.get('/quick-commerce/peak-hour-rules/active'),
 
   getPlatformSettings: () => axiosInstance.get('/quick-commerce/admin/fee-settings'),
   updatePlatformSettings: (body) =>

@@ -56,7 +56,7 @@ function formatDateRange(startDate, endDate) {
   return "—"
 }
 
-export default function PeakHoursSection() {
+export default function PeakHoursSection({ onRuleChange }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [rules, setRules] = useState([])
   const [loading, setLoading] = useState(true)
@@ -102,6 +102,7 @@ export default function PeakHoursSection() {
       await adminAPI.togglePeakHourRuleStatus(rule._id, newStatus)
       setRules(rules.map((r) => (r._id === rule._id ? { ...r, status: newStatus } : r)))
       toast.success("Rule status updated")
+      onRuleChange?.()
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to update status")
     }
@@ -144,6 +145,7 @@ export default function PeakHoursSection() {
       setIsDeleteOpen(false)
       setSelectedRule(null)
       toast.success("Rule deleted")
+      onRuleChange?.()
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to delete rule")
     } finally {
@@ -216,6 +218,7 @@ export default function PeakHoursSection() {
       setFormData({ ...emptyForm })
       setSelectedRule(null)
       await fetchRules()
+      onRuleChange?.()
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to save rule")
     } finally {
