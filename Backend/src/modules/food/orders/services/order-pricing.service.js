@@ -21,6 +21,7 @@ import {
   resolveSpeedFeeModifier,
   resolveSpeedOption,
   splitSpeedFeeShares,
+  resolveActivePeakHourSurcharge,
 } from './order.helpers.js';
 import { FoodDeliveryBoySettings } from '../../admin/models/deliveryBoySettings.model.js';
 import { validateRestaurantChainForItems } from './restaurant-chain-radius.service.js';
@@ -466,9 +467,15 @@ export async function calculateOrderPricing(userId, dto) {
     });
   const speedAdjustment = Number(speedFeeModifier) || 0;
 
+  // Peak Hour surcharge: a flat admin-kept charge during admin-configured recurring
+  // windows (lunch rush, evening peak, festival days). Not split with the rider, and
+  // waived whenever delivery itself is waived (threshold / free-delivery coupon).
+  const peakHourSurcharge = deliveryWaived ? null : await resolveActivePeakHourSurcharge();
+  const peakHourCharge = peakHourSurcharge ? Number(peakHourSurcharge.charge) || 0 : 0;
+
   const deliveryFee = deliveryWaived
     ? baseCustomerDeliveryFee
-    : Math.max(0, baseCustomerDeliveryFee + speedAdjustment);
+    : Math.max(0, baseCustomerDeliveryFee + speedAdjustment + peakHourCharge);
 
   // Rider: slab/default + multi/split; speed driver share only when customer delivery is not fully waived
   const riderSurchargeResult = applyDeliverySurcharges(baseRiderFee, {
@@ -502,6 +509,9 @@ export async function calculateOrderPricing(userId, dto) {
     speedShareRestaurant: 0,
     speedShareDriver: speedShares.speedShareDriver,
     adminBearsNegativeSpeed: speedShares.adminBearsNegative,
+    peakHourCharge,
+    peakHourRuleId: peakHourSurcharge?.ruleId || null,
+    peakHourRuleName: peakHourSurcharge?.name || null,
     baseFee: baseDeliveryFee,
     fee: deliveryFee,
     userCharge: baseDeliveryFee,
@@ -611,6 +621,8 @@ export async function calculateOrderPricing(userId, dto) {
       deliveryFee,
       deliveryDiscount,
       deliveryFeeBreakdown: deliveryFeeBreakdown || undefined,
+      peakHourCharge,
+      peakHourSurcharge,
       platformFee,
       discount,
       platformSubsidy,

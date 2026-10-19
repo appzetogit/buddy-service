@@ -36,6 +36,7 @@ const invDeliveryBoySettings = withFoodCacheInvalidation(invalidateAfterDelivery
 // ----- Public Business Settings (No Admin Required) -----
 router.get('/business-settings/public', businessSettingsController.getBusinessSettings);
 router.get('/fee-settings/public', adminController.getPublicFeeSettings);
+router.get('/peak-hour-rules/active', adminController.getActivePeakHourSurchargePublic);
 
 const requireAdmin = (req, _res, next) => {
     const user = req.user;
@@ -193,6 +194,11 @@ router.post('/delivery/commission-rules', adminController.createDeliveryCommissi
 router.patch('/delivery/commission-rules/:id', adminController.updateDeliveryCommissionRule);
 router.delete('/delivery/commission-rules/:id', adminController.deleteDeliveryCommissionRule);
 router.patch('/delivery/commission-rules/:id/status', adminController.toggleDeliveryCommissionRuleStatus);
+router.get('/peak-hour-rules', adminController.getPeakHourRules);
+router.post('/peak-hour-rules', adminController.createPeakHourRule);
+router.patch('/peak-hour-rules/:id', adminController.updatePeakHourRule);
+router.delete('/peak-hour-rules/:id', adminController.deletePeakHourRule);
+router.patch('/peak-hour-rules/:id/status', adminController.togglePeakHourRuleStatus);
 router.get('/delivery/reviews', adminController.getDeliverymanReviews);
 router.get('/contact-messages', adminController.getContactMessages);
 router.get('/delivery/earning-addons', adminController.getEarningAddons);

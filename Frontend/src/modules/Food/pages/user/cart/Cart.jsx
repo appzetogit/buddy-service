@@ -1334,8 +1334,10 @@ function Cart() {
     : 0
   const deliveryFeeBreakdown = pricing?.deliveryFeeBreakdown || null
   const backendSpeedModifier = Number(deliveryFeeBreakdown?.speedFeeModifier) || 0
+  const peakHourCharge = Number(deliveryFeeBreakdown?.peakHourCharge ?? pricing?.peakHourCharge) || 0
+  const peakHourRuleName = deliveryFeeBreakdown?.peakHourRuleName || pricing?.peakHourSurcharge?.name || null
   const deliveryFeeBeforeSpeed = pricing != null
-    ? Math.max(0, (Number(pricing.deliveryFee) || 0) - backendSpeedModifier)
+    ? Math.max(0, (Number(pricing.deliveryFee) || 0) - backendSpeedModifier - peakHourCharge)
     : fallbackDeliveryFee
   const deliveryFee = pricing != null
     ? (Number(pricing.deliveryFee) || 0)
@@ -2812,6 +2814,17 @@ function Cart() {
                             </span>
                             <span className={speedFeeModifier < 0 ? "text-[#16A34A] font-medium" : "text-gray-800 dark:text-gray-200 font-medium"}>
                               {speedFeeModifier < 0 ? "-" : ""}{RUPEE_SYMBOL}{Math.abs(speedFeeModifier).toFixed(2)}
+                            </span>
+                          </div>
+                        )}
+                        {peakHourCharge > 0 && !isDeliveryFreeForCustomer && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                              {peakHourRuleName || "Peak hour charge"}
+                            </span>
+                            <span className="text-amber-700 dark:text-amber-400 font-medium">
+                              +{RUPEE_SYMBOL}{peakHourCharge.toFixed(2)}
                             </span>
                           </div>
                         )}

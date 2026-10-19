@@ -6,6 +6,7 @@ import { validateCreateOfferDto, validateUpdateOfferDto, validateUpdateOfferCart
 import { validateAddDeliveryBonusDto } from '../validators/deliveryBonus.validator.js';
 import { validateCheckCompletionsDto, validateEarningAddonHistoryActionDto, validateEarningAddonUpsertDto, validateToggleEarningAddonStatusDto } from '../validators/earningAddon.validator.js';
 import { validateDeliveryCommissionRuleDto, validateOptionalStatusDto, validateRestaurantCommissionUpsertDto } from '../validators/commission.validator.js';
+import { validatePeakHourRuleDto, validateOptionalStatusDto as validatePeakHourStatusDto } from '../validators/peakHourRule.validator.js';
 import { validateFeeSettingsUpsertDto } from '../validators/feeSettings.validator.js';
 import { validateDeliveryEmergencyHelpUpsertDto } from '../validators/deliveryEmergencyHelp.validator.js';
 import { validateReferralSettingsUpsertDto } from '../validators/referralSettings.validator.js';
@@ -1145,6 +1146,88 @@ export async function toggleDeliveryCommissionRuleStatus(req, res, next) {
             return res.status(404).json({ success: false, message: 'Commission rule not found' });
         }
         res.status(200).json({ success: true, message: 'Status updated successfully', data: { commission: updated } });
+    } catch (error) {
+        next(error);
+    }
+}
+
+// ----- Peak Hour Rules (admin) -----
+export async function getPeakHourRules(req, res, next) {
+    try {
+        const data = await adminService.getPeakHourRules();
+        res.status(200).json({ success: true, message: 'Peak hour rules fetched successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function createPeakHourRule(req, res, next) {
+    try {
+        const body = validatePeakHourRuleDto(req.body || {});
+        const created = await adminService.createPeakHourRule(body);
+        res.status(201).json({ success: true, message: 'Peak hour rule created successfully', data: { rule: created } });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function updatePeakHourRule(req, res, next) {
+    try {
+        const { id } = req.params;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid rule id' });
+        }
+        const body = validatePeakHourRuleDto(req.body || {});
+        const updated = await adminService.updatePeakHourRule(id, body);
+        if (!updated) {
+            return res.status(404).json({ success: false, message: 'Peak hour rule not found' });
+        }
+        res.status(200).json({ success: true, message: 'Peak hour rule updated successfully', data: { rule: updated } });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function deletePeakHourRule(req, res, next) {
+    try {
+        const { id } = req.params;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid rule id' });
+        }
+        const result = await adminService.deletePeakHourRule(id);
+        if (!result) {
+            return res.status(404).json({ success: false, message: 'Peak hour rule not found' });
+        }
+        res.status(200).json({ success: true, message: 'Peak hour rule deleted successfully', data: result });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function togglePeakHourRuleStatus(req, res, next) {
+    try {
+        const { id } = req.params;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid rule id' });
+        }
+        const { status } = validatePeakHourStatusDto(req.body || {});
+        if (typeof status !== 'boolean') {
+            return res.status(400).json({ success: false, message: 'status is required' });
+        }
+        const updated = await adminService.togglePeakHourRuleStatus(id, status);
+        if (!updated) {
+            return res.status(404).json({ success: false, message: 'Peak hour rule not found' });
+        }
+        res.status(200).json({ success: true, message: 'Status updated successfully', data: { rule: updated } });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function getActivePeakHourSurchargePublic(req, res, next) {
+    try {
+        const data = await adminService.getActivePeakHourSurchargePublic();
+        res.status(200).json({ success: true, message: 'Active peak hour surcharge fetched successfully', data });
     } catch (error) {
         next(error);
     }

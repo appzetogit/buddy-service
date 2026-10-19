@@ -970,6 +970,30 @@ export const adminAPI = {
       { contextModule: "admin" },
     ),
 
+  /** Peak Hour Rules (admin) */
+  getPeakHourRules: () =>
+    apiClient.get("/food/admin/peak-hour-rules", { contextModule: "admin" }),
+  createPeakHourRule: (body) =>
+    apiClient.post("/food/admin/peak-hour-rules", body ?? {}, {
+      contextModule: "admin",
+    }),
+  updatePeakHourRule: (id, body) =>
+    apiClient.patch(`/food/admin/peak-hour-rules/${String(id)}`, body ?? {}, {
+      contextModule: "admin",
+    }),
+  deletePeakHourRule: (id) =>
+    apiClient.delete(`/food/admin/peak-hour-rules/${String(id)}`, {
+      contextModule: "admin",
+    }),
+  togglePeakHourRuleStatus: (id, status) =>
+    apiClient.patch(
+      `/food/admin/peak-hour-rules/${String(id)}/status`,
+      { status: Boolean(status) },
+      { contextModule: "admin" },
+    ),
+  getActivePeakHourSurcharge: (config = {}) =>
+    apiClient.get("/food/admin/peak-hour-rules/active", config),
+
   /** Fee Settings (admin) */
   getFeeSettings: () =>
     apiClient.get("/food/admin/fee-settings", { contextModule: "admin" }),

@@ -14,6 +14,7 @@ import PartnerSettingsSection, {
   MAX_CONCURRENT_ORDERS_DEFAULT,
 } from "./PartnerSettingsSection"
 import DistanceRulesSection from "./DistanceRulesSection"
+import PeakHoursSection from "./PeakHoursSection"
 
 const ADMIN_SPEED_ICONS = [
   { id: "bike", label: "Bike", Icon: Bike },
@@ -37,6 +38,7 @@ const PAGE_TABS = [
   { id: "speed", label: "Cart Delivery Speed" },
   { id: "partner", label: "Partner Settings" },
   { id: "rules", label: "Distance Rules" },
+  { id: "peak", label: "Peak Hours" },
 ]
 
 const DEFAULT_PARTNER_SETTINGS = {
@@ -143,7 +145,7 @@ export default function FeeSettings() {
   }
 
   const handleSave = async () => {
-    if (pageTab === "rules") return
+    if (pageTab === "rules" || pageTab === "peak") return
     try {
       setSaving(true)
 
@@ -300,7 +302,7 @@ export default function FeeSettings() {
                 <p className="text-xs text-slate-500">Fees, delivery speed, partner & distance rules</p>
               </div>
             </div>
-            {pageTab !== "rules" && (
+            {pageTab !== "rules" && pageTab !== "peak" && (
             <Button
               onClick={handleSave}
               disabled={saving || loading}
@@ -649,6 +651,8 @@ export default function FeeSettings() {
           />
         ) : pageTab === "rules" ? (
           <DistanceRulesSection />
+        ) : pageTab === "peak" ? (
+          <PeakHoursSection />
         ) : null}
       </div>
     </div>

@@ -31,6 +31,8 @@ import { FoodEarningAddon } from '../models/earningAddon.model.js';
 import { FoodEarningAddonHistory } from '../models/earningAddonHistory.model.js';
 import { FoodRestaurantCommission } from '../models/restaurantCommission.model.js';
 import { FoodDeliveryCommissionRule } from '../models/deliveryCommissionRule.model.js';
+import { FoodPeakHourRule } from '../models/peakHourRule.model.js';
+import { resolveActivePeakHourSurcharge } from '../../orders/services/order.helpers.js';
 import { FoodFeeSettings } from '../models/feeSettings.model.js';
 import { FoodDeliveryBoySettings } from '../models/deliveryBoySettings.model.js';
 import {
@@ -2068,6 +2070,67 @@ export async function toggleDeliveryCommissionRuleStatus(id, status) {
         { new: true }
     ).lean();
     return updated;
+}
+
+// ----- Peak Hour Rules (admin) -----
+export async function getPeakHourRules() {
+    const list = await FoodPeakHourRule.find({}).sort({ sortOrder: 1, createdAt: -1 }).lean();
+    const rules = list.map((r, index) => ({ ...r, sl: index + 1 }));
+    return { rules };
+}
+
+export async function createPeakHourRule(body) {
+    const count = await FoodPeakHourRule.countDocuments({});
+    const created = await FoodPeakHourRule.create({
+        name: body.name || '',
+        days: body.days || [],
+        startTime: body.startTime,
+        endTime: body.endTime,
+        charge: body.charge,
+        status: body.status ?? true,
+        sortOrder: count,
+    });
+    return created.toObject();
+}
+
+export async function updatePeakHourRule(id, body) {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+    const updated = await FoodPeakHourRule.findByIdAndUpdate(
+        id,
+        {
+            $set: {
+                name: body.name || '',
+                days: body.days || [],
+                startTime: body.startTime,
+                endTime: body.endTime,
+                charge: body.charge,
+            },
+        },
+        { new: true }
+    ).lean();
+    return updated;
+}
+
+export async function deletePeakHourRule(id) {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+    const deleted = await FoodPeakHourRule.findByIdAndDelete(id).lean();
+    return deleted ? { id } : null;
+}
+
+export async function togglePeakHourRuleStatus(id, status) {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+    const updated = await FoodPeakHourRule.findByIdAndUpdate(
+        id,
+        { $set: { status: Boolean(status) } },
+        { new: true }
+    ).lean();
+    return updated;
+}
+
+/** Customer-facing: the single peak-hour surcharge live right now, or null. */
+export async function getActivePeakHourSurchargePublic() {
+    const surcharge = await resolveActivePeakHourSurcharge();
+    return { surcharge };
 }
 
 // ----- Fee Settings (admin) -----

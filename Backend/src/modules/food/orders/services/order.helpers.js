@@ -9,6 +9,7 @@ import { getIO, getBroadcaster, rooms } from '../../../../config/socket.js';
 import { config } from '../../../../config/env.js';
 import { addOrderJob } from '../../../../queues/producers/order.producer.js';
 import { FoodOrderEvent } from '../models/foodOrderEvent.model.js';
+import { FoodPeakHourRule } from '../../admin/models/peakHourRule.model.js';
 
 /**
  * Record an order lifecycle milestone.
@@ -774,6 +775,81 @@ export function splitSpeedFeeShares(speedFeeModifier, { driverShareAmount } = {}
     speedShareDriver,
     adminBearsNegative: false,
   };
+}
+
+const toMinutes = (value) => {
+  const [hour, minute] = String(value || '')
+    .split(':')
+    .map((part) => Number(part));
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  return hour * 60 + minute;
+};
+
+/**
+ * Wall-clock weekday and minute-of-day in the given timezone. Mirrors Taxi's
+ * priceHikeService.nowInZone — Intl does the DST/offset work.
+ */
+const nowInZone = (timezone) => {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone || 'Asia/Kolkata',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(new Date()).map((part) => [part.type, part.value]),
+  );
+  const weekdays = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const hour = Number(parts.hour) % 24;
+  return { day: weekdays[parts.weekday] ?? 0, minutes: hour * 60 + Number(parts.minute) };
+};
+
+/** Pure window test, split out from the clock so it can be unit tested directly. */
+export function isPeakHourRuleActiveAt(rule, { day, minutes }) {
+  const start = toMinutes(rule.startTime);
+  const end = toMinutes(rule.endTime);
+  if (start === null || end === null || start === end) return false;
+
+  const days = Array.isArray(rule.days) ? rule.days : [];
+
+  // A window like 22:00-02:00 wraps past midnight. In the small hours we are
+  // inside yesterday's window, so the day check uses yesterday.
+  if (end < start) {
+    const inWindow = minutes >= start || minutes < end;
+    if (!inWindow) return false;
+    const owningDay = minutes < end ? (day + 6) % 7 : day;
+    return days.length === 0 || days.includes(owningDay);
+  }
+
+  if (minutes < start || minutes >= end) return false;
+  return days.length === 0 || days.includes(day);
+}
+
+/**
+ * The active peak-hour rule right now (highest charge wins when two windows
+ * overlap, same precedent as Taxi's price hikes — no silent stacking), or
+ * null when none apply. The whole charge is kept by the platform; it is not
+ * split with the rider (unlike the Cart Delivery Speed fee modifier).
+ */
+export async function resolveActivePeakHourSurcharge() {
+  const rules = await FoodPeakHourRule.find({ status: true })
+    .select('name days startTime endTime timezone charge')
+    .lean();
+  if (!rules.length) return null;
+
+  const active = rules.filter((rule) => isPeakHourRuleActiveAt(rule, nowInZone(rule.timezone)));
+  if (!active.length) return null;
+
+  const best = active.reduce((max, rule) => {
+    const charge = Number(rule.charge) || 0;
+    return charge > (Number(max?.charge) || 0) ? rule : max;
+  }, active[0]);
+
+  const charge = Number(best.charge) || 0;
+  if (charge <= 0) return null;
+
+  return { ruleId: best._id, name: best.name || 'Peak Hour', charge };
 }
 
 /** Weight a total amount across restaurant groups by food subtotal (remainder on last). */
