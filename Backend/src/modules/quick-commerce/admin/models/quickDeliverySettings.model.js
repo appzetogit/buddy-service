@@ -18,7 +18,14 @@ const deliverySpeedOptionSchema = new mongoose.Schema(
     feeModifier: { type: Number, default: 0 },
     /** Of a positive feeModifier, how much goes to the rider; admin keeps the rest. */
     driverShareAmount: { type: Number, default: 0, min: 0 },
+    /** Short line shown directly on the option card/list, e.g. "normal delivery". */
     description: { type: String, default: '', trim: true },
+    /**
+     * Heading for the "what is this?" info popup a customer opens by tapping an info icon on
+     * the option, e.g. "What is Priority Delivery?". Shown with `description` as the popup
+     * body. Empty = no info icon shown for that option.
+     */
+    detailTitle: { type: String, default: '', trim: true },
     icon: { type: String, enum: ['bike', 'leaf', 'zap', 'truck', 'clock'], default: 'bike' },
     isEnabled: { type: Boolean, default: true },
     isDefault: { type: Boolean, default: false },

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from "react"
 import { createPortal } from "react-dom"
 import { Link, useNavigate } from "react-router-dom"
-import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Share2, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles, Zap, CheckCircle2, MessageCircle, Send, Mail, Copy, AlertCircle, Leaf, Bike, Truck } from "lucide-react"
+import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Share2, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles, Zap, CheckCircle2, MessageCircle, Send, Mail, Copy, AlertCircle, Leaf, Bike, Truck, Info } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import confetti from "canvas-confetti"
 
@@ -291,6 +291,7 @@ function Cart() {
   const [appliedCoupon, setAppliedCoupon] = useState(null)
   const [couponCode, setCouponCode] = useState("")
   const [couponErrorPopup, setCouponErrorPopup] = useState({ open: false, message: "" })
+  const [speedOptionInfo, setSpeedOptionInfo] = useState(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("razorpay")
   const [showPaymentSheet, setShowPaymentSheet] = useState(false)
   const [walletBalance, setWalletBalance] = useState(0)
@@ -2132,6 +2133,45 @@ function Cart() {
         document.body,
       )}
 
+      {speedOptionInfo && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSpeedOptionInfo(null)}
+        >
+          <div
+            className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-white dark:bg-[#1a1a1a] shadow-2xl border border-gray-100 dark:border-gray-800 p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                {speedOptionInfo.detailTitle}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSpeedOptionInfo(null)}
+                className="shrink-0 p-1 -m-1 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-5 leading-relaxed whitespace-pre-line">
+              {speedOptionInfo.description}
+            </p>
+            <button
+              type="button"
+              className="w-full rounded-xl bg-[#16A34A] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#15803D]"
+              onClick={() => setSpeedOptionInfo(null)}
+            >
+              Got it
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       <CartPageHeader
         restaurantName={restaurantName}
         deliveryTime={restaurantData?.estimatedDeliveryTime || "25-35 mins"}
@@ -2420,6 +2460,19 @@ function Cart() {
                                   <span className={`text-[9px] font-extrabold px-1.5 py-0 rounded border ${option.badgeColor}`}>
                                     {option.badge}
                                   </span>
+                                )}
+                                {option.detailTitle && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setSpeedOptionInfo(option)
+                                    }}
+                                    className="p-0.5 rounded-full text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                                    aria-label={`What is ${option.name}?`}
+                                  >
+                                    <Info className="h-3 w-3" />
+                                  </button>
                                 )}
                               </div>
                               <p className="text-[10px] text-gray-500 mt-0.5 leading-none">

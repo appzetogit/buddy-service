@@ -165,6 +165,7 @@ export default function FeeSettings() {
         feeModifier: 0,
         driverShareAmount: 0,
         description: "",
+        detailTitle: "",
         icon: "bike",
         isEnabled: true,
         isDefault: options.length === 0,
@@ -457,8 +458,11 @@ export default function FeeSettings() {
                             Zero fee — no rider/admin split to configure.
                           </div>
                         )}
+                        <Field label="Info popup title" hint="Shown as the heading when a customer taps the info icon on this option. Leave blank to hide the info icon.">
+                          <input type="text" value={option.detailTitle || ""} onChange={(e) => updateOption(index, "detailTitle", e.target.value)} placeholder="e.g. What is Priority Delivery?" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary outline-none" />
+                        </Field>
                         <Field label="Description">
-                          <input type="text" value={option.description || ""} onChange={(e) => updateOption(index, "description", e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary outline-none" />
+                          <textarea rows={4} value={option.description || ""} onChange={(e) => updateOption(index, "description", e.target.value)} placeholder="Explain this option in full — shown both as a short line on the card and as the body text inside the info popup." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary outline-none resize-y" />
                         </Field>
                         <div>
                           <label className="block text-xs font-medium text-slate-500 mb-2">Icon</label>

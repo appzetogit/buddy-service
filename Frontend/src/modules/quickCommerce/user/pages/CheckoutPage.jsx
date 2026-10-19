@@ -35,7 +35,7 @@ import { useLocation as useAppLocation } from "../context/LocationContext";
 import {
   MapPin, Clock, CreditCard, Banknote, ChevronRight, ChevronLeft,
   Share2, Gift, ShoppingBag, ChevronDown, ChevronUp, Heart, Truck,
-  Tag, Sparkles, Plus, Minus, Search, X, Clipboard, Check, Contact2, Wallet, Loader2,
+  Tag, Sparkles, Plus, Minus, Search, X, Clipboard, Check, Contact2, Wallet, Loader2, Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
@@ -409,6 +409,7 @@ const CheckoutPage = () => {
   const [deliveryOptions, setDeliveryOptions] = useState(null);
   const [selectedSpeedId, setSelectedSpeedId] = useState("");
   const [isScheduled, setIsScheduled] = useState(false);
+  const [speedOptionInfo, setSpeedOptionInfo] = useState(null);
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
   const [selectedPayment, setSelectedPayment] = useState(
@@ -1818,23 +1819,40 @@ const CheckoutPage = () => {
                     const fee = Number(option.feeModifier || 0);
                     const active = option.id === selectedSpeedId;
                     return (
-                      <button
+                      <div
                         key={option.id}
-                        type="button"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => setSelectedSpeedId(option.id)}
-                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left ${active ? "border-rose-500 bg-rose-50" : "border-slate-200"}`}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") setSelectedSpeedId(option.id);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left cursor-pointer ${active ? "border-rose-500 bg-rose-50" : "border-slate-200"}`}
                       >
                         <span>
-                          <span className="block text-[13px] font-semibold text-slate-800">
+                          <span className="flex items-center gap-1 text-[13px] font-semibold text-slate-800">
                             {option.name}
-                            {option.badge ? <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{option.badge}</span> : null}
+                            {option.badge ? <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{option.badge}</span> : null}
+                            {option.detailTitle && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSpeedOptionInfo(option);
+                                }}
+                                className="p-0.5 rounded-full text-slate-400 hover:text-slate-600"
+                                aria-label={`What is ${option.name}?`}
+                              >
+                                <Info className="h-3 w-3" />
+                              </button>
+                            )}
                           </span>
                           <span className="block text-[11px] text-slate-500">{option.time || option.description}</span>
                         </span>
                         <span className="text-[12px] font-semibold text-slate-700">
                           {fee === 0 ? "Free" : fee > 0 ? `+₹${fee}` : `-₹${Math.abs(fee)}`}
                         </span>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -2141,6 +2159,26 @@ const CheckoutPage = () => {
       </AnimatePresence>
 
       {/* All modals & overlays from original (address, coupon, success) go here unchanged */}
+
+      <Dialog open={Boolean(speedOptionInfo)} onOpenChange={(open) => !open && setSpeedOptionInfo(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{speedOptionInfo?.detailTitle}</DialogTitle>
+          </DialogHeader>
+          <DialogDescription className="whitespace-pre-line text-slate-600">
+            {speedOptionInfo?.description}
+          </DialogDescription>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setSpeedOptionInfo(null)}
+              className="w-full rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700"
+            >
+              Got it
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <style dangerouslySetInnerHTML={{ __html: `.no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}` }} />
     </div>
