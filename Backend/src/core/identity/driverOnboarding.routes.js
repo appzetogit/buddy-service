@@ -8,6 +8,7 @@ import {
   updateVehicle,
   updateServices,
   updateFoodVehicle,
+  updateTaxiVehicle,
   updateSelfie,
   completeOnboarding,
   enableCapability,
@@ -78,6 +79,17 @@ router.patch('/vehicle-food', driverOnly, async (req, res, next) => {
   try {
     const updated = await updateFoodVehicle(req.identity, req.body);
     return sendResponse(res, 200, 'Food vehicle saved', {
+      onboardingStep: updated.onboardingStep,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/vehicle-taxi', driverOnly, async (req, res, next) => {
+  try {
+    const updated = await updateTaxiVehicle(req.identity, req.body);
+    return sendResponse(res, 200, 'Taxi vehicle saved', {
       onboardingStep: updated.onboardingStep,
     });
   } catch (err) {

@@ -85,6 +85,8 @@ const getNextStep = (identity, currentStep) => {
       return 'basics';
     case 'vehicle_food':
       return 'basics';
+    case 'vehicle_taxi':
+      return 'basics';
     case 'basics':
       return 'kyc';
     case 'kyc':
@@ -202,6 +204,15 @@ const normalizeFoodVehicleType = (value = '') => {
   return 'bike';
 };
 
+const normalizeTaxiVehicleType = (value = '') => {
+  const v = String(value || '').trim().toLowerCase();
+  if (v.includes('auto') || v.includes('rickshaw')) return 'auto';
+  if (v.includes('car') || v.includes('cab') || v.includes('sedan') || v.includes('suv')) return 'car';
+  if (v.includes('scooter')) return 'scooter';
+  if (v.includes('bike')) return 'bike';
+  return LEGACY_VEHICLE_TYPES.includes(v) ? v : '';
+};
+
 const assertCreatableProfiles = async (identity, services = []) => {
   const normalizedServices = Array.isArray(services) ? services : [];
   if (normalizedServices.includes('food')) {
@@ -251,6 +262,39 @@ export const updateFoodVehicle = async (identity, body) => {
   await assertUniqueVehicleNumber(identity, identity.foodVehicle.number);
   identity.markModified('foodVehicle');
   await advanceStep(identity, 'vehicle_food');
+  return identity;
+};
+
+export const updateTaxiVehicle = async (identity, body) => {
+  const { type, vehicleTypeId, number, make, model, color, photoUrl, rcUrl, insuranceUrl, commercialPermitUrl, pucUrl } = body || {};
+  const vehicleType = normalizeTaxiVehicleType(type);
+  if (!vehicleType) {
+    throw new ValidationError('Select a valid taxi vehicle type');
+  }
+  const vehicleNumber = assertString(number, 'Vehicle number', {
+    max: 15,
+    pattern: RE_VEHICLE,
+    patternMessage: 'Vehicle number must look like MH12AB1234',
+  });
+  const vehicleMake = assertString(make, 'Vehicle make', { min: 2, max: 60, pattern: /^[A-Za-z0-9][A-Za-z0-9\s.\-/&'()]{0,59}$/ });
+  const vehicleModel = assertString(model, 'Vehicle model', { min: 2, max: 60, pattern: /^[A-Za-z0-9][A-Za-z0-9\s.\-/&'()]{0,59}$/ });
+
+  identity.taxiVehicle = {
+    type: vehicleType,
+    vehicleTypeId: sanitize(vehicleTypeId) || '',
+    make: vehicleMake,
+    model: vehicleModel,
+    number: normalizeVehicleNumber(vehicleNumber),
+    color: assertOptionalString(color, 'Vehicle color', { max: 30 }) || '',
+    photoUrl: assertOptionalHttpUrl(photoUrl, 'Vehicle photo') || '',
+    rcUrl: assertOptionalHttpUrl(rcUrl, 'RC document') || '',
+    insuranceUrl: assertOptionalHttpUrl(insuranceUrl, 'Insurance document') || '',
+    commercialPermitUrl: assertOptionalHttpUrl(commercialPermitUrl, 'Commercial permit') || '',
+    pucUrl: assertOptionalHttpUrl(pucUrl, 'PUC certificate') || '',
+  };
+  await assertUniqueVehicleNumber(identity, identity.taxiVehicle.number);
+  identity.markModified('taxiVehicle');
+  await advanceStep(identity, 'vehicle_taxi');
   return identity;
 };
 
