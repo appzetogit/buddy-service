@@ -3,10 +3,34 @@ import { getIO, rooms } from '../../../config/socket.js';
 import { logger } from '../../../utils/logger.js';
 import { QuickOrder } from '../models/order.model.js';
 import { SellerOrder } from '../seller/models/sellerOrder.model.js';
+import { notifyOwnerSafely } from '../../../core/notifications/firebase.service.js';
 import { getHeaderCommissionSnapshot } from '../admin/services/commission.service.js';
 import { isQuickOrderVisibleToSeller } from '../utils/sellerOrderVisibility.helpers.js';
 import { resolveQuickOrderCustomer, isGenericCustomerLabel } from '../utils/customer.helpers.js';
 import { allocateQuickCouponEarnings } from '../utils/quickCouponEarnings.helpers.js';
+
+/**
+ * The one ringing, order-id-carrying push a seller gets per order leg. Sent unconditionally —
+ * not just when the inbox-entry write (upsertSellerNotification) fails — so a seller app that
+ * never opens the socket connection still gets woken up for a new order.
+ */
+const sendNewSellerOrderPush = (sellerOrder) =>
+  notifyOwnerSafely(
+    { ownerType: 'SELLER', ownerId: sellerOrder.sellerId },
+    {
+      title: 'New order received',
+      body: `Order ${sellerOrder.orderId} is waiting for you`,
+      ring: true,
+      data: {
+        type: 'new_seller_order',
+        orderId: String(sellerOrder.orderId),
+        sellerOrderId: String(sellerOrder._id?.toString?.() || ''),
+        link: '/seller/orders',
+      },
+    },
+  ).catch((pushErr) => {
+    logger.warn(`New seller order push failed: ${pushErr?.message || pushErr}`);
+  });
 
 const emitQuickSellerOrders = async (sellerOrders) => {
   try {
@@ -44,7 +68,7 @@ const emitQuickSellerOrders = async (sellerOrders) => {
       }
 
       if (typeof upsertSellerNotification === 'function') {
-        const saved = await upsertSellerNotification(sellerOrder.sellerId, {
+        await upsertSellerNotification(sellerOrder.sellerId, {
           key: `order:${sellerOrder.orderId}:new`,
           type: 'order',
           title: 'New quick order received',
@@ -56,29 +80,9 @@ const emitQuickSellerOrders = async (sellerOrders) => {
             orderType: 'quick',
           },
         });
-        if (!saved) {
-          try {
-            const { notifyOwnerSafely } = await import(
-              '../../../core/notifications/firebase.service.js'
-            );
-            await notifyOwnerSafely(
-              { ownerType: 'SELLER', ownerId: sellerOrder.sellerId },
-              {
-                title: 'New quick order received',
-                body: `Order ${sellerOrder.orderId} is waiting for seller action.`,
-                data: {
-                  type: 'new_seller_order',
-                  orderId: sellerOrder.orderId,
-                  sellerOrderId: sellerOrder._id?.toString?.() || '',
-                  link: '/seller/orders',
-                },
-              },
-            );
-          } catch (pushErr) {
-            logger.warn(`Seller push fallback failed: ${pushErr?.message || pushErr}`);
-          }
-        }
       }
+
+      void sendNewSellerOrderPush(sellerOrder);
     }
   } catch (error) {
     logger.warn(`emitQuickSellerOrders failed: ${error?.message || error}`);

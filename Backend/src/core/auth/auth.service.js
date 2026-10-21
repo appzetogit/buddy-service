@@ -10,6 +10,7 @@ import {
 } from "../../modules/food/restaurant/services/restaurantOnboarding.service.js";
 import { isRestaurantBanned } from "../../modules/food/restaurant/utils/restaurantBan.util.js";
 import { FoodDeliveryPartner } from "../../modules/food/delivery/models/deliveryPartner.model.js";
+import { Seller } from "../../modules/quick-commerce/seller/models/seller.model.js";
 import { FoodReferralSettings } from "../../modules/food/admin/models/referralSettings.model.js";
 import { FoodReferralLog } from "../../modules/food/admin/models/referralLog.model.js";
 import { createOrUpdateOtp, verifyOtp } from "../otp/otp.service.js";
@@ -600,7 +601,7 @@ export const logout = async (refreshToken, fcmToken, platform) => {
     // We try to remove the token from all 4 possible models regardless of the user ID, 
     // ensuring no stale connections are left across any role or app the user was logged into.
     const field = platform === "mobile" ? "fcmTokenMobile" : "fcmTokens";
-    const models = [FoodUser, FoodRestaurant, FoodDeliveryPartner, Admin];
+    const models = [FoodUser, FoodRestaurant, FoodDeliveryPartner, Admin, Seller];
     
     try {
       await Promise.all(

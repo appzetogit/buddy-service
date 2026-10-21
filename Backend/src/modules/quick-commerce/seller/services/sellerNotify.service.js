@@ -21,6 +21,13 @@ const isStatusDecisionKey = (key = '') => {
     );
 };
 
+/**
+ * New-order keys look like `order:<orderId>:new`. These get their own ringing,
+ * order-id-carrying push (see emitQuickSellerOrders) — the generic push below must not
+ * also fire, or the seller gets two notifications for the same order.
+ */
+const isNewOrderKey = (key = '') => /^order:.+:new$/.test(String(key));
+
 const emitSellerLiveUpdate = (sellerId, payload) => {
     try {
         const io = getIO();
@@ -100,20 +107,22 @@ export const upsertSellerNotification = async (sellerId, notification = {}) => {
 
         emitSellerLiveUpdate(id, livePayload);
 
-        void notifyOwnerSafely(
-            { ownerId: id, ownerType: 'SELLER' },
-            {
-                title,
-                body: message,
-                data: {
-                    type: notification.type || 'system',
-                    link: link || '/seller',
-                    audience: 'seller',
-                    uniqueKey: key,
-                    sellerId: id,
+        if (!isNewOrderKey(key)) {
+            void notifyOwnerSafely(
+                { ownerId: id, ownerType: 'SELLER' },
+                {
+                    title,
+                    body: message,
+                    data: {
+                        type: notification.type || 'system',
+                        link: link || '/seller',
+                        audience: 'seller',
+                        uniqueKey: key,
+                        sellerId: id,
+                    },
                 },
-            },
-        );
+            );
+        }
 
         if (sendEmailSms) {
             const seller = await Seller.findById(id).select('email phone shopInfo.name name').lean();

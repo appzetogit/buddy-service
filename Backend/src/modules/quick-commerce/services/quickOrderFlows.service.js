@@ -95,6 +95,47 @@ const involvedRiderIds = (order) => {
 };
 
 /**
+ * Tell every seller leg of a cancelled/withdrawn order to close its new-order popup: socket
+ * event for an open app, FCM data push for a killed one. Mirrors releaseRidersForCancelledQuickOrder.
+ */
+export async function notifySellersOrderWithdrawn(order, { sellerLegs } = {}) {
+  if (!order) return;
+  const mongoId = toId(order._id);
+  const legs = sellerLegs || (await SellerOrder.find({ orderId: order.orderId }).select('sellerId _id').lean());
+  if (!legs?.length) return;
+
+  legs.forEach((leg) => {
+    try {
+      getIO()
+        ?.to(rooms.seller(String(leg.sellerId)))
+        .emit('order_status_update', {
+          orderId: order.orderId,
+          orderMongoId: mongoId,
+          orderStatus: order.orderStatus,
+          status: 'cancelled',
+          message: `Order #${order.orderId} was cancelled.`,
+        });
+    } catch {
+      /* socket optional */
+    }
+
+    void notifyOwnerSafely(
+      { ownerType: 'SELLER', ownerId: leg.sellerId },
+      {
+        title: 'Order cancelled',
+        body: `Order #${order.orderId} was cancelled.`,
+        data: {
+          type: 'order_cancelled',
+          orderId: String(order.orderId),
+          sellerOrderId: toId(leg._id),
+          orderMongoId: mongoId,
+        },
+      },
+    ).catch(() => {});
+  });
+}
+
+/**
  * Tell every rider tied to a cancelled order to let go of it: the assigned rider(s) get
  * `order_cancelled`, riders who merely hold an unanswered offer get the "taken" signal that
  * closes their offer card.
@@ -232,22 +273,7 @@ export async function finalizeQuickCancellation(order, opts = {}) {
   await releaseRidersForCancelledQuickOrder(claimed, { message: `Order #${claimed.orderId} was cancelled.` });
 
   // Seller learns the order is gone (only matters once the rider-accept fan-out created a leg).
-  try {
-    const sellerLegs = await SellerOrder.find({ orderId: claimed.orderId }).select('sellerId').lean();
-    sellerLegs.forEach((leg) => {
-      getIO()
-        ?.to(rooms.seller(String(leg.sellerId)))
-        .emit('order_status_update', {
-          orderId: claimed.orderId,
-          orderMongoId: toId(claimed._id),
-          orderStatus: toStatus,
-          status: 'cancelled',
-          message: `Order #${claimed.orderId} was cancelled.`,
-        });
-    });
-  } catch {
-    /* socket optional */
-  }
+  await notifySellersOrderWithdrawn(claimed).catch(() => {});
 
   await emitQuickCommerceStatusUpdate(claimed, { message }).catch(() => {});
   await emitQuickOrderUpdate(claimed, 'order_update').catch(() => {});
@@ -926,7 +952,7 @@ export async function sweepQuickSellerAcknowledgements() {
             title: 'Order waiting for you',
             body: `Order ${leg.orderId} has a rider waiting. Please accept it.`,
             ring: true,
-            data: { type: 'new_seller_order', orderId: leg.orderId, sellerOrderId: toId(leg._id), link: '/seller/orders' },
+            data: { type: 'new_seller_order', orderId: String(leg.orderId), sellerOrderId: toId(leg._id), link: '/seller/orders' },
           },
         ).catch(() => {});
       });

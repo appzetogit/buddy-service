@@ -61,7 +61,7 @@ import {
   refundFailedQuickCheckout,
   verifyQuickCheckoutPayment,
 } from '../services/quickCheckout.service.js';
-import { releaseRidersForCancelledQuickOrder } from '../services/quickOrderFlows.service.js';
+import { releaseRidersForCancelledQuickOrder, notifySellersOrderWithdrawn } from '../services/quickOrderFlows.service.js';
 import { deductWalletBalance, refundWalletBalance } from '../../food/user/services/userWallet.service.js';
 import {
     getGlobalPaymentSettings,
@@ -2102,6 +2102,13 @@ export const cancelOrder = async (req, res) => {
         `Quick cancelOrder rider release failed for ${claimedOrder.orderId}: ${releaseErr?.message || releaseErr}`,
       );
     }
+
+    // Seller's new-order popup must close too, if it ever reached them.
+    await notifySellersOrderWithdrawn(claimedOrder).catch((withdrawErr) => {
+      logger.warn(
+        `Quick cancelOrder seller withdraw push failed for ${claimedOrder.orderId}: ${withdrawErr?.message || withdrawErr}`,
+      );
+    });
 
     const cancellationMessage =
       refundResult?.message || 'Quick order cancelled successfully.';
