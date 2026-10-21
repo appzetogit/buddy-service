@@ -11,6 +11,8 @@ import {
 import { isRestaurantBanned } from "../../modules/food/restaurant/utils/restaurantBan.util.js";
 import { FoodDeliveryPartner } from "../../modules/food/delivery/models/deliveryPartner.model.js";
 import { Seller } from "../../modules/quick-commerce/seller/models/seller.model.js";
+import { BuddyIdentity } from "../identity/buddyIdentity.model.js";
+import { normalizePhone } from "../identity/identity.helpers.js";
 import { FoodReferralSettings } from "../../modules/food/admin/models/referralSettings.model.js";
 import { FoodReferralLog } from "../../modules/food/admin/models/referralLog.model.js";
 import { createOrUpdateOtp, verifyOtp } from "../otp/otp.service.js";
@@ -563,9 +565,41 @@ export const verifyDeliveryOtpAndLogin = async (phone, otp, fcmToken, platform) 
     };
   }
 
+  // The unified-auth endpoints (driver onboarding, driver mode, etc.) require a token
+  // carrying identityId. This legacy login never touched BuddyIdentity, so a driver who
+  // only ever logged in here had no identityId and 401'd on every unified endpoint.
+  // Link (or create) the BuddyIdentity by phone, the same key the unified flow uses.
+  const phoneLast10 = normalizePhone(deliveryPartner.phone) || normalized;
+  const identity = await BuddyIdentity.findOneAndUpdate(
+    { phone: phoneLast10 },
+    {
+      $setOnInsert: {
+        phone: phoneLast10,
+        countryCode: "+91",
+        isVerified: true,
+        name: deliveryPartner.name || "",
+        onboardingComplete: true,
+        onboardingStep: "done",
+      },
+      $addToSet: { roles: "DRIVER" },
+      $set: {
+        lastLoginAt: new Date(),
+        "identityRefs.foodPartnerId": deliveryPartner._id,
+      },
+    },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  );
+  if (!deliveryPartner.identityId) {
+    deliveryPartner.identityId = identity._id;
+    await deliveryPartner.save();
+  }
+
   const payload = {
     userId: deliveryPartner._id.toString(),
     role: ROLES.DELIVERY_PARTNER,
+    identityId: String(identity._id),
+    sub: String(identity._id),
+    capabilities: { food: deliveryPartner.status || "approved" },
   };
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);

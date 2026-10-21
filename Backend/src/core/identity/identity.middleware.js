@@ -28,7 +28,10 @@ export const authenticateIdentity = (options = {}) => async (req, res, next) => 
       return sendError(res, 401, 'Account has been deactivated');
     }
 
-    const role = String(payload.role || '').toUpperCase();
+    // Legacy delivery-partner logins (core/auth/auth.service.js) still issue role=DELIVERY_PARTNER
+    // so they keep working against the older authMiddleware too; treat it as DRIVER here.
+    const rawRole = String(payload.role || '').toUpperCase();
+    const role = rawRole === 'DELIVERY_PARTNER' ? 'DRIVER' : rawRole;
     const allowedRoles = (options.roles || []).map((r) => String(r).toUpperCase());
     if (allowedRoles.length && !allowedRoles.includes(role)) {
       return sendError(res, 403, 'Insufficient permissions');
