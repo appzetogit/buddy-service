@@ -10,6 +10,7 @@ import { FoodUser } from '../users/user.model.js';
 import { FoodRestaurant } from '../../modules/food/restaurant/models/restaurant.model.js';
 import { FoodDeliveryPartner } from '../../modules/food/delivery/models/deliveryPartner.model.js';
 import { Admin } from '../admin/admin.model.js';
+import { Seller } from '../../modules/quick-commerce/seller/models/seller.model.js';
 import { config } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 
@@ -17,7 +18,8 @@ const OWNER_MODELS = {
     USER: FoodUser,
     RESTAURANT: FoodRestaurant,
     DELIVERY_PARTNER: FoodDeliveryPartner,
-    ADMIN: Admin
+    ADMIN: Admin,
+    SELLER: Seller
 };
 const OWNER_TOKEN_FIELDS = {
     web: 'fcmTokens',
@@ -34,7 +36,8 @@ const OWNER_APP_PREFIXES = {
     USER: '👤 [User]',
     RESTAURANT: '🏪 [Shop]',
     DELIVERY_PARTNER: '🛵 [Rider]',
-    ADMIN: '🛡️ [Admin]'
+    ADMIN: '🛡️ [Admin]',
+    SELLER: '🛒 [Seller]'
 };
 
 /**
@@ -47,6 +50,7 @@ export const normalizeFcmOwnerType = (ownerType) => {
     if (normalized === 'RESTAURANT') return 'RESTAURANT';
     if (normalized === 'ADMIN') return 'ADMIN';
     if (normalized === 'DELIVERY_PARTNER' || normalized === 'DRIVER') return 'DELIVERY_PARTNER';
+    if (normalized === 'SELLER') return 'SELLER';
     return null;
 };
 

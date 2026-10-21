@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { userAPI, restaurantAPI, deliveryAPI, adminAPI } from "@food/api";
+import { sellerApi } from "@/modules/seller/services/sellerApi";
 import { initializeApp, getApp, getApps } from "firebase/app";
 const fallbackNotificationSound = "/alert.mp3";
 
@@ -41,7 +42,17 @@ function normalizeModuleFromPath(pathname = window.location.pathname) {
   if (pathname.includes("/restaurant") && !pathname.includes("/restaurants")) return "restaurant";
   if (pathname.includes("/delivery")) return "delivery";
   if (pathname.includes("/admin")) return "admin";
+  if (pathname.includes("/seller")) return "seller";
   return "user";
+}
+
+const MODULE_ACCESS_TOKEN_KEYS = {
+  seller: "auth_seller",
+};
+
+function getModuleAccessToken(moduleName) {
+  const storageKey = MODULE_ACCESS_TOKEN_KEYS[moduleName] || `${moduleName}_accessToken`;
+  return localStorage.getItem(storageKey);
 }
 
 function isRecord(value) {
@@ -457,6 +468,10 @@ async function saveTokenByModule(moduleName, token, platform = "web") {
   }
   if (moduleName === "user") {
     await userAPI.saveFcmToken(token, { platform });
+    return;
+  }
+  if (moduleName === "seller") {
+    await sellerApi.saveFcmToken(token, platform);
   }
 }
 
@@ -687,7 +702,7 @@ export async function registerWebPushForCurrentModule(pathname = window.location
   if (moduleName === "admin") return;
   initPushNotificationClient();
 
-  const accessToken = localStorage.getItem(`${moduleName}_accessToken`);
+  const accessToken = getModuleAccessToken(moduleName);
   if (!accessToken) return;
 
   const supportsBrowserPush = isSupportedBrowser() && isSecureContextForPush();
