@@ -61,10 +61,11 @@ export const setDriverMode = async (identity, mode, options = {}) => {
   }
   if (services) {
     for (const svc of services) {
-      // Taxi has no separate onboarding: an approved delivery partner can opt in to rides.
-      if (svc === 'taxi') {
+      // Taxi and Quick Commerce have no separate onboarding: an approved Food delivery
+      // partner can opt in to those job types on the same profile.
+      if (svc === 'taxi' || svc === 'quickCommerce') {
         if (partner.status !== 'approved') {
-          throw new ForbiddenError(`Taxi is ${partner.status || 'pending'} — wait for admin approval`);
+          throw new ForbiddenError(`${SERVICE_LABEL[svc]} is ${partner.status || 'pending'} — wait for admin approval`);
         }
         continue;
       }
