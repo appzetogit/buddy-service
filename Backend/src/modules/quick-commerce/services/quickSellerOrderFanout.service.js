@@ -14,23 +14,61 @@ import { allocateQuickCouponEarnings } from '../utils/quickCouponEarnings.helper
  * not just when the inbox-entry write (upsertSellerNotification) fails — so a seller app that
  * never opens the socket connection still gets woken up for a new order.
  */
-const sendNewSellerOrderPush = (sellerOrder) =>
-  notifyOwnerSafely(
-    { ownerType: 'SELLER', ownerId: sellerOrder.sellerId },
-    {
-      title: 'New order received',
-      body: `Order ${sellerOrder.orderId} is waiting for you`,
-      ring: true,
-      data: {
-        type: 'new_seller_order',
-        orderId: String(sellerOrder.orderId),
-        sellerOrderId: String(sellerOrder._id?.toString?.() || ''),
-        link: '/seller/orders',
+const PUSH_ITEMS_LIST_MAX = 150;
+
+// FCM data values must be strings; empty/missing values are dropped, never sent as placeholders.
+const buildNewSellerOrderPushDetails = async (sellerOrder) => {
+  const details = {};
+  const customerName = String(sellerOrder.customer?.name || '').trim();
+  if (customerName && !isGenericCustomerLabel(customerName)) details.customerName = customerName;
+
+  const address = String(sellerOrder.address?.address || '').trim();
+  if (address) details.customerAddress = address;
+
+  const items = Array.isArray(sellerOrder.items) ? sellerOrder.items : [];
+  if (items.length) {
+    details.itemCount = String(items.reduce((n, i) => n + (Number(i?.quantity) || 1), 0));
+    const list = items.map((i) => `${Number(i?.quantity) || 1} x ${i?.name || ''}`.trim()).join(', ');
+    if (list) details.itemsList = list.slice(0, PUSH_ITEMS_LIST_MAX);
+  }
+
+  const total = sellerOrder.pricing?.total;
+  if (total !== undefined && total !== null && total !== '') details.total = String(total);
+
+  try {
+    if (sellerOrder.parentOrderId) {
+      const parent = await QuickOrder.findById(sellerOrder.parentOrderId).select('payment.method').lean();
+      const method = String(parent?.payment?.method || '').trim();
+      if (method) details.paymentMethod = method;
+    }
+  } catch (err) {
+    logger.warn(`New seller order push: payment lookup failed: ${err?.message || err}`);
+  }
+  return details;
+};
+
+const sendNewSellerOrderPush = async (sellerOrder) => {
+  try {
+    const details = await buildNewSellerOrderPushDetails(sellerOrder);
+    await notifyOwnerSafely(
+      { ownerType: 'SELLER', ownerId: sellerOrder.sellerId },
+      {
+        title: 'New order received',
+        body: `Order ${sellerOrder.orderId} is waiting for you`,
+        ring: true,
+        data: {
+          type: 'new_seller_order',
+          orderId: String(sellerOrder.orderId),
+          sellerOrderId: String(sellerOrder._id?.toString?.() || ''),
+          link: '/seller/orders',
+          ...details,
+        },
       },
-    },
-  ).catch((pushErr) => {
+    );
+  } catch (pushErr) {
     logger.warn(`New seller order push failed: ${pushErr?.message || pushErr}`);
-  });
+  }
+};
 
 export const emitQuickSellerOrders = async (sellerOrders) => {
   try {
