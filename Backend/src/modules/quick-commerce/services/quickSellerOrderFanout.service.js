@@ -32,7 +32,7 @@ const sendNewSellerOrderPush = (sellerOrder) =>
     logger.warn(`New seller order push failed: ${pushErr?.message || pushErr}`);
   });
 
-const emitQuickSellerOrders = async (sellerOrders) => {
+export const emitQuickSellerOrders = async (sellerOrders) => {
   try {
     const io = getIO();
     if (!Array.isArray(sellerOrders) || sellerOrders.length === 0) return;

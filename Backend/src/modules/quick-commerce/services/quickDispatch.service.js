@@ -479,10 +479,15 @@ export async function acceptQuickOrder(orderId, partnerId) {
   // (and so reset) a seller leg the shop has already started working on.
   try {
     const { SellerOrder } = await import('../seller/models/sellerOrder.model.js');
-    const alreadyFannedOut = await SellerOrder.exists({ parentOrderId: claimed._id });
-    if (!alreadyFannedOut) {
-      const { fanOutQuickSellerOrdersForParent } = await import('./quickSellerOrderFanout.service.js');
-      await fanOutQuickSellerOrdersForParent(claimed);
+    const existingLegs = await SellerOrder.find({ parentOrderId: claimed._id });
+    const fanout = await import('./quickSellerOrderFanout.service.js');
+    if (!existingLegs.length) {
+      await fanout.fanOutQuickSellerOrdersForParent(claimed);
+    } else {
+      // Leg may pre-exist (built silently before accept): still pending -> ring the seller now.
+      // Past pending (admin reassign) -> stay quiet.
+      const pendingLegs = existingLegs.filter((leg) => leg.status === 'pending');
+      if (pendingLegs.length) await fanout.emitQuickSellerOrders(pendingLegs);
     }
   } catch (err) {
     logger.error(`[QuickDispatch] seller fan-out failed for ${claimed._id}: ${err.message}`);

@@ -2782,7 +2782,9 @@ export const getSellerOrdersController = async (req, res) => {
       const parentStatus = String(po?.orderStatus || "").toLowerCase();
 
       if (!so) {
-        parentsNeedingBuild.push(po);
+        // Rider-first dispatch: the seller leg is created (and the seller notified) on rider
+        // accept. Building it here from a list refresh would skip that fan-out/push.
+        if (po.dispatch?.acceptedAt) parentsNeedingBuild.push(po);
       } else if (parentStatus === "delivered" && so.status !== "delivered") {
         bulkOps.push({
           updateOne: {
