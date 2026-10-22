@@ -17,7 +17,7 @@ import { allocateQuickCouponEarnings } from '../utils/quickCouponEarnings.helper
 const PUSH_ITEMS_LIST_MAX = 150;
 
 // FCM data values must be strings; empty/missing values are dropped, never sent as placeholders.
-const buildNewSellerOrderPushDetails = async (sellerOrder) => {
+export const buildNewSellerOrderPushDetails = async (sellerOrder) => {
   const details = {};
   const customerName = String(sellerOrder.customer?.name || '').trim();
   if (customerName && !isGenericCustomerLabel(customerName)) details.customerName = customerName;

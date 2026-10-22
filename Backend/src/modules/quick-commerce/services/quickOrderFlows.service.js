@@ -946,15 +946,19 @@ export async function sweepQuickSellerAcknowledgements() {
         } catch {
           /* socket optional */
         }
-        void notifyOwnerSafely(
-          { ownerType: 'SELLER', ownerId: leg.sellerId },
-          {
-            title: 'Order waiting for you',
-            body: `Order ${leg.orderId} has a rider waiting. Please accept it.`,
-            ring: true,
-            data: { type: 'new_seller_order', orderId: String(leg.orderId), sellerOrderId: toId(leg._id), link: '/seller/orders' },
-          },
-        ).catch(() => {});
+        void (async () => {
+          const { buildNewSellerOrderPushDetails } = await import('./quickSellerOrderFanout.service.js');
+          const details = await buildNewSellerOrderPushDetails(leg);
+          await notifyOwnerSafely(
+            { ownerType: 'SELLER', ownerId: leg.sellerId },
+            {
+              title: 'Order waiting for you',
+              body: `Order ${leg.orderId} has a rider waiting. Please accept it.`,
+              ring: true,
+              data: { type: 'new_seller_order', orderId: String(leg.orderId), sellerOrderId: toId(leg._id), link: '/seller/orders', ...details },
+            },
+          );
+        })().catch(() => {});
       });
 
       if (!order.dispatch?.sellerAckAlertedAt) {
