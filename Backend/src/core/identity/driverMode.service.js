@@ -4,7 +4,7 @@ import { FoodDeliveryPartner } from '../../modules/food/delivery/models/delivery
 import { FoodOrder } from '../../modules/food/orders/models/order.model.js';
 import { getEffectiveServiceStatus } from './driverOnboardingAdmin.service.js';
 
-const VALID_MODES = ['off', 'food'];
+const VALID_MODES = ['off', 'food', 'taxi'];
 const OFF_ALIASES = new Set(['off', 'none', 'offline', '', null, undefined]);
 const DELIVERY_SERVICES = ['food', 'quickCommerce', 'taxi'];
 const SERVICE_LABEL = { food: 'Food', quickCommerce: 'Quick Commerce', taxi: 'Taxi' };
@@ -23,9 +23,14 @@ const normalizeServices = (raw) => {
   return services;
 };
 
+// Quick Commerce has no activeService of its own: it rides on the food delivery
+// pipeline (selected via `services`), so those aliases collapse to 'food'.
+const FOOD_ALIASES = new Set(['food', 'quickcommerce', 'quick_commerce', 'quick-commerce', 'qc', 'delivery']);
+
 const normalizeMode = (raw) => {
   const value = typeof raw === 'string' ? raw.trim().toLowerCase() : raw;
   if (OFF_ALIASES.has(value)) return 'off';
+  if (FOOD_ALIASES.has(value)) return 'food';
   return value;
 };
 
