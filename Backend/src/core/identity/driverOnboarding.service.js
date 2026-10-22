@@ -78,12 +78,15 @@ const getSelectedServices = (identity) => {
 const getNextStep = (identity, currentStep) => {
   const services = getSelectedServices(identity);
   const hasFoodOrQc = needsFoodVehicleStep(services);
+  const hasTaxi = services.includes('taxi');
 
   switch (String(currentStep || '').toLowerCase()) {
     case 'services':
       if (hasFoodOrQc) return 'vehicle_food';
+      if (hasTaxi) return 'vehicle_taxi';
       return 'basics';
     case 'vehicle_food':
+      if (hasTaxi) return 'vehicle_taxi';
       return 'basics';
     case 'vehicle_taxi':
       return 'basics';
@@ -215,10 +218,14 @@ const normalizeTaxiVehicleType = (value = '') => {
 
 const assertCreatableProfiles = async (identity, services = []) => {
   const normalizedServices = Array.isArray(services) ? services : [];
-  if (normalizedServices.includes('food')) {
+  const needsPartnerProfile = normalizedServices.some((svc) =>
+    ['food', 'quickCommerce', 'taxi'].includes(svc),
+  );
+  if (needsPartnerProfile) {
     await assertUniquePhoneForProfiles(identity, { food: true });
-    const foodNumber = identity.foodVehicle?.number || identity.vehicle?.number;
-    await assertUniqueVehicleNumber(identity, foodNumber);
+    const vehicleNumber =
+      identity.foodVehicle?.number || identity.taxiVehicle?.number || identity.vehicle?.number;
+    await assertUniqueVehicleNumber(identity, vehicleNumber);
   }
 };
 
@@ -554,6 +561,13 @@ const assertOnboardingDataComplete = (identityDoc, services = []) => {
       throw new ValidationError('Add your delivery vehicle details');
     }
   }
+
+  if (services.includes('taxi')) {
+    const taxiVehicle = identityDoc.taxiVehicle || {};
+    if (!taxiVehicle.number || !taxiVehicle.make || !taxiVehicle.model) {
+      throw new ValidationError('Add your taxi vehicle details');
+    }
+  }
 };
 
 export const completeOnboarding = async (identity, body) => {
@@ -583,9 +597,11 @@ export const completeOnboarding = async (identity, body) => {
   const serviceRejected = (svc) =>
     getEffectiveServiceStatus(identityDoc, svc, existingPartner).status === 'rejected';
 
-  const isResubmit = services.includes('food') && serviceRejected('food');
+  const isResubmit = services.some(serviceRejected);
 
-  const needsPartner = services.includes('food');
+  // Food, Quick Commerce and Taxi all ride on the same FoodDeliveryPartner profile
+  // (vehicle/KYC/bank record) — create it whenever any of the three is selected, not just food.
+  const needsPartner = services.some((svc) => ['food', 'quickCommerce', 'taxi'].includes(svc));
   const createdPartner = needsPartner ? await ensureFoodPartner(identityDoc) : null;
 
   if (isResubmit) {
@@ -739,27 +755,25 @@ export const enableCapability = async (identity, service) => {
   if (!identity.onboardingComplete) {
     throw new ValidationError('Complete onboarding before enabling a capability');
   }
-  const svc = String(service || '').toLowerCase();
-  if (!VALID_SERVICES.includes(svc)) {
+  const requested = String(service || '').trim();
+  const svc = VALID_SERVICES.find((s) => s.toLowerCase() === requested.toLowerCase());
+  if (!svc) {
     throw new ValidationError(`service must be one of: ${VALID_SERVICES.join(', ')}`);
   }
-  if (svc === 'food') {
-    await assertCreatableProfiles(identity, [svc]);
-    const partner = await ensureFoodPartner(identity);
-    setServiceStatusOnIdentity(identity, svc, {
-      status: 'pending',
-      rejectionReason: '',
-      rejectedAt: null,
-      approvedAt: null,
-    });
-    if (!identity.onboardingServices.includes(svc)) {
-      identity.onboardingServices.push(svc);
-      identity.markModified('onboardingServices');
-    }
-    await identity.save();
-    return { service: svc, status: partner.status || 'pending' };
+  await assertCreatableProfiles(identity, [svc]);
+  const partner = await ensureFoodPartner(identity);
+  setServiceStatusOnIdentity(identity, svc, {
+    status: 'pending',
+    rejectionReason: '',
+    rejectedAt: null,
+    approvedAt: null,
+  });
+  if (!identity.onboardingServices.includes(svc)) {
+    identity.onboardingServices.push(svc);
+    identity.markModified('onboardingServices');
   }
-  throw new ValidationError(`service must be one of: ${VALID_SERVICES.join(', ')}`);
+  await identity.save();
+  return { service: svc, status: svc === 'food' ? partner.status || 'pending' : 'pending' };
 };
 
 export const getOnboardingState = async (identity) => {
@@ -768,8 +782,12 @@ export const getOnboardingState = async (identity) => {
   const { partner } = await findPartnerProfiles(identity);
   const capabilities = summarisePartnerCapabilities(identity, partner);
   const foodStatus = getEffectiveServiceStatus(identity, 'food', partner);
+  const quickCommerceStatus = getEffectiveServiceStatus(identity, 'quickCommerce', partner);
+  const taxiStatus = getEffectiveServiceStatus(identity, 'taxi', partner);
   const foodRejected = foodStatus.status === 'rejected';
-  const resubmitAllowed = foodRejected;
+  const quickCommerceRejected = quickCommerceStatus.status === 'rejected';
+  const taxiRejected = taxiStatus.status === 'rejected';
+  const resubmitAllowed = foodRejected || quickCommerceRejected || taxiRejected;
   const onboardingLocked = Boolean(identity.onboardingComplete) && !resubmitAllowed;
 
   return {
@@ -794,15 +812,33 @@ export const getOnboardingState = async (identity) => {
     capabilities,
     serviceStatuses: {
       food: foodStatus,
+      quickCommerce: quickCommerceStatus,
+      taxi: taxiStatus,
     },
     rejectedServices: [
       foodRejected ? 'food' : null,
+      quickCommerceRejected ? 'quickCommerce' : null,
+      taxiRejected ? 'taxi' : null,
     ].filter(Boolean),
     rejection: {
       food: foodRejected
         ? {
             reason: foodStatus.rejectionReason || '',
             rejectedAt: foodStatus.rejectedAt || null,
+            partnerId: partner?._id ? String(partner._id) : null,
+          }
+        : null,
+      quickCommerce: quickCommerceRejected
+        ? {
+            reason: quickCommerceStatus.rejectionReason || '',
+            rejectedAt: quickCommerceStatus.rejectedAt || null,
+            partnerId: partner?._id ? String(partner._id) : null,
+          }
+        : null,
+      taxi: taxiRejected
+        ? {
+            reason: taxiStatus.rejectionReason || '',
+            rejectedAt: taxiStatus.rejectedAt || null,
             partnerId: partner?._id ? String(partner._id) : null,
           }
         : null,

@@ -172,6 +172,7 @@ const buddyIdentitySchema = new mongoose.Schema(
     },
     serviceStatuses: {
       food: { type: serviceStatusSchema, default: () => ({ status: 'not_enabled' }) },
+      quickCommerce: { type: serviceStatusSchema, default: () => ({ status: 'not_enabled' }) },
       taxi: { type: serviceStatusSchema, default: () => ({ status: 'not_enabled' }) },
     },
     kyc: {

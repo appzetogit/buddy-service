@@ -1650,6 +1650,52 @@ export async function rejectDeliveryPartner(req, res, next) {
     }
 }
 
+/** Approve every service the driver selected at onboarding — the "Approve" button on a join request. */
+export async function approveDeliveryPartnerAllServices(req, res, next) {
+    try {
+        const result = await adminService.approveDeliveryPartnerAllServices(req.params.id);
+        if (!result) {
+            return res.status(404).json({
+                success: false,
+                message: 'Driver not found'
+            });
+        }
+        res.status(200).json({
+            success: true,
+            message: 'Driver approved successfully',
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function rejectDeliveryPartnerAllServices(req, res, next) {
+    try {
+        const reason = req.body?.reason != null ? String(req.body.reason).trim() : '';
+        if (!reason) {
+            return res.status(400).json({
+                success: false,
+                message: 'Rejection reason is required',
+            });
+        }
+        const result = await adminService.rejectDeliveryPartnerAllServices(req.params.id, reason);
+        if (!result) {
+            return res.status(404).json({
+                success: false,
+                message: 'Driver not found'
+            });
+        }
+        res.status(200).json({
+            success: true,
+            message: 'Driver rejected successfully',
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 // ----- Zones -----
 export async function getZones(req, res, next) {
     try {

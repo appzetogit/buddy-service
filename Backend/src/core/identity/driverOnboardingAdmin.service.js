@@ -2,11 +2,14 @@ import mongoose from 'mongoose';
 import { ValidationError, NotFoundError } from '../auth/errors.js';
 import { BuddyIdentity } from './buddyIdentity.model.js';
 import { FoodDeliveryPartner } from '../../modules/food/delivery/models/deliveryPartner.model.js';
+import { Driver as LegacyTaxiDriverView } from '../../modules/taxi/driver/models/Driver.js';
 
-export const ONBOARDING_SERVICES = ['food'];
+export const ONBOARDING_SERVICES = ['food', 'quickCommerce', 'taxi'];
 
 const SERVICE_LABELS = {
   food: 'Food',
+  quickCommerce: 'Quick Commerce',
+  taxi: 'Taxi',
 };
 
 const normalizeService = (service) => {
@@ -273,6 +276,26 @@ const syncFoodPartnerForService = async (identity, service, statusPatch) => {
   return partner;
 };
 
+/**
+ * The legacy taxi admin "Pending Drivers" screen filters by a loose `approve`/`status` field it
+ * writes directly on the shared delivery-partner document (never through BuddyIdentity). That
+ * screen's approve action now calls approveDriverAllServices/rejectDriverAllServices like
+ * everything else, so this keeps its own filter in sync instead of going stale. Written through
+ * the `strict:false` Driver view, since FoodDeliveryPartner's schema doesn't declare this field.
+ */
+const syncLegacyTaxiApproveFlag = async (identityId, approved) => {
+  try {
+    const partner = await FoodDeliveryPartner.findOne({ identityId }).select('_id').lean();
+    if (!partner) return;
+    await LegacyTaxiDriverView.updateOne(
+      { _id: partner._id },
+      { $set: { approve: Boolean(approved), status: approved ? 'approved' : 'rejected' } },
+    );
+  } catch {
+    // Best-effort compatibility shim — must never block the real approval.
+  }
+};
+
 export async function approveDriverService(requestId, service) {
   const svc = normalizeService(service);
   const identity = await resolveIdentityFromRequestId(requestId);
@@ -336,6 +359,84 @@ export async function rejectDriverService(requestId, service, reason) {
   return buildJoinRequestRow(identity.toObject(), svc, partner);
 }
 
+/**
+ * Approve every service the driver selected at onboarding in one action — the admin's
+ * "approve" button doesn't ask which service, it approves the whole application.
+ * Already-approved services are left untouched (so re-running this is safe); already-rejected
+ * services are re-approved, same as the single-service path.
+ */
+export async function approveDriverAllServices(requestId) {
+  const identity = await resolveIdentityFromRequestId(requestId);
+  if (!identity) throw new NotFoundError('Driver onboarding request not found');
+
+  const services = Array.isArray(identity.onboardingServices) ? identity.onboardingServices : [];
+  const applicable = services.filter((svc) => ONBOARDING_SERVICES.includes(svc));
+  if (!applicable.length) {
+    throw new ValidationError('Driver did not select any service to approve');
+  }
+
+  const approvedAt = new Date();
+  for (const svc of applicable) {
+    setServiceStatusOnIdentity(identity, svc, {
+      status: 'approved',
+      rejectionReason: '',
+      rejectedAt: null,
+      approvedAt,
+    });
+  }
+  await identity.save();
+
+  if (applicable.includes('food')) {
+    await syncFoodPartnerForService(identity, 'food', { status: 'approved', approvedAt });
+  }
+  await syncLegacyTaxiApproveFlag(identity._id, true);
+
+  const { partner } = await findProfilesForIdentity(identity._id);
+  return applicable.map((svc) => buildJoinRequestRow(identity.toObject(), svc, partner));
+}
+
+/** Reject every service the driver selected at onboarding, with one shared reason. */
+export async function rejectDriverAllServices(requestId, reason) {
+  const normalizedReason = typeof reason === 'string' ? reason.trim() : '';
+  if (!normalizedReason) {
+    throw new ValidationError('Rejection reason is required');
+  }
+
+  const identity = await resolveIdentityFromRequestId(requestId);
+  if (!identity) throw new NotFoundError('Driver onboarding request not found');
+
+  const services = Array.isArray(identity.onboardingServices) ? identity.onboardingServices : [];
+  const applicable = services.filter((svc) => ONBOARDING_SERVICES.includes(svc));
+  if (!applicable.length) {
+    throw new ValidationError('Driver did not select any service to reject');
+  }
+
+  const rejectedAt = new Date();
+  for (const svc of applicable) {
+    setServiceStatusOnIdentity(identity, svc, {
+      status: 'rejected',
+      rejectionReason: normalizedReason,
+      rejectedAt,
+      approvedAt: null,
+    });
+  }
+  await identity.save();
+
+  if (applicable.includes('food')) {
+    await syncFoodPartnerForService(identity, 'food', {
+      status: 'rejected',
+      rejectionReason: normalizedReason,
+      rejectedAt,
+    });
+  }
+  await syncLegacyTaxiApproveFlag(identity._id, false);
+
+  const { partner } = await findProfilesForIdentity(identity._id);
+  return applicable.map((svc) => buildJoinRequestRow(identity.toObject(), svc, partner));
+}
+
 export const summariseCapabilitiesFromIdentity = (identity, partner = null) => ({
   food: getEffectiveServiceStatus(identity, 'food', partner).status,
+  quickCommerce: getEffectiveServiceStatus(identity, 'quickCommerce', partner).status,
+  taxi: getEffectiveServiceStatus(identity, 'taxi', partner).status,
 });

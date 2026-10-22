@@ -94,7 +94,7 @@ const PendingDrivers = () => {
       }
 
       if (action === 'approve') {
-        await adminService.updateDriverStatus(driverId, { approve: true, status: 'approved' });
+        await adminService.approveDriverOnboarding(driverId);
       } else if (action === 'delete') {
         await adminService.deleteDriver(driverId);
       } else if (action === 'password') {

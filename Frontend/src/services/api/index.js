@@ -413,6 +413,20 @@ export const adminAPI = {
         contextModule: "admin",
       },
     ),
+  /** Approve every service the driver applied for (Food/Quick Commerce/Taxi) in one action. */
+  approveDeliveryPartnerAllServices: (id) =>
+    apiClient.patch(
+      `/food/admin/delivery/${String(id)}/approve-all`,
+      {},
+      { contextModule: "admin" },
+    ),
+  /** Reject every service the driver applied for, with one shared reason. */
+  rejectDeliveryPartnerAllServices: (id, reason) =>
+    apiClient.patch(
+      `/food/admin/delivery/${String(id)}/reject-all`,
+      { reason: String(reason || "").trim() },
+      { contextModule: "admin" },
+    ),
   /** GET /food/admin/delivery/support-tickets - list all delivery support tickets (query: status, priority, search, page, limit). */
   getDeliverySupportTickets: (params) =>
     apiClient.get("/food/admin/delivery/support-tickets", {

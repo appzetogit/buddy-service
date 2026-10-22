@@ -117,6 +117,7 @@ function VehicleBlock({ title, vehicle, icon: Icon }) {
 
 const SERVICE_LABELS = {
   food: "Food",
+  quickCommerce: "Quick Commerce",
   taxi: "Taxi",
 };
 
@@ -125,10 +126,12 @@ export default function DeliveryPartnerJoinDetailModal({
   onOpenChange,
   details,
   loading,
-  adminService = "food",
   onApproveService,
   onRejectService,
+  onApproveAll,
+  onRejectAll,
   processingService = null,
+  processingAll = false,
 }) {
   const profileUrl = details?.profileImage?.url || details?.profilePhoto || null
   const bank = details?.documents?.bankDetails
@@ -362,34 +365,73 @@ export default function DeliveryPartnerJoinDetailModal({
           )}
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-slate-200 px-4 py-4 sm:px-6">
-          {details && onApproveService && onRejectService && services.includes(adminService) ? (
-            <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                disabled={processingService === adminService}
-                onClick={() => onRejectService(adminService)}
-                className="w-full rounded-lg border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 sm:w-auto disabled:opacity-60"
-              >
-                Reject Driver
-              </button>
-              <button
-                type="button"
-                disabled={processingService === adminService}
-                onClick={() => onApproveService(adminService)}
-                className="w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 sm:w-auto disabled:opacity-60"
-              >
-                Approve Driver
-              </button>
+        <DialogFooter className="shrink-0 flex-col items-stretch gap-3 border-t border-slate-200 px-4 py-4 sm:px-6">
+          {details && onApproveService && onRejectService && services.length > 0 ? (
+            <div className="w-full space-y-1.5">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                Approve / reject one service
+              </p>
+              {services.map((svc) => {
+                const status = serviceStatuses?.[svc]?.status || "pending"
+                const isProcessing = processingService === svc
+                return (
+                  <div key={svc} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                    <span className="text-sm font-medium text-slate-800">
+                      {SERVICE_LABELS[svc] || svc}
+                      <span className="ml-2 text-xs font-normal text-slate-500 capitalize">{status}</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={isProcessing || status === "rejected"}
+                        onClick={() => onRejectService(svc)}
+                        className="rounded-md border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isProcessing || status === "approved"}
+                        onClick={() => onApproveService(svc)}
+                        className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           ) : null}
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 sm:w-auto"
-          >
-            Close
-          </button>
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-end">
+            {details && onRejectAll ? (
+              <button
+                type="button"
+                disabled={processingAll}
+                onClick={onRejectAll}
+                className="w-full rounded-lg border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 sm:w-auto disabled:opacity-60"
+              >
+                Reject Entire Application
+              </button>
+            ) : null}
+            {details && onApproveAll ? (
+              <button
+                type="button"
+                disabled={processingAll}
+                onClick={onApproveAll}
+                className="w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 sm:w-auto disabled:opacity-60"
+              >
+                Approve Entire Application
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 sm:w-auto"
+            >
+              Close
+            </button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

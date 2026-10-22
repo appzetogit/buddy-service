@@ -1,4 +1,5 @@
 import api from '../../../shared/api/axiosInstance';
+import platformClient from '@food/api/axios';
 
 export const adminService = {
   /**
@@ -49,6 +50,13 @@ export const adminService = {
   getDriver: (id) => api.get(`/admin/drivers/${id}`),
   createDriver: (driverData) => api.post('/admin/drivers', driverData),
   updateDriverStatus: (id, data) => api.patch(`/admin/drivers/${id}`, data),
+  /**
+   * Approve a driver's full onboarding application (Food + Quick Commerce + Taxi, whichever
+   * they selected) through the unified driver-onboarding approval system, instead of flipping
+   * this shared driver record's status directly — that bypass left this screen's "approved"
+   * state out of sync with the per-service approvals shown on the Food admin join-requests page.
+   */
+  approveDriverOnboarding: (id) => platformClient.patch(`/food/admin/delivery/${id}/approve-all`),
   updateDriverPassword: (id, password) => api.patch(`/admin/drivers/update-password/${id}`, { password }),
   deleteDriver: (id) => api.delete(`/admin/drivers/${id}`),
   getDriverDeleteRequests: () => api.get('/admin/drivers/delete-requests'),

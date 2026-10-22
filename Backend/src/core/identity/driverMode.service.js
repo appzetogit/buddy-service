@@ -61,14 +61,9 @@ export const setDriverMode = async (identity, mode, options = {}) => {
   }
   if (services) {
     for (const svc of services) {
-      // Taxi and Quick Commerce have no separate onboarding: an approved Food delivery
-      // partner can opt in to those job types on the same profile.
-      if (svc === 'taxi' || svc === 'quickCommerce') {
-        if (partner.status !== 'approved') {
-          throw new ForbiddenError(`${SERVICE_LABEL[svc]} is ${partner.status || 'pending'} — wait for admin approval`);
-        }
-        continue;
-      }
+      // Food, Taxi and Quick Commerce each carry their own approval status on the
+      // identity (admin approves/rejects them independently), but all three ride on
+      // the same FoodDeliveryPartner profile record for KYC/vehicle/bank data.
       const { status } = getEffectiveServiceStatus(identity, svc, partner);
       if (status !== 'approved') {
         throw new ForbiddenError(`${SERVICE_LABEL[svc]} is ${status.replace('_', ' ')} — wait for admin approval`);
@@ -131,6 +126,8 @@ export const setDriverMode = async (identity, mode, options = {}) => {
     services: services || partner?.deliveryServices || null,
     capabilities: {
       food: partner ? partner.status || 'approved' : 'not_enabled',
+      quickCommerce: getEffectiveServiceStatus(identity, 'quickCommerce', partner).status,
+      taxi: getEffectiveServiceStatus(identity, 'taxi', partner).status,
     },
   };
 };
@@ -146,6 +143,8 @@ export const getDriverMode = async (identity) => {
     services: partner?.deliveryServices?.length ? partner.deliveryServices : null,
     capabilities: {
       food: partner ? partner.status || 'approved' : 'not_enabled',
+      quickCommerce: getEffectiveServiceStatus(identity, 'quickCommerce', partner).status,
+      taxi: getEffectiveServiceStatus(identity, 'taxi', partner).status,
     },
     food: partner
       ? {

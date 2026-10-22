@@ -218,6 +218,8 @@ router.get('/delivery/:id', adminController.getDeliveryPartnerById);
 router.patch('/delivery/:id', adminController.updateDeliveryPartner);
 router.patch('/delivery/:id/approve', adminController.approveDeliveryPartner);
 router.patch('/delivery/:id/reject', adminController.rejectDeliveryPartner);
+router.patch('/delivery/:id/approve-all', adminController.approveDeliveryPartnerAllServices);
+router.patch('/delivery/:id/reject-all', adminController.rejectDeliveryPartnerAllServices);
 
 // ----- Zones -----
 router.get('/zones', adminController.getZones);

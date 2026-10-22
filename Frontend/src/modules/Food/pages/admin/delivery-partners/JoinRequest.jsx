@@ -10,8 +10,15 @@ const debugWarn = (...args) => {}
 const debugError = (...args) => {}
 
 
+const SERVICE_TABS = [
+  { value: "food", label: "Food" },
+  { value: "quickCommerce", label: "Quick Commerce" },
+  { value: "taxi", label: "Taxi" },
+]
+
 export default function JoinRequest() {
   const [activeTab, setActiveTab] = useState("pending")
+  const [activeService, setActiveService] = useState("food")
   const [searchQuery, setSearchQuery] = useState("")
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -24,6 +31,7 @@ export default function JoinRequest() {
   const [viewLoading, setViewLoading] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [processingService, setProcessingService] = useState(null)
+  const [processingAll, setProcessingAll] = useState(false)
   const [rejectionReason, setRejectionReason] = useState("")
   const [filters, setFilters] = useState({
     zone: "",
@@ -47,6 +55,7 @@ export default function JoinRequest() {
 
       const params = {
         status: activeTab === "pending" ? "pending" : "denied",
+        service: activeService,
         page: 1,
         limit: 1000,
       }
@@ -100,7 +109,7 @@ export default function JoinRequest() {
       fetchJoinRequests()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, debouncedSearch, filters, isFilterOpen])
+  }, [activeTab, activeService, debouncedSearch, filters, isFilterOpen])
 
   const filteredRequests = useMemo(() => {
     let result = [...requests]
@@ -123,14 +132,17 @@ export default function JoinRequest() {
 
     try {
       setProcessing(true)
-      await adminAPI.approveDeliveryPartner(selectedRequest._id, "food")
-      
+      // Approves every service the driver selected at onboarding (Food/QC/Taxi), not just
+      // whichever tab happens to be open — the admin's "approve" button approves the whole
+      // application in one go.
+      await adminAPI.approveDeliveryPartnerAllServices(selectedRequest._id)
+
       // Refresh the list
       await fetchJoinRequests()
-      
+
       setIsApproveOpen(false)
       setSelectedRequest(null)
-      
+
       toast.success(`Successfully approved driver ${selectedRequest.name}'s join request!`)
     } catch (err) {
       debugError("Error approving request:", err)
@@ -158,15 +170,16 @@ export default function JoinRequest() {
 
     try {
       setProcessing(true)
-      await adminAPI.rejectDeliveryPartner(selectedRequest._id, rejectionReason.trim(), "food")
-      
+      // Rejects every service the driver selected at onboarding, with this one shared reason.
+      await adminAPI.rejectDeliveryPartnerAllServices(selectedRequest._id, rejectionReason.trim())
+
       // Refresh the list
       await fetchJoinRequests()
-      
+
       setIsDenyOpen(false)
       setSelectedRequest(null)
       setRejectionReason("")
-      
+
       toast.success(`Successfully rejected driver ${selectedRequest.name}'s join request.`)
     } catch (err) {
       debugError("Error rejecting request:", err)
@@ -213,6 +226,43 @@ export default function JoinRequest() {
       toast.error(err.response?.data?.message || err?.message || "Failed to reject driver")
     } finally {
       setProcessingService(null)
+    }
+  }
+
+  const handleModalApproveAll = async () => {
+    if (!selectedRequest) return
+    try {
+      setProcessingAll(true)
+      const approveRes = await adminAPI.approveDeliveryPartnerAllServices(selectedRequest._id)
+      await fetchJoinRequests()
+      const response = await adminAPI.getDeliveryPartnerById(selectedRequest._id)
+      if (response.data?.success) setViewDetails(response.data.data.delivery)
+      toast.success(approveRes?.data?.message || "Driver's entire application approved")
+    } catch (err) {
+      toast.error(err.response?.data?.message || err?.message || "Failed to approve driver")
+    } finally {
+      setProcessingAll(false)
+    }
+  }
+
+  const handleModalRejectAll = async () => {
+    if (!selectedRequest) return
+    const reason = window.prompt("Rejection reason for the whole application (required):")
+    if (!reason?.trim()) {
+      toast.error("Rejection reason is required")
+      return
+    }
+    try {
+      setProcessingAll(true)
+      const rejectRes = await adminAPI.rejectDeliveryPartnerAllServices(selectedRequest._id, reason.trim())
+      await fetchJoinRequests()
+      setIsViewOpen(false)
+      setViewDetails(null)
+      toast.success(rejectRes?.data?.message || "Driver's entire application rejected")
+    } catch (err) {
+      toast.error(err.response?.data?.message || err?.message || "Failed to reject driver")
+    } finally {
+      setProcessingAll(false)
     }
   }
 
@@ -303,6 +353,24 @@ export default function JoinRequest() {
             >
               Denied Deliveryman
             </button>
+          </div>
+
+          {/* Service tabs — each service has its own pending/denied queue; a driver who applied
+              for Food + Quick Commerce + Taxi shows up on all three until each is approved. */}
+          <div className="flex items-center gap-2 mb-6">
+            {SERVICE_TABS.map((svc) => (
+              <button
+                key={svc.value}
+                onClick={() => setActiveService(svc.value)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${
+                  activeService === svc.value
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {svc.label}
+              </button>
+            ))}
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
@@ -645,10 +713,12 @@ export default function JoinRequest() {
         }}
         details={viewDetails}
         loading={viewLoading}
-        adminService="food"
         onApproveService={activeTab === "pending" ? handleModalApprove : undefined}
         onRejectService={activeTab === "pending" ? handleModalReject : undefined}
+        onApproveAll={activeTab === "pending" ? handleModalApproveAll : undefined}
+        onRejectAll={activeTab === "pending" ? handleModalRejectAll : undefined}
         processingService={processingService}
+        processingAll={processingAll}
       />
 
       {/* Filter Panel */}
