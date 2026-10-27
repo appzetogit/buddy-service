@@ -485,6 +485,7 @@ const orderSchema = new mongoose.Schema(
             default: () => ({})
         },
         restaurantNote: { type: String, default: '', trim: true },
+        deliveryInstructions: { type: String, default: '', trim: true, maxlength: 240 },
         note: { type: String, default: '', trim: true },
         sendCutlery: { type: Boolean, default: true },
         deliveryFleet: { type: String, default: 'standard', trim: true },

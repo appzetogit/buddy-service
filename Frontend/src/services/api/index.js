@@ -744,6 +744,16 @@ export const adminAPI = {
   deleteZone: (id) =>
     apiClient.delete(`/food/admin/zones/${id}`, { contextModule: "admin" }),
 
+  /** Offer banners (admin) */
+  getOfferBanners: () =>
+    apiClient.get("/food/admin/offer-banners", { contextModule: "admin" }),
+  createOfferBanner: (body) =>
+    apiClient.post("/food/admin/offer-banners", body ?? {}, { contextModule: "admin" }),
+  updateOfferBanner: (id, body) =>
+    apiClient.patch(`/food/admin/offer-banners/${id}`, body ?? {}, { contextModule: "admin" }),
+  deleteOfferBanner: (id) =>
+    apiClient.delete(`/food/admin/offer-banners/${id}`, { contextModule: "admin" }),
+
   /** Feedback Experience (admin) */
   getFeedbackExperiences: (params = {}) =>
     apiClient.get(API_ENDPOINTS.ADMIN.FEEDBACK_EXPERIENCE, {
@@ -1016,6 +1026,14 @@ export const adminAPI = {
   createOrUpdateFeeSettings: (body) =>
     apiClient.put("/food/admin/fee-settings", body ?? {}, {
       contextModule: "admin",
+    }),
+  /** Public tip config (no auth) */
+  getTipsConfig: (config = {}) => apiClient.get("/food/tips/config", config),
+  /** Public offer banners (no auth) */
+  getOfferBannersPublic: (zoneId, config = {}) =>
+    apiClient.get("/food/offer-banners/public", {
+      ...config,
+      params: { ...(config.params || {}), ...(zoneId ? { zoneId } : {}) },
     }),
 
   /** Referral Settings (admin) */

@@ -13,6 +13,7 @@ import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model
 import { BuddyIdentity } from '../../../../core/identity/buddyIdentity.model.js';
 import { DeliverySupportTicket } from '../../delivery/models/supportTicket.model.js';
 import { FoodZone } from '../models/zone.model.js';
+import { FoodOfferBanner } from '../models/offerBanner.model.js';
 import { FoodCategory } from '../models/category.model.js';
 import { FoodItem } from '../models/food.model.js';
 import { FoodOffer } from '../models/offer.model.js';
@@ -2156,7 +2157,19 @@ export async function getPublicFeeSettings() {
             platformFee: doc.platformFee,
             packagingFee: doc.packagingFee,
             gstRate: doc.gstRate,
+            tipsEnabled: Boolean(doc.tipsEnabled),
+            tipPresets: Array.isArray(doc.tipPresets) ? doc.tipPresets : [],
+            tipMaxAmount: doc.tipMaxAmount ?? null,
         } : null,
+    };
+}
+
+export async function getTipsConfig() {
+    const doc = await FoodFeeSettings.findOne({ isActive: true }).sort({ createdAt: -1 }).lean();
+    return {
+        tipsEnabled: Boolean(doc?.tipsEnabled),
+        presets: Array.isArray(doc?.tipPresets) ? doc.tipPresets : [],
+        maxAmount: doc?.tipMaxAmount ?? null,
     };
 }
 
@@ -2201,6 +2214,11 @@ export async function upsertFeeSettings(body) {
         if (body.gstRate === null) $unset.gstRate = 1;
         else if (body.gstRate !== undefined) $set.gstRate = body.gstRate;
 
+        if (body.tipsEnabled !== undefined) $set.tipsEnabled = body.tipsEnabled;
+        if (body.tipPresets !== undefined) $set.tipPresets = body.tipPresets;
+        if (body.tipMaxAmount === null) $unset.tipMaxAmount = 1;
+        else if (body.tipMaxAmount !== undefined) $set.tipMaxAmount = body.tipMaxAmount;
+
         if (body.isActive !== undefined) $set.isActive = body.isActive;
 
         const update = {};
@@ -2221,6 +2239,9 @@ export async function upsertFeeSettings(body) {
     if (body.platformFee !== undefined && body.platformFee !== null) payload.platformFee = body.platformFee;
     if (body.packagingFee !== undefined && body.packagingFee !== null) payload.packagingFee = body.packagingFee;
     if (body.gstRate !== undefined && body.gstRate !== null) payload.gstRate = body.gstRate;
+    if (body.tipsEnabled !== undefined) payload.tipsEnabled = body.tipsEnabled;
+    if (body.tipPresets !== undefined) payload.tipPresets = body.tipPresets;
+    if (body.tipMaxAmount !== undefined && body.tipMaxAmount !== null) payload.tipMaxAmount = body.tipMaxAmount;
 
     const created = await FoodFeeSettings.create(payload);
     return created.toObject();
@@ -6302,6 +6323,73 @@ export async function updateZone(id, body) {
 export async function deleteZone(id) {
     const zone = await FoodZone.findByIdAndDelete(id);
     return zone ? { id } : null;
+}
+
+// ----- Offer banners (admin) -----
+export async function getOfferBanners() {
+    const banners = await FoodOfferBanner.find({}).sort({ sortOrder: 1, createdAt: -1 }).lean();
+    return { banners };
+}
+
+export async function createOfferBanner(body) {
+    const imageUrl = typeof body.imageUrl === 'string' ? body.imageUrl.trim() : '';
+    if (!imageUrl) return { error: 'Banner image is required' };
+
+    const banner = await FoodOfferBanner.create({
+        imageUrl,
+        title: (body.title && String(body.title).trim()) || '',
+        ctaLink: (body.ctaLink && String(body.ctaLink).trim()) || '',
+        zoneIds: Array.isArray(body.zoneIds) ? body.zoneIds : [],
+        isActive: body.isActive !== false,
+        sortOrder: Number(body.sortOrder) || 0,
+        startAt: body.startAt ? new Date(body.startAt) : null,
+        endAt: body.endAt ? new Date(body.endAt) : null,
+    });
+    return { banner: banner.toObject() };
+}
+
+export async function updateOfferBanner(id, body) {
+    const banner = await FoodOfferBanner.findById(id);
+    if (!banner) return null;
+
+    if (body.imageUrl !== undefined) banner.imageUrl = String(body.imageUrl).trim();
+    if (body.title !== undefined) banner.title = String(body.title).trim();
+    if (body.ctaLink !== undefined) banner.ctaLink = String(body.ctaLink).trim();
+    if (body.zoneIds !== undefined) banner.zoneIds = Array.isArray(body.zoneIds) ? body.zoneIds : [];
+    if (body.isActive !== undefined) banner.isActive = body.isActive !== false;
+    if (body.sortOrder !== undefined) banner.sortOrder = Number(body.sortOrder) || 0;
+    if (body.startAt !== undefined) banner.startAt = body.startAt ? new Date(body.startAt) : null;
+    if (body.endAt !== undefined) banner.endAt = body.endAt ? new Date(body.endAt) : null;
+
+    await banner.save();
+    return { banner: banner.toObject() };
+}
+
+export async function deleteOfferBanner(id) {
+    const banner = await FoodOfferBanner.findByIdAndDelete(id);
+    return banner ? { id } : null;
+}
+
+export async function getOfferBannersPublic(zoneId) {
+    const now = new Date();
+    const filter = {
+        isActive: true,
+        $and: [
+            { $or: [{ startAt: null }, { startAt: { $lte: now } }] },
+            { $or: [{ endAt: null }, { endAt: { $gte: now } }] },
+        ],
+    };
+    if (zoneId && mongoose.Types.ObjectId.isValid(zoneId)) {
+        filter.$and.push({ $or: [{ zoneIds: { $size: 0 } }, { zoneIds: new mongoose.Types.ObjectId(zoneId) }] });
+    } else {
+        filter.$and.push({ zoneIds: { $size: 0 } });
+    }
+
+    const banners = await FoodOfferBanner.find(filter)
+        .sort({ sortOrder: 1, createdAt: -1 })
+        .select('imageUrl title ctaLink')
+        .lean();
+    return { banners };
 }
 
 // ----- Withdrawals (admin) -----

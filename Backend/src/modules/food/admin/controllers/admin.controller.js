@@ -1271,6 +1271,15 @@ export async function getPublicFeeSettings(req, res, next) {
     }
 }
 
+export async function getTipsConfig(req, res, next) {
+    try {
+        const data = await adminService.getTipsConfig();
+        res.status(200).json({ success: true, message: 'Tip config fetched successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
 export async function createOrUpdateFeeSettings(req, res, next) {
     try {
         const body = validateFeeSettingsUpsertDto(req.body || {});
@@ -1781,6 +1790,61 @@ export async function deleteZone(req, res, next) {
             message: 'Zone deleted successfully',
             data: result
         });
+    } catch (error) {
+        next(error);
+    }
+}
+
+// ----- Offer banners -----
+export async function getOfferBanners(req, res, next) {
+    try {
+        const data = await adminService.getOfferBanners();
+        res.status(200).json({ success: true, message: 'Offer banners fetched successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function createOfferBanner(req, res, next) {
+    try {
+        const result = await adminService.createOfferBanner(req.body || {});
+        if (result.error) {
+            return res.status(400).json({ success: false, message: result.error });
+        }
+        res.status(201).json({ success: true, message: 'Offer banner created successfully', data: result });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function updateOfferBanner(req, res, next) {
+    try {
+        const result = await adminService.updateOfferBanner(req.params.id, req.body || {});
+        if (!result) {
+            return res.status(404).json({ success: false, message: 'Offer banner not found' });
+        }
+        res.status(200).json({ success: true, message: 'Offer banner updated successfully', data: result });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function deleteOfferBanner(req, res, next) {
+    try {
+        const result = await adminService.deleteOfferBanner(req.params.id);
+        if (!result) {
+            return res.status(404).json({ success: false, message: 'Offer banner not found' });
+        }
+        res.status(200).json({ success: true, message: 'Offer banner deleted successfully', data: result });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function getOfferBannersPublic(req, res, next) {
+    try {
+        const data = await adminService.getOfferBannersPublic(req.query?.zoneId);
+        res.status(200).json({ success: true, message: 'Offer banners fetched successfully', data });
     } catch (error) {
         next(error);
     }

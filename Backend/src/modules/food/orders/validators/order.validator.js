@@ -68,6 +68,7 @@ export function validateCalculateOrderDto(body) {
         deliveryFleet: z.string().optional(),
         deliverySpeedOptionId: z.string().optional(),
         deliveryOption: z.string().optional(),
+        tip: z.number().min(0).optional(),
     });
     const result = schema.safeParse(body);
     if (!result.success) {
@@ -91,6 +92,8 @@ export function validateCreateOrderDto(body) {
         deliveryFleet: z.string().optional(),
         note: z.string().optional(),
         restaurantNote: z.string().optional(),
+        deliveryInstructions: z.string().trim().max(240).optional(),
+        tip: z.number().min(0).optional(),
         sendCutlery: z.boolean().optional(),
         // COD (cash / razorpay_qr-at-delivery) is disabled — prepaid only.
         paymentMethod: z.enum(['razorpay', 'card', 'wallet']),

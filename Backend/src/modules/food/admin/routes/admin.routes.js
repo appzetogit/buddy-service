@@ -228,6 +228,12 @@ router.post('/zones', invZone, adminController.createZone);
 router.patch('/zones/:id', invZone, adminController.updateZone);
 router.delete('/zones/:id', invZone, adminController.deleteZone);
 
+// ----- Offer banners -----
+router.get('/offer-banners', adminController.getOfferBanners);
+router.post('/offer-banners', adminController.createOfferBanner);
+router.patch('/offer-banners/:id', adminController.updateOfferBanner);
+router.delete('/offer-banners/:id', adminController.deleteOfferBanner);
+
 // ----- Dining -----
 router.get('/dining/categories', diningAdminController.getDiningCategories);
 router.post('/dining/categories', invDining, diningAdminController.createDiningCategory);

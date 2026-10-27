@@ -314,6 +314,18 @@ export async function calculateOrderPricing(userId, dto) {
     gstRate: 0,
   };
 
+  let tip = 0;
+  if (dto.tip !== undefined && dto.tip !== null) {
+    if (!feeSettings.tipsEnabled) throw new ValidationError('Tips are not enabled');
+    const rawTip = Number(dto.tip);
+    if (!Number.isFinite(rawTip) || rawTip < 0) throw new ValidationError('Invalid tip amount');
+    const tipMaxAmount = Number(feeSettings.tipMaxAmount);
+    if (Number.isFinite(tipMaxAmount) && rawTip > tipMaxAmount) {
+      throw new ValidationError(`Tip cannot exceed ${tipMaxAmount}`);
+    }
+    tip = rawTip;
+  }
+
   let deliveryBoySettings = await FoodDeliveryBoySettings.findOne({ isActive: true })
     .sort({ createdAt: -1 })
     .lean();
@@ -606,7 +618,7 @@ export async function calculateOrderPricing(userId, dto) {
   const customerDeliveryFee = Math.max(0, deliveryFee - deliveryDiscount);
   const total = Math.max(
     0,
-    foodSubtotal + packagingFee + customerDeliveryFee + platformFee + tax - discount,
+    foodSubtotal + packagingFee + customerDeliveryFee + platformFee + tax - discount + tip,
   );
 
   return {
@@ -627,6 +639,8 @@ export async function calculateOrderPricing(userId, dto) {
       discount,
       platformSubsidy,
       couponCategory,
+      tip,
+      freeDeliveryThreshold: freeThreshold > 0 ? freeThreshold : undefined,
       total,
       currency: 'INR',
       couponCode: appliedCoupon?.code || null,

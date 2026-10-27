@@ -18,6 +18,9 @@ const feeSettingsSchema = new mongoose.Schema(
         platformFee: { type: Number, min: 0 },
         packagingFee: { type: Number, min: 0 },
         gstRate: { type: Number, min: 0, max: 100 },
+        tipsEnabled: { type: Boolean, default: false },
+        tipPresets: { type: [Number], default: [10, 20, 30, 50] },
+        tipMaxAmount: { type: Number, min: 0 },
         isActive: { type: Boolean, default: true, index: true }
     },
     { collection: 'food_fee_settings', timestamps: true }

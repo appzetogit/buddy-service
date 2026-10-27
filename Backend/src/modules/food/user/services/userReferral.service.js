@@ -2,8 +2,88 @@ import mongoose from 'mongoose';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodUser } from '../../../../core/users/user.model.js';
 import { FoodUserWallet } from '../models/userWallet.model.js';
+import { FoodOrder } from '../../orders/models/order.model.js';
 import { FoodReferralSettings } from '../../admin/models/referralSettings.model.js';
 import { FoodReferralLog } from '../../admin/models/referralLog.model.js';
+import { creditReferralReward } from './userWallet.service.js';
+
+/** Shared by signup-time ref crediting (core/auth/auth.service.js) and applyUserReferral below. */
+export const creditUserReferral = async (userDoc, referrerId, settingsDoc) => {
+    const reward = Math.max(0, Number(settingsDoc?.referralRewardUser) || 0);
+    const limit = Math.max(0, Number(settingsDoc?.referralLimitUser) || 0);
+    const referrer = await FoodUser.findById(referrerId).select('_id referralCount').lean();
+
+    if (!referrer || reward <= 0 || limit <= 0 || Number(referrer.referralCount || 0) >= limit) {
+        await FoodReferralLog.create({
+            referrerId,
+            refereeId: userDoc._id,
+            role: 'USER',
+            rewardAmount: reward,
+            status: 'rejected',
+            reason: !referrer ? 'referrer_not_found' : reward <= 0 ? 'reward_disabled' : limit <= 0 ? 'limit_disabled' : 'limit_reached',
+        });
+        throw new ValidationError('Referral program is unavailable right now');
+    }
+
+    userDoc.referredBy = referrerId;
+    await userDoc.save();
+
+    const log = await FoodReferralLog.create({
+        referrerId,
+        refereeId: userDoc._id,
+        role: 'USER',
+        rewardAmount: reward,
+        status: 'credited',
+    });
+
+    await Promise.all([
+        FoodUser.updateOne({ _id: referrerId }, { $inc: { referralCount: 1 } }),
+        creditReferralReward(referrerId, reward, {
+            role: 'USER',
+            refereeId: String(userDoc._id),
+            referralLogId: String(log._id),
+        }),
+    ]);
+};
+
+export const applyUserReferral = async (userId, code) => {
+    const id = String(userId || '');
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+        throw new ValidationError('User not found');
+    }
+    const refRaw = String(code || '').trim();
+    if (!refRaw || !mongoose.Types.ObjectId.isValid(refRaw)) {
+        throw new ValidationError('Invalid referral code');
+    }
+
+    const referrerId = new mongoose.Types.ObjectId(refRaw);
+    if (String(referrerId) === id) {
+        throw new ValidationError('You cannot use your own referral code');
+    }
+
+    const userDoc = await FoodUser.findById(id);
+    if (!userDoc) throw new ValidationError('User not found');
+    if (userDoc.referredBy) {
+        throw new ValidationError('A referral code is already applied to your account');
+    }
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    if (userDoc.createdAt && userDoc.createdAt < sevenDaysAgo) {
+        throw new ValidationError('Referral codes can only be applied within 7 days of joining');
+    }
+    const hasOrdered = await FoodOrder.exists({ userId: id });
+    if (hasOrdered) {
+        throw new ValidationError('Referral codes can only be applied before your first order');
+    }
+
+    const settingsDoc = await FoodReferralSettings.findOne({ isActive: true }).sort({ createdAt: -1 }).lean();
+    if (!settingsDoc) {
+        throw new ValidationError('Referral program is currently disabled');
+    }
+
+    await creditUserReferral(userDoc, referrerId, settingsDoc);
+    return { success: true };
+};
 
 export const getUserReferralStats = async (userId) => {
     const id = String(userId || '');

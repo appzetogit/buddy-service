@@ -14,6 +14,9 @@ const feeSettingsUpsertSchema = z.object({
     platformFee: z.number().min(0).nullable().optional(),
     packagingFee: z.number().min(0).nullable().optional(),
     gstRate: z.number().min(0).max(100).nullable().optional(),
+    tipsEnabled: z.boolean().optional(),
+    tipPresets: z.array(z.number().min(0)).optional(),
+    tipMaxAmount: z.number().min(0).nullable().optional(),
     isActive: z.boolean().optional()
 });
 
@@ -44,6 +47,12 @@ export const validateFeeSettingsUpsertDto = (body) => {
             body?.packagingFee === null ? null : body?.packagingFee !== undefined ? Number(body.packagingFee) : undefined,
         gstRate:
             body?.gstRate === null ? null : body?.gstRate !== undefined ? Number(body.gstRate) : undefined,
+        tipsEnabled: body?.tipsEnabled !== undefined ? Boolean(body.tipsEnabled) : undefined,
+        tipPresets: Array.isArray(body?.tipPresets)
+            ? body.tipPresets.map((v) => Number(v))
+            : undefined,
+        tipMaxAmount:
+            body?.tipMaxAmount === null ? null : body?.tipMaxAmount !== undefined ? Number(body.tipMaxAmount) : undefined,
         isActive: body?.isActive !== undefined ? Boolean(body.isActive) : undefined
     };
 

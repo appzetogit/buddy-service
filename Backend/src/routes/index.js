@@ -24,6 +24,7 @@ import fcmRoutes from '../core/notifications/fcm.routes.js';
 import notificationRoutes from '../core/notifications/notification.routes.js';
 import { authMiddleware } from '../core/auth/auth.middleware.js';
 import * as businessSettingsController from '../modules/food/admin/controllers/businessSettings.controller.js';
+import { getTipsConfig as getFoodTipsConfig, getOfferBannersPublic } from '../modules/food/admin/controllers/admin.controller.js';
 import { requireRoles } from '../core/roles/role.middleware.js';
 import { getQueuesController } from '../controllers/admin.controller.js';
 import { getPublicEnvController } from '../modules/food/landing/controllers/publicEnv.controller.js';
@@ -71,6 +72,8 @@ router.use('/v1/uploads', uploadRoutes);
 
 // Mark business-settings/public as truly public (must be before protected admin block)
 router.get('/v1/food/admin/business-settings/public', businessSettingsController.getBusinessSettings);
+router.get('/v1/food/tips/config', getFoodTipsConfig);
+router.get('/v1/food/offer-banners/public', getOfferBannersPublic);
 
 router.use('/v1/food/admin', authMiddleware, requireRoles('ADMIN'), restaurantAdminRoutes);
 router.use('/v1/quick-commerce/admin', authMiddleware, requireRoles('ADMIN'), quickCommerceAdminRoutes);

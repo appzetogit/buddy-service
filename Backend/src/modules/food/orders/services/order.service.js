@@ -273,6 +273,7 @@ export async function createOrder(userId, dto, options = {}) {
     couponCode: dto.pricing?.couponCode,
     deliverySpeedOptionId: dto.deliverySpeedOptionId,
     deliveryOption: dto.deliveryOption,
+    tip: dto.tip,
   });
 
   // Prefer hydrated catalog lines for all downstream order creation
@@ -294,6 +295,8 @@ export async function createOrder(userId, dto, options = {}) {
     deliveryDiscount: Number(recalculated.pricing?.deliveryDiscount ?? 0),
     platformSubsidy: Number(recalculated.pricing?.platformSubsidy ?? 0),
     couponCategory: recalculated.pricing?.couponCategory || undefined,
+    tip: Number(recalculated.pricing?.tip ?? 0),
+    freeDeliveryThreshold: recalculated.pricing?.freeDeliveryThreshold,
     total: Number(recalculated.pricing?.total ?? 0),
     currency: String(recalculated.pricing?.currency || "INR"),
     restaurantCommission: Number(dto.pricing?.restaurantCommission || 0),
@@ -523,7 +526,9 @@ export async function createOrder(userId, dto, options = {}) {
     Number((deliveryMarginBase + Math.max(0, speedShareAdmin)).toFixed(2)),
   );
 
-  const tipAmount = Number(dto.tip || 0) || 0;
+  // Validated/clamped tip from calculateOrderPricing, not the raw client value — keeps the
+  // customer total (normalizedPricing.total, which already includes this tip) and driver payout in sync.
+  const tipAmount = Number(normalizedPricing.tip || 0) || 0;
   const driverSettlement = {
     deliveryFee: customerDeliveryFeePaid,
     tip: tipAmount,
@@ -688,6 +693,7 @@ export async function createOrder(userId, dto, options = {}) {
     payment,
     orderStatus: isScheduledOrder ? "scheduled" : "created",
     restaurantNote: dto.restaurantNote || "",
+    deliveryInstructions: dto.deliveryInstructions || "",
     note: dto.note || "",
     sendCutlery: dto.sendCutlery !== false,
     scheduledAt: scheduledAtDate,

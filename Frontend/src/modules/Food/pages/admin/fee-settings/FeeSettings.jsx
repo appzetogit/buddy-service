@@ -62,6 +62,9 @@ export default function FeeSettings() {
     platformFee: "",
     packagingFee: "",
     gstRate: "",
+    tipsEnabled: false,
+    tipPresets: "10, 20, 30, 50",
+    tipMaxAmount: "",
   })
   const [partnerSettings, setPartnerSettings] = useState(DEFAULT_PARTNER_SETTINGS)
   const [deliverySpeedOptions, setDeliverySpeedOptions] = useState([])
@@ -98,6 +101,9 @@ export default function FeeSettings() {
             platformFee: fs.platformFee ?? "",
             packagingFee: fs.packagingFee ?? "",
             gstRate: fs.gstRate ?? "",
+            tipsEnabled: Boolean(fs.tipsEnabled),
+            tipPresets: Array.isArray(fs.tipPresets) ? fs.tipPresets.join(", ") : "10, 20, 30, 50",
+            tipMaxAmount: fs.tipMaxAmount ?? "",
           })
         } else {
           setFeeSettings({
@@ -106,6 +112,9 @@ export default function FeeSettings() {
             platformFee: "",
             packagingFee: "",
             gstRate: "",
+            tipsEnabled: false,
+            tipPresets: "10, 20, 30, 50",
+            tipMaxAmount: "",
           })
         }
       }
@@ -167,6 +176,12 @@ export default function FeeSettings() {
         platformFee: feeSettings.platformFee === "" ? undefined : Number(feeSettings.platformFee),
         packagingFee: feeSettings.packagingFee === "" ? undefined : Number(feeSettings.packagingFee),
         gstRate: feeSettings.gstRate === "" ? undefined : Number(feeSettings.gstRate),
+        tipsEnabled: Boolean(feeSettings.tipsEnabled),
+        tipPresets: String(feeSettings.tipPresets || "")
+          .split(",")
+          .map((v) => Number(v.trim()))
+          .filter((v) => Number.isFinite(v) && v >= 0),
+        tipMaxAmount: feeSettings.tipMaxAmount === "" ? undefined : Number(feeSettings.tipMaxAmount),
         isActive: true,
       }
 
@@ -211,6 +226,9 @@ export default function FeeSettings() {
             platformFee: saved.platformFee ?? "",
             packagingFee: saved.packagingFee ?? "",
             gstRate: saved.gstRate ?? "",
+            tipsEnabled: Boolean(saved.tipsEnabled),
+            tipPresets: Array.isArray(saved.tipPresets) ? saved.tipPresets.join(", ") : "10, 20, 30, 50",
+            tipMaxAmount: saved.tipMaxAmount ?? "",
           })
         }
         fetchAll()
@@ -462,6 +480,51 @@ export default function FeeSettings() {
                   />
                   <p className="text-xs text-slate-500">GST percentage applied on order subtotal</p>
                 </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                <h2 className="text-lg font-bold text-slate-900">Rider Tip</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Let customers add a tip for their delivery partner at checkout</p>
+              </div>
+              <div className="p-6 space-y-4">
+                <label className="flex items-center gap-2 cursor-pointer w-fit">
+                  <input
+                    type="checkbox"
+                    checked={feeSettings.tipsEnabled}
+                    onChange={(e) => setFeeSettings({ ...feeSettings, tipsEnabled: e.target.checked })}
+                  />
+                  <span className="text-sm font-semibold text-slate-700">Enable rider tips</span>
+                </label>
+                {feeSettings.tipsEnabled && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-slate-700">Preset amounts (₹)</label>
+                      <input
+                        type="text"
+                        value={feeSettings.tipPresets}
+                        onChange={(e) => setFeeSettings({ ...feeSettings, tipPresets: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                        placeholder="10, 20, 30, 50"
+                      />
+                      <p className="text-xs text-slate-500">Comma-separated amounts shown as quick-tip buttons</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-sm font-semibold text-slate-700">Max tip amount (₹)</label>
+                      <input
+                        type="number"
+                        value={feeSettings.tipMaxAmount}
+                        onChange={(e) => setFeeSettings({ ...feeSettings, tipMaxAmount: e.target.value })}
+                        min="0"
+                        step="1"
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                        placeholder="100"
+                      />
+                      <p className="text-xs text-slate-500">Leave blank for no upper limit</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

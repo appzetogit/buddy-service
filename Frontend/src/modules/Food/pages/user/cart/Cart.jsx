@@ -21,7 +21,7 @@ import { useOrders } from "@food/context/OrdersContext"
 import { useLocation as useUserLocation } from "@food/hooks/useLocation"
 import { useZone } from "@food/hooks/useZone"
 import { useLocationSelector } from "@food/components/user/UserLayout"
-import { orderAPI, restaurantAPI, userAPI } from "@food/api"
+import { orderAPI, restaurantAPI, userAPI, adminAPI } from "@food/api"
 import { API_BASE_URL } from "@food/api/config"
 import { initRazorpayPayment } from "@food/utils/razorpay"
 import { toast } from "sonner"
@@ -320,6 +320,10 @@ function Cart() {
       return false
     }
   })
+  const [deliveryInstructions, setDeliveryInstructions] = useState("")
+  const [showDeliveryInstructionsInput, setShowDeliveryInstructionsInput] = useState(false)
+  const [tipsConfig, setTipsConfig] = useState({ tipsEnabled: false, presets: [], maxAmount: null })
+  const [tip, setTip] = useState(0)
   const [showShareModal, setShowShareModal] = useState(false)
   const [sharePayload, setSharePayload] = useState(null)
   const [isEditingRecipient, setIsEditingRecipient] = useState(false)
@@ -438,6 +442,14 @@ function Cart() {
   const [availableCoupons, setAvailableCoupons] = useState([])
   const [loadingCoupons, setLoadingCoupons] = useState(false)
   const [userOrderCount, setUserOrderCount] = useState(0)
+
+  useEffect(() => {
+    adminAPI.getTipsConfig()
+      .then((res) => {
+        if (res?.data?.success && res.data.data) setTipsConfig(res.data.data)
+      })
+      .catch(() => {})
+  }, [])
 
   // Soft local defaults only while calculateOrder loads — no delivery fee fallback.
   const feeSettings = {
@@ -1104,6 +1116,7 @@ function Cart() {
       deliveryOption: String(deliveryOption || ""),
       addressId: String(defaultAddress?._id || defaultAddress?.id || ""),
       coords: Array.isArray(coords) ? coords : null,
+      tip: tipsConfig.tipsEnabled ? Number(tip) || 0 : 0,
     })
   }, [
     cart,
@@ -1115,6 +1128,8 @@ function Cart() {
     restaurantData?.restaurantId,
     restaurantData?._id,
     deliveryOption,
+    tip,
+    tipsConfig.tipsEnabled,
   ])
 
   const lastPricingKeyRef = useRef("")
@@ -1180,6 +1195,7 @@ function Cart() {
           couponCode: couponCode || appliedCoupon?.code || undefined,
           deliverySpeedOptionId: deliveryOption || undefined,
           deliveryOption: selectedSpeed?.name || undefined,
+          tip: tipsConfig.tipsEnabled && tip > 0 ? tip : undefined,
         })
 
         if (cancelled || requestId !== pricingRequestIdRef.current || placeOrderInFlightRef.current) return
@@ -1841,6 +1857,8 @@ function Cart() {
         pricing: orderPricing,
         note: "",
         restaurantNote: restaurantNote || "",
+        deliveryInstructions: deliveryInstructions || "",
+        tip: tipsConfig.tipsEnabled && tip > 0 ? tip : undefined,
         sendCutlery: sendCutlery !== false,
         paymentMethod: selectedPaymentMethod,
         // `useZone()` can return `null`. Zod expects string/undefined, not null.
@@ -2213,6 +2231,14 @@ function Cart() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setShowDeliveryInstructionsInput(!showDeliveryInstructionsInput)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <MapPin className="h-3.5 w-3.5 text-[#16A34A]" />
+                  <span className="truncate">{deliveryInstructions || "Add note for rider"}</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setSendCutlery(!sendCutlery)}
                   className={`flex items-center justify-center gap-1.5 px-3 py-2 border rounded-xl text-xs font-semibold transition-colors ${sendCutlery ? 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300' : 'border-[#16A34A] dark:border-[#16A34A]/50 text-[#16A34A] bg-[#16A34A05] dark:bg-[#16A34A10]'}`}
                 >
@@ -2242,6 +2268,30 @@ function Cart() {
                     </p>
                     <span className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">
                       {restaurantNote.length}/240
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Rider Note Input */}
+              {showDeliveryInstructionsInput && (
+                <div className="bg-white dark:bg-[#1a1a1a] p-3 rounded-2xl border border-slate-100 dark:border-gray-800 shadow-xs">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">
+                    Rider instructions
+                  </p>
+                  <textarea
+                    value={deliveryInstructions}
+                    onChange={(e) => setDeliveryInstructions(e.target.value)}
+                    placeholder="Eg. Ring the bell, leave at the door, etc."
+                    className="w-full border border-gray-200 dark:border-gray-700 rounded-xl p-2.5 text-xs resize-none h-16 focus:outline-none focus:border-[#16A34A] dark:focus:border-[#16A34A] bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-gray-100"
+                    maxLength={240}
+                  />
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                      Note for your delivery partner.
+                    </p>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                      {deliveryInstructions.length}/240
                     </span>
                   </div>
                 </div>
@@ -2915,6 +2965,11 @@ function Cart() {
                         </span>
                       </div>
                     )}
+                    {customerDeliveryFee > 0 && pricing?.freeDeliveryThreshold > billSubtotal && (
+                      <p className="text-[11px] text-[#16A34A] -mt-1">
+                        Add {RUPEE_SYMBOL}{(pricing.freeDeliveryThreshold - billSubtotal).toFixed(0)} more for free delivery
+                      </p>
+                    )}
                     {deliveryFeeBreakdownText && (
                       <div className="text-[11px] text-gray-500 dark:text-gray-400 -mt-1.5 ml-1 border-l-2 border-gray-100 pl-2">
                         {deliveryFeeBreakdownText}
@@ -2957,6 +3012,29 @@ function Cart() {
                       <div className="flex justify-between text-sm text-[#16A34A] font-medium">
                         <span>Free Delivery (Coupon)</span>
                         <span>-{RUPEE_SYMBOL}{deliveryDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {tipsConfig.tipsEnabled && (
+                      <div className="pt-1">
+                        <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Tip your delivery partner</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {tipsConfig.presets.map((amount) => (
+                            <button
+                              key={amount}
+                              type="button"
+                              onClick={() => setTip(tip === amount ? 0 : amount)}
+                              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${tip === amount ? "border-[#16A34A] bg-[#16A34A] text-white" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300"}`}
+                            >
+                              {RUPEE_SYMBOL}{amount}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {tip > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">Tip</span>
+                        <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{tip.toFixed(2)}</span>
                       </div>
                     )}
                     <div className="flex justify-between items-center text-sm font-bold border-t border-gray-200 dark:border-gray-700 pt-2 mt-1">
