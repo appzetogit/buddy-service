@@ -2021,6 +2021,7 @@ export function buildDeliverySocketPayload(orderDoc, restaurantDoc = null) {
     },
     deliveryAddress: order?.deliveryAddress,
     deliveryInstructions: order?.deliveryInstructions || "",
+    packingMinutes: order?.packingMinutes ?? null,
     customerAddress: customerAddressParts.length ? customerAddressParts.join(', ') : "",
     customerName: order?.customerName || order?.deliveryAddress?.fullName || order?.deliveryAddress?.name || order?.userId?.name || "",
     customerPhone: order?.customerPhone || order?.deliveryAddress?.phone || order?.userId?.phone || "",

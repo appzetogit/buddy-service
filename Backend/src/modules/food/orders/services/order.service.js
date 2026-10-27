@@ -2581,7 +2581,8 @@ export async function updateOrderStatusRestaurant(
   orderId,
   restaurantId,
   orderStatus,
-  note = ""
+  note = "",
+  packingMinutes = undefined
 ) {
   const identity = buildOrderIdentityFilter(orderId);
   let order = await FoodOrder.findOne({
@@ -2641,6 +2642,7 @@ export async function updateOrderStatusRestaurant(
       return normalizeOrderForClient(finalized);
     } else if (orderStatus === 'confirmed') {
       pickup.status = 'accepted';
+      if (Number.isFinite(packingMinutes)) pickup.packingMinutes = packingMinutes;
     } else if (orderStatus === 'preparing') {
       pickup.status = 'preparing';
     } else if (orderStatus === 'ready_for_pickup' || orderStatus === 'ready') {
@@ -2685,6 +2687,10 @@ export async function updateOrderStatusRestaurant(
     if (pickup) {
       pickup.status = derivePickupStatusFromOrderStatus(finalStatus);
     }
+    if (finalStatus === 'confirmed' && Number.isFinite(packingMinutes)) {
+      order.packingMinutes = packingMinutes;
+      if (pickup) pickup.packingMinutes = packingMinutes;
+    }
   }
 
   const historyNote = isMulti
@@ -2706,12 +2712,15 @@ export async function updateOrderStatusRestaurant(
 
   if (statusForMessage === "confirmed") {
     title = "Order Accepted! 🧑‍🍳";
+    const packingLabel = Number.isFinite(packingMinutes) ? `${packingMinutes} mins to pack` : '';
     const etaLabel =
       String(order.deliveryTime || '').trim() ||
       (Number(order.estimatedTime) > 0 ? `${Number(order.estimatedTime)} mins` : '');
-    body = etaLabel
-      ? `The restaurant has accepted your order. Estimated delivery: ${etaLabel}.`
-      : "The restaurant has accepted your order and is starting to prepare it.";
+    body = packingLabel
+      ? `The restaurant has accepted your order (${packingLabel}).${etaLabel ? ` Estimated delivery: ${etaLabel}.` : ''}`
+      : etaLabel
+        ? `The restaurant has accepted your order. Estimated delivery: ${etaLabel}.`
+        : "The restaurant has accepted your order and is starting to prepare it.";
   } else if (statusForMessage === "preparing") {
     title = "Food is being prepared! 🍳";
     body = "Your food is currently being prepared by the restaurant.";

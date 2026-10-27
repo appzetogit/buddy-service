@@ -34,7 +34,9 @@ const roomNames = {
     seller: (id) => `seller:${String(id)}`,
     user: (id) => `user:${String(id)}`,
     delivery: (id) => `delivery:${String(id)}`,
-    tracking: (orderId) => `tracking:${String(orderId)}`
+    tracking: (orderId) => `tracking:${String(orderId)}`,
+    /** Shared room every connected admin joins, for live chat/notifications fan-out. */
+    adminBroadcast: () => 'admin_broadcast'
 };
 
 /** Unified identity uses role=DRIVER; legacy food delivery JWT uses DELIVERY_PARTNER. */
@@ -157,6 +159,7 @@ export const initSocket = async (server) => {
             if (role === 'RESTAURANT') socket.join(roomNames.restaurant(userId));
             if (role === 'SELLER') socket.join(roomNames.seller(userId));
             if (role === 'USER') socket.join(roomNames.user(userId));
+            if (role === 'ADMIN') socket.join(roomNames.adminBroadcast());
             if (isFoodDeliveryRole(role)) {
                 socket.join(roomNames.delivery(userId));
                 socket.join('all_delivery'); // Global delivery broadcast room

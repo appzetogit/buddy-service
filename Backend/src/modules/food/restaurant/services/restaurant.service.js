@@ -1993,6 +1993,10 @@ export async function listRestaurantOffers(restaurantId) {
         rejectedAt: o.rejectedAt || null,
         pausedBy: o.pausedBy || null,
         createdAt: o.createdAt,
+        activeDays: o.activeDays || [],
+        activeFromTime: o.activeFromTime || '',
+        activeToTime: o.activeToTime || '',
+        newToRestaurantOnly: o.newToRestaurantOnly ?? false,
     }));
     return { offers };
 }
@@ -2026,6 +2030,10 @@ export async function createRestaurantOffer(restaurantId, body) {
         createdBy: 'restaurant',
         createdById: restaurantId,
         couponCategory: COUPON_CATEGORY.NORMAL,
+        activeDays: Array.isArray(body.activeDays) ? body.activeDays : [],
+        activeFromTime: body.activeFromTime || '',
+        activeToTime: body.activeToTime || '',
+        newToRestaurantOnly: Boolean(body.newToRestaurantOnly),
     });
 
     logOfferAction('created', { offerId: String(doc._id), couponCode: doc.couponCode, createdBy: 'restaurant', restaurantId: String(restaurantId) });
@@ -2099,6 +2107,14 @@ export async function updateRestaurantOffer(restaurantId, offerId, body) {
                 endDate: body.endDate ?? existing.endDate ?? undefined,
                 status,
                 approvalStatus: 'pending',
+                activeDays: body.activeDays !== undefined
+                    ? (Array.isArray(body.activeDays) ? body.activeDays : [])
+                    : existing.activeDays ?? [],
+                activeFromTime: body.activeFromTime !== undefined ? body.activeFromTime || '' : existing.activeFromTime ?? '',
+                activeToTime: body.activeToTime !== undefined ? body.activeToTime || '' : existing.activeToTime ?? '',
+                newToRestaurantOnly: body.newToRestaurantOnly !== undefined
+                    ? Boolean(body.newToRestaurantOnly)
+                    : existing.newToRestaurantOnly ?? false,
             },
         },
         { new: true }

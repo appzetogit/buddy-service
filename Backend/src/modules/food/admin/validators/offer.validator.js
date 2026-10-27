@@ -2,6 +2,8 @@ import { z } from 'zod';
 import mongoose from 'mongoose';
 import { ValidationError } from '../../../../core/auth/errors.js';
 
+const timeOfDaySchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Time must be in HH:mm format').or(z.literal(''));
+
 const createOfferSchema = z.object({
     couponCode: z.string().min(1, 'Coupon code is required'),
     discountType: z.enum(['percentage', 'flat-price']).default('percentage'),
@@ -22,6 +24,10 @@ const createOfferSchema = z.object({
     description: z.string().optional(),
     banner: z.string().optional(),
     terms: z.string().optional(),
+    activeDays: z.array(z.number().int().min(1).max(7)).optional(),
+    activeFromTime: timeOfDaySchema.optional(),
+    activeToTime: timeOfDaySchema.optional(),
+    newToRestaurantOnly: z.boolean().optional(),
 });
 
 const updateOfferSchema = createOfferSchema.extend({
@@ -109,6 +115,10 @@ export const validateCreateOfferDto = (body) => {
         description: body?.description ? String(body.description) : undefined,
         banner: body?.banner ? String(body.banner) : undefined,
         terms: body?.terms ? String(body.terms) : undefined,
+        activeDays: Array.isArray(body?.activeDays) ? body.activeDays.map(Number) : undefined,
+        activeFromTime: body?.activeFromTime !== undefined ? String(body.activeFromTime) : undefined,
+        activeToTime: body?.activeToTime !== undefined ? String(body.activeToTime) : undefined,
+        newToRestaurantOnly: body?.newToRestaurantOnly !== undefined ? Boolean(body.newToRestaurantOnly) : undefined,
     };
 
     const result = createOfferSchema.safeParse(normalized);
@@ -157,6 +167,10 @@ export const validateCreateOfferDto = (body) => {
         description: result.data.description,
         banner: result.data.banner,
         terms: result.data.terms,
+        activeDays: result.data.activeDays,
+        activeFromTime: result.data.activeFromTime,
+        activeToTime: result.data.activeToTime,
+        newToRestaurantOnly: result.data.newToRestaurantOnly,
     };
 };
 
@@ -188,6 +202,10 @@ export const validateRestaurantCreateOfferDto = (body) => {
         usageLimit: body?.usageLimit !== undefined ? Number(body.usageLimit) : undefined,
         perUserLimit: body?.perUserLimit !== undefined ? Number(body.perUserLimit) : undefined,
         isFirstOrderOnly: body?.isFirstOrderOnly !== undefined ? Boolean(body.isFirstOrderOnly) : undefined,
+        activeDays: Array.isArray(body?.activeDays) ? body.activeDays.map(Number) : undefined,
+        activeFromTime: body?.activeFromTime !== undefined ? String(body.activeFromTime) : undefined,
+        activeToTime: body?.activeToTime !== undefined ? String(body.activeToTime) : undefined,
+        newToRestaurantOnly: body?.newToRestaurantOnly !== undefined ? Boolean(body.newToRestaurantOnly) : undefined,
     };
 
     const result = createOfferSchema.safeParse(normalized);
@@ -221,6 +239,10 @@ export const validateRestaurantCreateOfferDto = (body) => {
         usageLimit: result.data.usageLimit,
         perUserLimit: result.data.perUserLimit,
         isFirstOrderOnly: result.data.isFirstOrderOnly,
+        activeDays: result.data.activeDays,
+        activeFromTime: result.data.activeFromTime,
+        activeToTime: result.data.activeToTime,
+        newToRestaurantOnly: result.data.newToRestaurantOnly,
     };
 };
 
@@ -257,6 +279,10 @@ export const validateUpdateOfferDto = (body) => {
         description: body?.description ? String(body.description) : undefined,
         banner: body?.banner ? String(body.banner) : undefined,
         terms: body?.terms ? String(body.terms) : undefined,
+        activeDays: Array.isArray(body?.activeDays) ? body.activeDays.map(Number) : undefined,
+        activeFromTime: body?.activeFromTime !== undefined ? String(body.activeFromTime) : undefined,
+        activeToTime: body?.activeToTime !== undefined ? String(body.activeToTime) : undefined,
+        newToRestaurantOnly: body?.newToRestaurantOnly !== undefined ? Boolean(body.newToRestaurantOnly) : undefined,
     };
 
     const result = updateOfferSchema.safeParse(normalized);
@@ -294,6 +320,10 @@ export const validateUpdateOfferDto = (body) => {
         description: result.data.description,
         banner: result.data.banner,
         terms: result.data.terms,
+        activeDays: result.data.activeDays,
+        activeFromTime: result.data.activeFromTime,
+        activeToTime: result.data.activeToTime,
+        newToRestaurantOnly: result.data.newToRestaurantOnly,
     };
 };
 
@@ -321,6 +351,10 @@ export const validateRestaurantUpdateOfferDto = (body) => {
         perUserLimit: body?.perUserLimit !== undefined ? Number(body.perUserLimit) : undefined,
         isFirstOrderOnly: body?.isFirstOrderOnly !== undefined ? Boolean(body.isFirstOrderOnly) : undefined,
         status: body?.status,
+        activeDays: Array.isArray(body?.activeDays) ? body.activeDays.map(Number) : undefined,
+        activeFromTime: body?.activeFromTime !== undefined ? String(body.activeFromTime) : undefined,
+        activeToTime: body?.activeToTime !== undefined ? String(body.activeToTime) : undefined,
+        newToRestaurantOnly: body?.newToRestaurantOnly !== undefined ? Boolean(body.newToRestaurantOnly) : undefined,
     };
 
     const result = updateOfferSchema.safeParse(normalized);
@@ -343,5 +377,9 @@ export const validateRestaurantUpdateOfferDto = (body) => {
         perUserLimit: result.data.perUserLimit,
         isFirstOrderOnly: result.data.isFirstOrderOnly,
         status: result.data.status,
+        activeDays: result.data.activeDays,
+        activeFromTime: result.data.activeFromTime,
+        activeToTime: result.data.activeToTime,
+        newToRestaurantOnly: result.data.newToRestaurantOnly,
     };
 };

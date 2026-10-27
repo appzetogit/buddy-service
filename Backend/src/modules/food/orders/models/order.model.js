@@ -287,6 +287,8 @@ const pickupSchema = new mongoose.Schema(
         sequence: { type: Number, default: 0 },
         /** Estimated kitchen prep time (minutes) for this restaurant's items, from menu preparationTime. */
         prepMinutes: { type: Number, default: 0, min: 0 },
+        /** Restaurant-entered packing/prep time (minutes), given when they confirm the order. */
+        packingMinutes: { type: Number, default: null, min: 0 },
         /** Set when this restaurant marks its items ready — drives waiting-state + ready-time ordering. */
         readyAt: { type: Date, default: null },
         /** Legacy strike counter (unused since Phase 3 immediate-drop policy); kept for back-compat. */
@@ -493,6 +495,8 @@ const orderSchema = new mongoose.Schema(
         deliveryOption: { type: String, default: 'Standard Delivery', trim: true },
         deliveryTime: { type: String, default: '25–35 mins', trim: true },
         estimatedTime: { type: Number, default: 30 },
+        /** Restaurant-entered packing/prep time (minutes) for single-restaurant orders, set on confirm. */
+        packingMinutes: { type: Number, default: null, min: 0 },
         riderEarning: { type: Number, default: 0, min: 0 },
         sharedRiderEarning: { type: Number, default: 0, min: 0 },
         platformProfit: { type: Number, default: 0, min: 0 },

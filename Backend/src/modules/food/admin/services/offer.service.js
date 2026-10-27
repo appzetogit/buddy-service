@@ -4,6 +4,7 @@ import { FoodOfferUsage } from '../models/offerUsage.model.js';
 import { FoodOfferUsageHistory } from '../models/offerUsageHistory.model.js';
 import { FoodOrder } from '../../orders/models/order.model.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
+import { nowInZone } from '../../orders/services/order.helpers.js';
 
 export const CREATED_BY_TYPE = { ADMIN: 'admin', RESTAURANT: 'restaurant' };
 export const COUPON_CATEGORY = { NORMAL: 'normal', FREE_DELIVERY: 'free_delivery' };
@@ -34,6 +35,36 @@ export function buildBaseActiveOfferFilter(now = new Date()) {
         $or: [{ approvalStatus: 'approved' }, { approvalStatus: { $exists: false } }],
         ...activeDateFilter(now),
     };
+}
+
+const toMinutesOfDay = (value) => {
+    const [hour, minute] = String(value || '').split(':').map(Number);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+    return hour * 60 + minute;
+};
+
+/** Day/time-of-day window check for a coupon, India time. Empty activeDays = every day;
+ *  empty from/to = all day; end before start wraps past midnight (mirrors peak-hour rules). */
+export function isCouponActiveNow(offer, clock = nowInZone('Asia/Kolkata')) {
+    const days = Array.isArray(offer?.activeDays) ? offer.activeDays : [];
+    // Model stores 1=Mon..7=Sun; nowInZone's `day` is 0=Sun..6=Sat — convert to the same scale.
+    const isoDay = clock.day === 0 ? 7 : clock.day;
+
+    const start = toMinutesOfDay(offer?.activeFromTime);
+    const end = toMinutesOfDay(offer?.activeToTime);
+    if (start === null || end === null || start === end) {
+        return days.length === 0 || days.includes(isoDay);
+    }
+
+    if (end < start) {
+        const inWindow = clock.minutes >= start || clock.minutes < end;
+        if (!inWindow) return false;
+        const owningDay = clock.minutes < end ? (isoDay === 1 ? 7 : isoDay - 1) : isoDay;
+        return days.length === 0 || days.includes(owningDay);
+    }
+
+    if (clock.minutes < start || clock.minutes >= end) return false;
+    return days.length === 0 || days.includes(isoDay);
 }
 
 function offerAppliesToRestaurant(offer, restaurantId) {
@@ -109,6 +140,10 @@ export function mapCouponRejectionMessage(reason, { minOrderValue, createdBy } =
             return 'This coupon is not valid for the restaurant in your cart';
         case 'multi_restaurant':
             return 'This coupon cannot be used with items from multiple restaurants';
+        case 'schedule':
+            return 'This coupon is not active right now — check the days/hours it applies';
+        case 'new_to_restaurant_only':
+            return 'This coupon is only for customers who have never ordered from this restaurant';
         case 'inactive':
         case 'not_approved':
             return 'This coupon is not currently available';
@@ -169,6 +204,7 @@ export async function checkOfferEligibility(offer, {
     if (!approvalOk) return { eligible: false, reason: 'not_approved' };
     if (offer.startDate && now < new Date(offer.startDate)) return { eligible: false, reason: 'not_started' };
     if (offer.endDate && now >= new Date(offer.endDate)) return { eligible: false, reason: 'expired' };
+    if (!isCouponActiveNow(offer)) return { eligible: false, reason: 'schedule' };
 
     const cartRestaurantIds = new Set(restaurantIds.map((id) => String(id)));
     if (offer.restaurantScope === 'selected') {
@@ -211,6 +247,18 @@ export async function checkOfferEligibility(offer, {
                 reason: offer.customerScope === 'first-time' ? 'first_time_only' : 'first_order_only',
             };
         }
+    }
+
+    if (userId && offer.newToRestaurantOnly && cartRestaurantIds.size > 0) {
+        const priorAtRestaurant = await FoodOrder.exists({
+            userId: new mongoose.Types.ObjectId(userId),
+            orderStatus: { $nin: FIRST_TIME_EXCLUDED_STATUSES },
+            $or: [
+                { restaurantId: { $in: [...cartRestaurantIds].map((id) => new mongoose.Types.ObjectId(id)) } },
+                { 'pickups.restaurantId': { $in: [...cartRestaurantIds].map((id) => new mongoose.Types.ObjectId(id)) } },
+            ],
+        });
+        if (priorAtRestaurant) return { eligible: false, reason: 'new_to_restaurant_only' };
     }
 
     return { eligible: true };
@@ -548,5 +596,9 @@ export function buildAdminOfferUpdate(existing, body, adminId) {
         couponCategory: body.couponCategory || COUPON_CATEGORY.NORMAL,
         isGlobal: body.restaurantScope === 'all',
         createdById: adminId,
+        activeDays: body.activeDays ?? [],
+        activeFromTime: body.activeFromTime ?? '',
+        activeToTime: body.activeToTime ?? '',
+        newToRestaurantOnly: body.newToRestaurantOnly ?? false,
     };
 }

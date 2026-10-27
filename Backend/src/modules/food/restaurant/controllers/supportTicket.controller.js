@@ -49,6 +49,31 @@ export const createRestaurantSupportTicketController = async (req, res, next) =>
     }
 };
 
+export const getRestaurantSupportTicketController = async (req, res, next) => {
+    try {
+        const restaurantId = req.user?.userId;
+        const ticketId = req.params?.id;
+        if (!restaurantId || !mongoose.Types.ObjectId.isValid(restaurantId)) {
+            return sendError(res, 401, 'Unauthorized');
+        }
+        if (!ticketId || !mongoose.Types.ObjectId.isValid(ticketId)) {
+            return sendError(res, 400, 'Invalid ticket id');
+        }
+
+        const ticket = await FoodRestaurantSupportTicket.findOne({
+            _id: ticketId,
+            restaurantId: new mongoose.Types.ObjectId(restaurantId),
+        }).lean();
+        if (!ticket) {
+            return sendError(res, 404, 'Ticket not found');
+        }
+
+        return sendResponse(res, 200, 'Support ticket fetched successfully', { ticket });
+    } catch (error) {
+        next(error);
+    }
+};
+
 export const listRestaurantSupportTicketsController = async (req, res, next) => {
     try {
         const restaurantId = req.user?.userId;

@@ -34,6 +34,13 @@ const foodOfferSchema = new mongoose.Schema(
         isDeleted: { type: Boolean, default: false, index: true },
         totalDiscount: { type: Number, default: 0, min: 0 },
         platformSubsidy: { type: Number, default: 0, min: 0 },
+        /** 1=Mon..7=Sun (ISO). Empty = every day. */
+        activeDays: { type: [Number], default: [] },
+        /** "HH:mm", India time. Empty = all day. End before start means the window crosses midnight. */
+        activeFromTime: { type: String, default: '', trim: true },
+        activeToTime: { type: String, default: '', trim: true },
+        /** Only customers who have never ordered from this coupon's restaurant(s) before. */
+        newToRestaurantOnly: { type: Boolean, default: false },
     },
     { collection: 'food_offers', timestamps: true }
 );

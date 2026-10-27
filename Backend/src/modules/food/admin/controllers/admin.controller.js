@@ -1850,6 +1850,61 @@ export async function getOfferBannersPublic(req, res, next) {
     }
 }
 
+// ----- Order rejection reasons -----
+export async function getOrderRejectionReasons(req, res, next) {
+    try {
+        const data = await adminService.getOrderRejectionReasons();
+        res.status(200).json({ success: true, message: 'Rejection reasons fetched successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function createOrderRejectionReason(req, res, next) {
+    try {
+        const result = await adminService.createOrderRejectionReason(req.body || {});
+        if (result.error) {
+            return res.status(400).json({ success: false, message: result.error });
+        }
+        res.status(201).json({ success: true, message: 'Rejection reason created successfully', data: result });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function updateOrderRejectionReason(req, res, next) {
+    try {
+        const result = await adminService.updateOrderRejectionReason(req.params.id, req.body || {});
+        if (!result) {
+            return res.status(404).json({ success: false, message: 'Rejection reason not found' });
+        }
+        res.status(200).json({ success: true, message: 'Rejection reason updated successfully', data: result });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function deleteOrderRejectionReason(req, res, next) {
+    try {
+        const result = await adminService.deleteOrderRejectionReason(req.params.id);
+        if (!result) {
+            return res.status(404).json({ success: false, message: 'Rejection reason not found' });
+        }
+        res.status(200).json({ success: true, message: 'Rejection reason deleted successfully', data: result });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function getOrderRejectionReasonsPublic(req, res, next) {
+    try {
+        const data = await adminService.getOrderRejectionReasonsPublic();
+        res.status(200).json({ success: true, message: 'Rejection reasons fetched successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
 export async function processRefund(req, res, next) {
     try {
         const { orderId } = req.params;

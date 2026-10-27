@@ -30,7 +30,8 @@ import {
 } from '../controllers/restaurant.controller.js';
 import {
     createRestaurantSupportTicketController,
-    listRestaurantSupportTicketsController
+    listRestaurantSupportTicketsController,
+    getRestaurantSupportTicketController
 } from '../controllers/supportTicket.controller.js';
 import {
     createWithdrawalRequestController,
@@ -63,7 +64,8 @@ import {
     deleteAddonController
 } from '../controllers/restaurantAddon.controller.js';
 import * as orderController from '../../orders/controllers/order.controller.js';
-import { downloadRestaurantMenuPdf } from '../../admin/controllers/admin.controller.js';
+import { downloadRestaurantMenuPdf, getOrderRejectionReasonsPublic } from '../../admin/controllers/admin.controller.js';
+import { getRestaurantMediaController, getRestaurantSubscriptionInvoicesController } from '../controllers/restaurantMisc.controller.js';
 import { authMiddleware } from '../../../../core/auth/auth.middleware.js';
 import { sendError } from '../../../../utils/response.js';
 import { getRestaurantFinanceController } from '../controllers/restaurantFinance.controller.js';
@@ -216,6 +218,7 @@ router.patch('/addons/:id', authMiddleware, requireRestaurant, invMenu, updateAd
 router.delete('/addons/:id', authMiddleware, requireRestaurant, invMenu, deleteAddonController);
 
 router.get('/orders', authMiddleware, requireRestaurant, orderController.listOrdersRestaurantController);
+router.get('/orders/rejection-reasons', authMiddleware, requireRestaurant, getOrderRejectionReasonsPublic);
 router.get('/orders/:orderId', authMiddleware, requireRestaurant, orderController.getOrderByIdRestaurantController);
 router.patch('/orders/:orderId/status', authMiddleware, requireRestaurant, orderController.updateOrderStatusRestaurantController);
 router.post('/orders/:orderId/resend-notification', authMiddleware, requireRestaurant, orderController.resendDeliveryNotificationRestaurantController);
@@ -224,6 +227,10 @@ router.post('/orders/:orderId/delay', authMiddleware, requireRestaurant, orderCo
 router.get('/complaints', authMiddleware, requireRestaurant, getRestaurantComplaintsController);
 router.post('/support/tickets', authMiddleware, requireRestaurant, createRestaurantSupportTicketController);
 router.get('/support/tickets', authMiddleware, requireRestaurant, listRestaurantSupportTicketsController);
+router.get('/support/tickets/:id', authMiddleware, requireRestaurant, getRestaurantSupportTicketController);
+
+router.get('/subscription/invoices', authMiddleware, requireRestaurant, getRestaurantSubscriptionInvoicesController);
+router.get('/media', authMiddleware, requireRestaurant, getRestaurantMediaController);
 
 router.get('/download-menu-pdf/:id', authMiddleware, (req, res, next) => {
     const isAdmin = req.user?.role === 'ADMIN';

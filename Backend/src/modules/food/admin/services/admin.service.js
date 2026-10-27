@@ -14,6 +14,7 @@ import { BuddyIdentity } from '../../../../core/identity/buddyIdentity.model.js'
 import { DeliverySupportTicket } from '../../delivery/models/supportTicket.model.js';
 import { FoodZone } from '../models/zone.model.js';
 import { FoodOfferBanner } from '../models/offerBanner.model.js';
+import { FoodOrderRejectionReason } from '../models/orderRejectionReason.model.js';
 import { FoodCategory } from '../models/category.model.js';
 import { FoodItem } from '../models/food.model.js';
 import { FoodOffer } from '../models/offer.model.js';
@@ -4116,6 +4117,10 @@ export async function getAllOffers(_query = {}) {
             rejectionReason: o.rejectionReason || '',
             rejectedAt: o.rejectedAt || null,
             pausedBy: o.pausedBy || null,
+            activeDays: o.activeDays || [],
+            activeFromTime: o.activeFromTime || '',
+            activeToTime: o.activeToTime || '',
+            newToRestaurantOnly: o.newToRestaurantOnly ?? false,
         };
     });
 
@@ -6390,6 +6395,47 @@ export async function getOfferBannersPublic(zoneId) {
         .select('imageUrl title ctaLink')
         .lean();
     return { banners };
+}
+
+// ----- Order rejection reasons (admin) -----
+export async function getOrderRejectionReasons() {
+    const reasons = await FoodOrderRejectionReason.find({}).sort({ order_by: 1, createdAt: 1 }).lean();
+    return { reasons };
+}
+
+export async function createOrderRejectionReason(body) {
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    if (!title) return { error: 'Reason title is required' };
+    const reason = await FoodOrderRejectionReason.create({
+        title,
+        order_by: Number(body.order_by) || 0,
+        active: body.active !== false,
+    });
+    return { reason: reason.toObject() };
+}
+
+export async function updateOrderRejectionReason(id, body) {
+    const reason = await FoodOrderRejectionReason.findById(id);
+    if (!reason) return null;
+    if (body.title !== undefined) reason.title = String(body.title).trim();
+    if (body.order_by !== undefined) reason.order_by = Number(body.order_by) || 0;
+    if (body.active !== undefined) reason.active = body.active !== false;
+    await reason.save();
+    return { reason: reason.toObject() };
+}
+
+export async function deleteOrderRejectionReason(id) {
+    const reason = await FoodOrderRejectionReason.findByIdAndDelete(id);
+    return reason ? { id } : null;
+}
+
+/** Public list of active reasons, shown in the restaurant app's reject-order flow. */
+export async function getOrderRejectionReasonsPublic() {
+    const reasons = await FoodOrderRejectionReason.find({ active: true })
+        .sort({ order_by: 1, createdAt: 1 })
+        .select('title')
+        .lean();
+    return { reasons: reasons.map((r) => r.title) };
 }
 
 // ----- Withdrawals (admin) -----

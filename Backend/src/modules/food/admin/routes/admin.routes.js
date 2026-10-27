@@ -234,6 +234,12 @@ router.post('/offer-banners', adminController.createOfferBanner);
 router.patch('/offer-banners/:id', adminController.updateOfferBanner);
 router.delete('/offer-banners/:id', adminController.deleteOfferBanner);
 
+// ----- Order rejection reasons -----
+router.get('/order-rejection-reasons', adminController.getOrderRejectionReasons);
+router.post('/order-rejection-reasons', adminController.createOrderRejectionReason);
+router.patch('/order-rejection-reasons/:id', adminController.updateOrderRejectionReason);
+router.delete('/order-rejection-reasons/:id', adminController.deleteOrderRejectionReason);
+
 // ----- Dining -----
 router.get('/dining/categories', diningAdminController.getDiningCategories);
 router.post('/dining/categories', invDining, diningAdminController.createDiningCategory);
