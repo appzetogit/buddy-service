@@ -800,6 +800,16 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
       ? Number(deliveryMeta.riderFee)
       : await getQuickRiderEarning(distanceKm);
 
+    // Tip + delivery instructions, same bounds Food uses (order.validator.js: tip min 0, deliveryInstructions max 240).
+    const rawTip = Number(req.body?.tipAmount ?? req.body?.tip);
+    if (req.body?.tipAmount != null || req.body?.tip != null) {
+      if (!Number.isFinite(rawTip) || rawTip < 0) {
+        throw new ValidationError('Invalid tip amount');
+      }
+    }
+    const tipAmount = Number.isFinite(rawTip) && rawTip > 0 ? rawTip : 0;
+    const deliveryInstructions = String(req.body?.deliveryInstructions || '').trim().slice(0, 240);
+
     const sellerBuckets = new Map();
     // @deprecated multi-seller bucketing — validated to single seller above; kept for SellerOrder fan-out.
     items.forEach((item) => {
@@ -980,6 +990,8 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
       isSplitOrder: Boolean(deliveryMeta?.isSplitOrder),
       isMultiSeller: Boolean(deliveryMeta?.isMultiSeller),
       ...(multiRoute ? { pickups: buildQuickPickupStops(multiRoute.stops, items) } : {}),
+      deliveryInstructions,
+      tipAmount,
       riderEarning: riderEarning || 0,
       platformProfit: allocateQuickCouponEarnings({
         couponSource,

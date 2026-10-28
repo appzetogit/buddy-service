@@ -4,6 +4,8 @@ import {
   getActivePeakHourSurchargeController,
 } from "../controllers/quickDeliverySettings.controller.js";
 import { getPublicFaqs } from "../controllers/faq.controller.js";
+// Tip presets are generic platform config, not Food-branded data — reuse Food's controller/source as-is.
+import { getTipsConfig as getQuickTipsConfig } from "../../food/admin/controllers/admin.controller.js";
 import { upload } from "../../../middleware/upload.js";
 import {
   getCategories,
@@ -185,6 +187,8 @@ const router = express.Router();
 router.get("/health", (_req, res) =>
   res.json({ success: true, module: "quick-commerce", status: "ok" }),
 );
+
+router.get("/tips/config", getQuickTipsConfig);
 
 // ─── Performance: Single bootstrap call for homepage ──────────────────────────────
 router.get("/bootstrap", getBootstrapData);

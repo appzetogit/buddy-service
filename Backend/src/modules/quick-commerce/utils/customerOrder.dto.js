@@ -420,6 +420,8 @@ export const toQuickCustomerOrderDetail = ({
     etaPromise: mapEtaPromise(order.etaPromise),
     sla: mapSla(order.sla),
     note: str(order.note),
+    deliveryInstructions: str(order.deliveryInstructions),
+    tipAmount: Number(order.tipAmount || 0),
     cancellationReason,
     cancelledBy: order.cancelledBy || null,
     scheduledAt: order.scheduledAt || null,

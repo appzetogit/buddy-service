@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { FoodChatConversation } from '../models/chatConversation.model.js';
 import { FoodChatMessage } from '../models/chatMessage.model.js';
 import { FoodOrder } from '../../orders/models/order.model.js';
+import { QuickOrder } from '../../../quick-commerce/models/order.model.js';
 import { ValidationError, ForbiddenError, NotFoundError } from '../../../../core/auth/errors.js';
 import { getIO, rooms } from '../../../../config/socket.js';
 import { notifyOwnerSafely, notifyAdminsSafely } from '../../../../core/notifications/firebase.service.js';
@@ -26,12 +27,19 @@ const parseToken = (token) => {
 /** Resolve the caller's own token from req.user, mapping unified DRIVER -> DELIVERY_PARTNER. */
 export const myTokenFromReqUser = (reqUser) => buildToken(reqUser?.role, reqUser?.userId);
 
-/** True when `token`'s party is one of the three people on this order. */
+/** True when `token`'s party is one of the three people on this order. Checks FoodOrder first,
+ *  then QuickOrder — same chat models/service serve both order kinds; QC orders have no single
+ *  "restaurant" field (sellers live in pickupPoints), so RESTAURANT-role membership is Food-only. */
 async function assertOrderMembership(orderId, token) {
     if (!mongoose.Types.ObjectId.isValid(orderId)) throw new ValidationError('Invalid orderId');
-    const order = await FoodOrder.findById(orderId)
+    let order = await FoodOrder.findById(orderId)
         .select('userId restaurantId pickups.restaurantId dispatch.deliveryPartnerId dispatch.sharedPartnerId')
         .lean();
+    if (!order) {
+        order = await QuickOrder.findById(orderId)
+            .select('userId dispatch.deliveryPartnerId dispatch.sharedPartnerId')
+            .lean();
+    }
     if (!order) throw new NotFoundError('Order not found');
 
     const { role, id } = parseToken(token);

@@ -578,6 +578,10 @@ const orderSchema = new mongoose.Schema(
         },
         note: { type: String, default: '', trim: true },
         restaurantNote: { type: String, default: '', trim: true },
+        /** Mirrors Food's `deliveryInstructions` — kept separate from `note` to match Food's split. */
+        deliveryInstructions: { type: String, default: '', trim: true, maxlength: 240 },
+        /** Customer tip at checkout; credited on top of riderEarning when delivery completes (see quickRiderFlow.service.js). */
+        tipAmount: { type: Number, default: 0, min: 0 },
         /** Actor who cancelled: user | restaurant | admin | system */
         cancelledBy: { type: String, default: null, trim: true },
         /** Human-readable cancel reason (e.g. timeout "Restaurant not accept"). */

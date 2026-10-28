@@ -23,6 +23,7 @@ import paymentRoutes from '../core/payments/payment.routes.js';
 import fcmRoutes from '../core/notifications/fcm.routes.js';
 import notificationRoutes from '../core/notifications/notification.routes.js';
 import chatRoutes from '../modules/food/chat/routes/chat.routes.js';
+import quickCommerceChatRoutes from '../modules/quick-commerce/chat/routes/chat.routes.js';
 import { authMiddleware } from '../core/auth/auth.middleware.js';
 import * as businessSettingsController from '../modules/food/admin/controllers/businessSettings.controller.js';
 import { getTipsConfig as getFoodTipsConfig, getOfferBannersPublic } from '../modules/food/admin/controllers/admin.controller.js';
@@ -79,6 +80,9 @@ router.get('/v1/food/offer-banners/public', getOfferBannersPublic);
 router.use('/v1/food/admin', authMiddleware, requireRoles('ADMIN'), restaurantAdminRoutes);
 router.use('/v1/quick-commerce/admin', authMiddleware, requireRoles('ADMIN'), quickCommerceAdminRoutes);
 router.use('/v1/quick-commerce/delivery', quickCommerceDeliveryRoutes);
+// Must be mounted before the generic '/v1/quick-commerce' router below, or that router's own
+// unmatched-path handling would intercept /v1/quick-commerce/chat/* requests first.
+router.use('/v1/quick-commerce/chat', authMiddleware, requireRoles('USER', 'DELIVERY_PARTNER', 'ADMIN'), quickCommerceChatRoutes);
 router.use('/v1/quick-commerce', quickCommerceRoutes);
 router.use('/v1/seller', quickCommerceSellerRoutes);
 router.use('/v1/common/onboarding-fees', commonOnboardingFeeRoutes);

@@ -419,6 +419,14 @@ export async function completeDelivery(orderId, partnerId, { otp = '' } = {}) {
   pushHistory(order, partnerId, 'picked_up', 'delivered', `Delivery completed by ${isPrimary ? 'primary' : 'second'} partner`);
   // Handover codes are single-use.
   order.deliveryOtp = '';
+  // Tip goes entirely to the primary rider's earning, added exactly once here (final completion only —
+  // never on the earlier "waitingForPartner" leg-return above), mirroring how Food shows tip on top of
+  // the delivery fee. Food itself only ever displays tip (driverSettlement) and never credits it to
+  // riderEarning, so this is QC going one step further to actually pay it out.
+  const tip = Number(order.tipAmount || 0);
+  if (tip > 0) {
+    order.riderEarning = Number(order.riderEarning || 0) + tip;
+  }
   await order.save();
 
   await syncSellerOrderFromDelivery(order._id, 'delivered').catch((err) =>

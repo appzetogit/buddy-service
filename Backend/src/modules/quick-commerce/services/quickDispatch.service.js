@@ -113,6 +113,8 @@ export const buildQuickOfferPayload = (orderDoc) => {
     userName: address.fullName || address.name || '',
     userPhone: address.phone || '',
     note: order?.note || '',
+    deliveryInstructions: order?.deliveryInstructions || '',
+    tipAmount: Number(order?.tipAmount || 0),
     riderEarning,
     // Single-store orders carry the OTP on the top-level field (select:false), so this is only
     // ever true/false here — never the real code, even if a caller forgot to strip it upstream.
