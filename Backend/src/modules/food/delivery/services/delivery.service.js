@@ -669,43 +669,68 @@ export const getDeliveryPartnerEarnings = async (deliveryPartnerId, query = {}) 
         match['deliveryState.deliveredAt'] = { $gte: range.start, $lte: range.end };
     }
 
-    const [totalOrders, agg] = await Promise.all([
+    const earningExpr = {
+        $cond: [
+            { $eq: ["$dispatch.deliveryPartnerId", partnerId] },
+            {
+                $ifNull: [
+                    "$riderEarning",
+                    {
+                        $ifNull: [
+                            "$pricing.deliveryFeeBreakdown.riderFee",
+                            {
+                                $ifNull: [
+                                    "$settlementBreakdown.driver.payout",
+                                    { $ifNull: ["$pricing.deliveryFeeBreakdown.deliveryBoyFee", 0] },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+            { $ifNull: ["$sharedRiderEarning", 0] }
+        ]
+    };
+
+    const [totalOrders, agg, byKindAgg] = await Promise.all([
         riderOrders.countDocuments(match),
         riderOrders.aggregate([
             { $match: match },
             {
                 $group: {
                     _id: null,
-                    totalEarnings: { 
-                        $sum: { 
-                            $cond: [
-                                { $eq: ["$dispatch.deliveryPartnerId", partnerId] },
-                                {
-                                    $ifNull: [
-                                        "$riderEarning",
-                                        {
-                                            $ifNull: [
-                                                "$pricing.deliveryFeeBreakdown.riderFee",
-                                                {
-                                                    $ifNull: [
-                                                        "$settlementBreakdown.driver.payout",
-                                                        { $ifNull: ["$pricing.deliveryFeeBreakdown.deliveryBoyFee", 0] },
-                                                    ],
-                                                },
-                                            ],
-                                        },
-                                    ],
-                                },
-                                { $ifNull: ["$sharedRiderEarning", 0] }
-                            ]
-                        } 
-                    }
+                    totalEarnings: { $sum: earningExpr }
+                }
+            }
+        ]),
+        riderOrders.aggregate([
+            { $match: match },
+            {
+                $group: {
+                    // Taxi parcels are tracked separately from taxi rides; everything else groups by orderKind.
+                    _id: {
+                        $cond: [
+                            { $and: [{ $eq: ["$orderKind", "taxi"] }, { $eq: ["$serviceType", "parcel"] }] },
+                            "parcel",
+                            { $ifNull: ["$orderKind", "food"] }
+                        ]
+                    },
+                    earnings: { $sum: earningExpr },
+                    orders: { $sum: 1 }
                 }
             }
         ])
     ]);
 
     const totalEarnings = Number(agg?.[0]?.totalEarnings) || 0;
+
+    const byKind = { food: { earnings: 0, orders: 0 }, quick: { earnings: 0, orders: 0 }, taxi: { earnings: 0, orders: 0 }, parcel: { earnings: 0, orders: 0 } };
+    for (const row of byKindAgg || []) {
+        const key = row?._id;
+        if (byKind[key]) {
+            byKind[key] = { earnings: Number(row.earnings) || 0, orders: Number(row.orders) || 0 };
+        }
+    }
 
     // Frontend only strongly relies on totalEarnings + totalOrders.
     const summary = {
@@ -715,7 +740,8 @@ export const getDeliveryPartnerEarnings = async (deliveryPartnerId, query = {}) 
         totalMinutes: 0,
         orderEarning: totalEarnings,
         incentive: 0,
-        otherEarnings: 0
+        otherEarnings: 0,
+        byKind
     };
 
     return {
@@ -818,10 +844,15 @@ const toTripDto = (order, deliveryPartnerId) => {
         sharedEarning: sharedPayout
     } : null;
 
+    const orderKind = order?.orderKind || 'food';
+    const serviceType = orderKind === 'taxi' ? (order?.serviceType || 'ride') : undefined;
+
     return {
         id: order?._id,
         _id: order?._id,
         orderId: order?.orderId || order?._id,
+        orderKind,
+        serviceType,
         status,
         restaurantName,
         restaurant: restaurantName,
@@ -970,9 +1001,12 @@ export const getDeliveryPocketDetails = async (deliveryPartnerId, query = {}) =>
             ? (Number(o?.sharedRiderEarning) || 0)
             : (Number(o?.riderEarning) || Number(o.pricing?.deliveryFee) || 0);
 
+        const kind = o?.orderKind === 'taxi' && o?.serviceType === 'parcel' ? 'parcel' : (o?.orderKind || 'food');
+
         return {
             _id: o._id,
             type: 'payment',
+            kind,
             amount: earningAmount,
             status: 'Completed',
             date: o?.deliveryState?.deliveredAt || o?.deliveredAt || o?.createdAt,

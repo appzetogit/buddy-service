@@ -46,6 +46,7 @@ const TAXI_AS_ORDER = {
     'payment.amountDue': { $cond: [{ $eq: ['$paymentMethod', 'cash'] }, { $ifNull: ['$fare', 0] }, 0] },
     'pricing.total': { $ifNull: ['$fare', 0] },
     orderKind: 'taxi',
+    serviceType: { $ifNull: ['$serviceType', 'ride'] },
     restaurantName: 'Taxi ride',
     orderId: { $concat: ['R', { $toUpper: { $substrCP: [{ $toString: '$_id' }, 18, 6] } }] },
   },

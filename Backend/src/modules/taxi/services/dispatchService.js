@@ -7,7 +7,7 @@ import { UserWallet } from '../user/models/UserWallet.js';
 import { Driver } from '../driver/models/Driver.js';
 import { Vehicle } from '../admin/models/Vehicle.js';
 import { WalletTransaction } from '../driver/models/WalletTransaction.js';
-import { applyDriverWalletAdjustment } from '../driver/services/walletService.js';
+import { applyDriverWalletAdjustment, estimateRideDriverEarnings } from '../driver/services/walletService.js';
 import { matchDrivers } from './matchingService.js';
 import {
   RIDE_LIVE_STATUS,
@@ -761,12 +761,16 @@ const emitRideRequestToDrivers = async ({
   // wave is being offered the same ride, so the label is identical for all
   // of them.
   const vehicleLabel = await resolveVehicleLabel(ride.vehicleTypeId);
+  // Same fare for every driver in this wave, so the estimate is computed once, not per driver.
+  const riderEarning = (await estimateRideDriverEarnings(ride).catch(() => null))?.earnings ?? 0;
 
   for (const driver of targetDrivers) {
     emitToDriver(driver._id, 'rideRequest', {
       rideId: String(ride._id),
       type: ride.serviceType || 'ride',
       serviceType: ride.serviceType || 'ride',
+      orderKind: 'taxi',
+      riderEarning,
       userId: String(ride.userId),
       user: {
         id: ride.userId?._id ? String(ride.userId._id) : String(ride.userId || ''),
@@ -840,6 +844,9 @@ const emitRideRequestToDrivers = async ({
         type: 'ride_request',
         rideId: String(ride._id),
         serviceType: ride.serviceType || 'ride',
+        orderKind: 'taxi',
+        riderEarning: String(riderEarning),
+        paymentMethod: ride.paymentMethod || '',
         userId: String(ride.userId?._id || ride.userId || ''),
         // Everything below is what the native card renders. It has to be
         // drawable with the app killed and no network, so anything missing here
@@ -1113,6 +1120,20 @@ export const cancelRideByUser = async ({ rideId, userId }) => {
       rideId: String(ride._id),
       reason: 'user-cancelled',
       message: 'User cancelled the ride.',
+    });
+
+    // The socket event above never reaches a killed app — this push does.
+    sendPushNotificationToEntities({
+      driverIds: [String(ride.driverId)],
+      title: 'Ride cancelled',
+      body: 'The passenger cancelled this ride.',
+      dataOnly: true,
+      data: {
+        type: 'ride_cancelled',
+        rideId: String(ride._id),
+      },
+    }).catch((error) => {
+      console.error('Failed to send ride-cancelled push notification', error);
     });
   }
 
