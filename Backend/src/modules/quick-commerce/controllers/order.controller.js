@@ -809,6 +809,8 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
     }
     const tipAmount = Number.isFinite(rawTip) && rawTip > 0 ? rawTip : 0;
     const deliveryInstructions = String(req.body?.deliveryInstructions || '').trim().slice(0, 240);
+    // Customer's note for the seller (not the rider) — kept separate from deliveryInstructions.
+    const customerNote = String(req.body?.note || '').trim().slice(0, 200);
 
     const sellerBuckets = new Map();
     // @deprecated multi-seller bucketing — validated to single seller above; kept for SellerOrder fan-out.
@@ -992,6 +994,7 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
       ...(multiRoute ? { pickups: buildQuickPickupStops(multiRoute.stops, items) } : {}),
       deliveryInstructions,
       tipAmount,
+      note: customerNote,
       riderEarning: riderEarning || 0,
       platformProfit: allocateQuickCouponEarnings({
         couponSource,

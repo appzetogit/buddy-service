@@ -576,7 +576,8 @@ const orderSchema = new mongoose.Schema(
             type: orderRatingsSchema,
             default: () => ({})
         },
-        note: { type: String, default: '', trim: true },
+        /** Customer's note for the seller (not the rider — see deliveryInstructions for that). */
+        note: { type: String, default: '', trim: true, maxlength: 200 },
         restaurantNote: { type: String, default: '', trim: true },
         /** Mirrors Food's `deliveryInstructions` — kept separate from `note` to match Food's split. */
         deliveryInstructions: { type: String, default: '', trim: true, maxlength: 240 },

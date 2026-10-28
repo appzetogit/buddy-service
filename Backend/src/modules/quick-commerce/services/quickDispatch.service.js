@@ -112,7 +112,8 @@ export const buildQuickOfferPayload = (orderDoc) => {
     customerPhone: address.phone || order?.customerPhone || '',
     userName: address.fullName || address.name || '',
     userPhone: address.phone || '',
-    note: order?.note || '',
+    // `note` is the customer's note for the SELLER, not the rider — riders only get
+    // deliveryInstructions. Do not add `note` back here.
     deliveryInstructions: order?.deliveryInstructions || '',
     tipAmount: Number(order?.tipAmount || 0),
     riderEarning,

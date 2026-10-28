@@ -232,6 +232,7 @@ const buildSellerOrderFromParentOrder = async (order, sellerId) => {
     },
     status: sellerStatus,
     workflowStatus: workflowStatus,
+    note: order?.note || "",
     deliveredAt: order?.deliveryState?.deliveredAt || (parentStatus === "delivered" ? order.updatedAt : null),
     sellerPendingExpiresAt: new Date(Date.now() + 2 * 60 * 1000),
     address: {
@@ -297,7 +298,7 @@ const backfillSellerOrdersFromParentOrders = async (sellerId) => {
       items: { $elemMatch: { type: "quick", sourceId: sellerKey } },
       ...getSellerVisibleQuickOrderPaymentFilter(),
     })
-      .select("_id orderId orderType items pricing deliveryAddress payment")
+      .select("_id orderId orderType items pricing deliveryAddress payment note")
       .sort({ createdAt: -1 })
       .limit(500)
       .lean(),

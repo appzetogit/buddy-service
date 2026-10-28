@@ -87,6 +87,7 @@ export const listAvailableQuickOrders = async (req, res) => {
         { 'dispatch.status': 'assigned', 'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(partnerId) },
       ],
     })
+      .select('+pickupOtp')
       .sort({ createdAt: -1 })
       .limit(20)
       .lean();
@@ -111,6 +112,7 @@ export const listCurrentQuickOrders = async (req, res) => {
       ...riderOnOrder(partnerId),
       orderStatus: { $in: ACTIVE_STATUSES },
     })
+      .select('+pickupOtp')
       .sort({ 'dispatch.acceptedAt': -1 })
       .lean();
 
@@ -128,7 +130,7 @@ export const getQuickOrderDetails = async (req, res) => {
     const partnerId = await resolvePartnerId(req);
     if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
 
-    const order = await QuickOrder.findById(req.params.orderId).select('+deliveryOtp').lean();
+    const order = await QuickOrder.findById(req.params.orderId).select('+deliveryOtp +pickupOtp').lean();
     if (!order) return sendError(res, 404, 'Order not found');
 
     const assigned =
