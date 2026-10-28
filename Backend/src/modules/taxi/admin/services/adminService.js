@@ -2092,7 +2092,8 @@ const syncDefaultAdminRecord = async () => {
         name: 'Super Admin',
         email: DEFAULT_ADMIN_EMAIL,
         phone: '9999999999',
-        role: 'superadmin',
+        // role is the auth role checked by requireAdmin/getProfile; superadmin-ness lives in admin_type.
+        role: 'ADMIN',
         admin_type: 'superadmin',
         permissions: ['*'],
         active: true,
@@ -2270,7 +2271,13 @@ export const loginAdmin = async ({ email, password, ip = '' }) => {
   const [serializedAdmin] = await enrichAdminSummaries([admin]);
 
   return {
-    token: signAccessToken({ sub: String(admin._id), role: 'admin' }),
+    // authMiddleware reads userId + the uppercase ADMIN role; sub/id kept for taxi's own consumers.
+    token: signAccessToken({
+      userId: String(admin._id),
+      sub: String(admin._id),
+      id: String(admin._id),
+      role: 'ADMIN',
+    }),
     admin: serializedAdmin,
   };
 };
@@ -2294,7 +2301,8 @@ const validateSubadminPayload = async (payload = {}, existingAdminId = null) => 
   const name = String(payload.name || '').trim();
   const email = String(payload.email || '').trim().toLowerCase();
   const phone = String(payload.phone || '').trim();
-  const role = String(payload.role || (adminType === 'superadmin' ? 'superadmin' : 'subadmin')).trim();
+  // role is the auth role (requireAdmin/getProfile expect 'ADMIN'); adminType holds superadmin/subadmin.
+  const role = 'ADMIN';
   const permissions = normalizeAdminPermissions(
     adminType === 'superadmin' ? [SUPERADMIN_PERMISSION] : payload.permissions || [],
   );

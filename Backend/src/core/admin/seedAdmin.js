@@ -22,6 +22,13 @@ const defaultAdminFields = () => ({
 /** Seed or repair the default admin in the unified admins collection. */
 export const seedDefaultAdmin = async () => {
     try {
+        // The taxi panel used to write role:'superadmin'/'subadmin' into this collection, which
+        // requireAdmin/getProfile reject (403 on admin APIs, 401 on /auth/me). Repair those.
+        const repaired = await Admin.updateMany({ role: { $ne: 'ADMIN' } }, { $set: { role: 'ADMIN' } });
+        if (repaired.modifiedCount) {
+            console.log(`[seedDefaultAdmin] Repaired non-ADMIN role on ${repaired.modifiedCount} admin(s).`);
+        }
+
         const existing = await Admin.findOne({ email: DEFAULT_ADMIN_EMAIL }).select('+password');
 
         if (existing) {
