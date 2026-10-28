@@ -75,7 +75,7 @@ import {
     isRazorpayConfigured,
     verifyPaymentSignature,
 } from '../../food/orders/helpers/razorpay.helper.js';
-import * as orderService from '../../food/orders/services/order.service.js';
+import { applyAggregateRating } from '../../food/orders/services/order.helpers.js';
 import { z } from 'zod';
 import { ForbiddenError, ValidationError } from '../../../core/auth/errors.js';
 import { getQuickCoupons } from '../services/content.service.js';
@@ -2136,12 +2136,74 @@ export const cancelOrder = async (req, res) => {
   }
 };
 
+/** The one seller whose items make up this QC order — same resolution buildSellerOrderFromParentOrder uses. */
+function resolveSingleSellerId(order) {
+  const sellerIds = new Set(
+    (Array.isArray(order?.items) ? order.items : [])
+      .filter((item) => item?.type === 'quick')
+      .map((item) => String(item?.sourceId || '').trim())
+      .filter(Boolean),
+  );
+  return sellerIds.size === 1 ? [...sellerIds][0] : null;
+}
+
 export async function submitOrderRatingsController(req, res, next) {
   try {
     const userId = req.user?.userId;
     const orderId = req.params.orderId;
     const dto = validateOrderRatingsDto(req.body);
-    const order = await orderService.submitOrderRatings(orderId, userId, dto);
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ success: false, message: 'Invalid order id' });
+    }
+
+    const order = await QuickOrder.findOne({ _id: orderId, userId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+    if (String(order.orderStatus) !== 'delivered') {
+      return res.status(400).json({ success: false, message: 'You can rate only delivered orders' });
+    }
+
+    const hasDeliveryPartner = Boolean(order.dispatch?.deliveryPartnerId);
+    if (hasDeliveryPartner && !dto.deliveryPartnerRating) {
+      return res.status(400).json({ success: false, message: 'Delivery partner rating is required' });
+    }
+
+    const restaurantAlreadyRated = Number.isFinite(Number(order?.ratings?.restaurant?.rating));
+    const deliveryAlreadyRated = Number.isFinite(Number(order?.ratings?.deliveryPartner?.rating));
+    if (restaurantAlreadyRated || (hasDeliveryPartner && deliveryAlreadyRated)) {
+      return res.status(400).json({ success: false, message: 'Ratings already submitted for this order' });
+    }
+
+    const sellerId = resolveSingleSellerId(order);
+    if (!sellerId) {
+      return res.status(400).json({ success: false, message: 'Could not resolve the seller for this order' });
+    }
+
+    const now = new Date();
+    order.ratings = order.ratings || {};
+    order.ratings.restaurant = {
+      rating: dto.restaurantRating,
+      comment: dto.restaurantComment || '',
+      ratedAt: now,
+    };
+    if (hasDeliveryPartner) {
+      order.ratings.deliveryPartner = {
+        rating: dto.deliveryPartnerRating,
+        comment: dto.deliveryPartnerComment || '',
+        ratedAt: now,
+      };
+    }
+
+    await Promise.all([
+      applyAggregateRating(Seller, sellerId, dto.restaurantRating),
+      hasDeliveryPartner
+        ? applyAggregateRating(FoodDeliveryPartner, order.dispatch.deliveryPartnerId, dto.deliveryPartnerRating)
+        : Promise.resolve(),
+    ]);
+
+    await order.save();
     return sendResponse(res, 200, 'Ratings submitted successfully', { order });
   } catch (err) {
     next(err);
