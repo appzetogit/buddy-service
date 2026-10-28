@@ -851,7 +851,8 @@ function AllOrders({ onSelectOrder, onCancel }) {
 
     try {
       setMarkingReadyOrderIds((prev) => ({ ...prev, [orderKey]: true }));
-      await restaurantAPI.markOrderReady(orderKey);
+      const response = await restaurantAPI.markOrderReady(orderKey);
+      const updated = response?.data?.data?.order;
       setOrders((prev) =>
         prev.map((order) =>
           (order.mongoId || order.orderId) === orderKey
@@ -860,6 +861,10 @@ function AllOrders({ onSelectOrder, onCancel }) {
                 status: "ready",
                 eta: null,
                 sortTimestamp: Date.now(),
+                // Pull the pickup OTP straight from this response — waiting on the next poll
+                // left the card showing no code right when the restaurant needs to read it out.
+                pickupOtp: updated?.pickupOtp || order.pickupOtp || "",
+                pickupOtpVerified: Boolean(updated?.pickupOtpVerified),
               }
             : order,
         ),

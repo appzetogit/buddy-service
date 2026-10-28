@@ -62,4 +62,6 @@ export const transformOrderForList = (order) => ({
   sortTimestamp: new Date(getAllOrdersTimestamp(order)).getTime(),
   scheduledAt: order.scheduledAt || null,
   restaurantNote: order.restaurantNote || null,
+  pickupOtp: order.pickupOtp || "",
+  pickupOtpVerified: Boolean(order.pickupOtpVerified),
 })
