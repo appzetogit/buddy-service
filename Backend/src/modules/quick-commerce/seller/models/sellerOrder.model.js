@@ -76,6 +76,13 @@ const sellerOrderSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // Customer's note for THIS seller, copied from the parent QuickOrder at snapshot time.
+    note: {
+      type: String,
+      trim: true,
+      maxlength: 200,
+      default: "",
+    },
     workflowStatus: {
       type: String,
       default: "SELLER_PENDING",

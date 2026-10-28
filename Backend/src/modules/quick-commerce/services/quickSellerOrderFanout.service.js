@@ -35,6 +35,9 @@ export const buildNewSellerOrderPushDetails = async (sellerOrder) => {
   const total = sellerOrder.pricing?.total;
   if (total !== undefined && total !== null && total !== '') details.total = String(total);
 
+  const note = String(sellerOrder.note || '').trim();
+  if (note) details.note = note;
+
   try {
     if (sellerOrder.parentOrderId) {
       const parent = await QuickOrder.findById(sellerOrder.parentOrderId).select('payment.method').lean();
@@ -91,6 +94,7 @@ export const emitQuickSellerOrders = async (sellerOrders) => {
         workflowStatus: sellerOrder.workflowStatus,
         items: sellerOrder.items || [],
         pricing: sellerOrder.pricing || {},
+        note: sellerOrder.note || '',
         createdAt: sellerOrder.createdAt || new Date(),
       };
 
@@ -211,6 +215,7 @@ export const buildQuickSellerOrderDocsFromParent = async (parentOrder) => {
         },
         status: 'pending',
         workflowStatus: 'SELLER_PENDING',
+        note: parentOrder?.note || '',
         sellerPendingExpiresAt: new Date(Date.now() + 2 * 60 * 1000),
         address: {
           address: deliveryAddress?.street || deliveryAddress?.address || '',

@@ -122,6 +122,24 @@ const buildSellerAddressFromParentOrder = (order) => {
   };
 };
 
+/**
+ * Derive the seller-facing status/workflowStatus from the parent QuickOrder's own orderStatus.
+ * Rider-first dispatch can advance the parent (confirmed -> preparing -> ready_for_pickup ->
+ * picked_up) without the seller ever calling their own status-update endpoint, so a stored
+ * SellerOrder.status can go stale at 'pending' while the parent has long since moved on. Used
+ * both when building a brand-new SellerOrder row and, in getSellerOrdersController, to correct
+ * an existing row's displayed status at read time instead of trusting the stored value blindly.
+ */
+const deriveSellerStatusFromParent = (parentStatus) => {
+  const status = String(parentStatus || 'pending').toLowerCase();
+  if (status === 'delivered') return { status: 'delivered', workflowStatus: 'DELIVERED' };
+  if (status.startsWith('cancel')) return { status: 'cancelled', workflowStatus: 'CANCELLED' };
+  if (['confirmed', 'preparing', 'ready_for_pickup', 'ready', 'picked_up', 'out_for_delivery'].includes(status)) {
+    return { status, workflowStatus: status.toUpperCase() };
+  }
+  return null;
+};
+
 const buildSellerOrderFromParentOrder = async (order, sellerId) => {
   const sellerKey = String(sellerId || "").trim();
   if (!sellerKey) return null;
@@ -181,24 +199,9 @@ const buildSellerOrderFromParentOrder = async (order, sellerId) => {
     packingFee: allocatedPackingFee,
   });
 
-  const parentStatus = String(order?.orderStatus || "pending").toLowerCase();
-  let sellerStatus = "pending";
-  let workflowStatus = "SELLER_PENDING";
-
-  if (parentStatus === "delivered") {
-    sellerStatus = "delivered";
-    workflowStatus = "DELIVERED";
-  } else if (parentStatus.startsWith("cancel")) {
-    sellerStatus = "cancelled";
-    workflowStatus = "CANCELLED";
-  } else if (
-    ["confirmed", "preparing", "ready_for_pickup", "ready", "picked_up", "out_for_delivery"].includes(
-      parentStatus,
-    )
-  ) {
-    sellerStatus = parentStatus;
-    workflowStatus = parentStatus.toUpperCase();
-  }
+  const derived = deriveSellerStatusFromParent(order?.orderStatus);
+  const sellerStatus = derived?.status || "pending";
+  const workflowStatus = derived?.workflowStatus || "SELLER_PENDING";
 
   const addr = order?.deliveryAddress;
   const customer = resolveQuickOrderCustomer(order);
@@ -2808,6 +2811,18 @@ export const getSellerOrdersController = async (req, res) => {
             update: { $set: { status: "cancelled", workflowStatus: "CANCELLED" } },
           },
         });
+      } else if (so.status === "pending") {
+        // Rider-first dispatch can carry the parent past 'pending' without ever touching this
+        // seller leg (see deriveSellerStatusFromParent) — persist the catch-up, not just the response.
+        const drift = deriveSellerStatusFromParent(parentStatus);
+        if (drift) {
+          bulkOps.push({
+            updateOne: {
+              filter: { _id: so._id },
+              update: { $set: { status: drift.status, workflowStatus: drift.workflowStatus } },
+            },
+          });
+        }
       }
     }
 
@@ -2953,8 +2968,20 @@ export const getSellerOrdersController = async (req, res) => {
       const ownPickupOtp = ownPickupStop ? ownPickupStop.pickupOtp : quickOrder?.pickupOtp;
       const ownPickupOtpVerified = ownPickupStop ? ownPickupStop.pickupOtpVerified : quickOrder?.pickupOtpVerified;
 
+      // Rider-first dispatch can advance the parent order without the seller ever calling their
+      // own status-update endpoint, leaving this SellerOrder row stuck at 'pending' even though
+      // the parent is confirmed/preparing/ready/picked_up. Only correct a still-'pending' row —
+      // any other stored status came from an explicit write (seller action or the picked_up/
+      // delivered sync) and must never be overridden backward by this read-time derivation.
+      const statusDrift = item.status === 'pending' ? deriveSellerStatusFromParent(quickOrder?.orderStatus) : null;
+
       return {
         ...item,
+        ...(statusDrift ? { status: statusDrift.status, workflowStatus: statusDrift.workflowStatus } : {}),
+        // Customer's note for the seller lives on the parent QuickOrder, not on the SellerOrder
+        // snapshot (older/most rows were built before `note` existed on that model) — read it
+        // from quickOrder here, same pattern as pickupOtp above.
+        note: quickOrder?.note || item?.note || '',
         pickupOtp: ownPickupOtp || '',
         pickupOtpVerified: Boolean(ownPickupOtpVerified),
         customer: resolveQuickOrderCustomer(quickOrder, item),
@@ -3012,9 +3039,14 @@ export const getSellerOrdersController = async (req, res) => {
 export const updateSellerOrderStatusController = async (req, res) => {
   try {
     const sellerId = sellerScope(req);
-    const nextStatus = str(
+    const rawStatus = str(
       req.body?.status || req.body?.orderStatus,
     ).toLowerCase();
+    // 'ready' is a value the rest of this module's status-derivation already anticipates as an
+    // alias (see deriveSellerStatusFromParent) — normalize here so a caller sending it still
+    // advances the parent order, instead of silently matching no key in SELLER_TO_PARENT_STATUS_MAP
+    // and leaving the parent stuck (which also re-triggers the seller-ack-resend sweep).
+    const nextStatus = rawStatus === 'ready' ? 'ready_for_pickup' : rawStatus;
     const orderId = req.params.orderId;
     const reason = str(req.body?.reason || req.body?.cancellationReason);
 
@@ -3022,8 +3054,8 @@ export const updateSellerOrderStatusController = async (req, res) => {
       return sendError(res, 400, "Status is required");
     }
 
-    // Sellers can only manually change status to 'confirmed', 'packed', or 'cancelled'
-    // 'out_for_delivery' and 'delivered' are managed automatically by the delivery partner app
+    // Sellers can manually change status up to 'ready_for_pickup'; 'out_for_delivery' and
+    // 'delivered' are managed automatically by the delivery partner app.
     const restrictedStatuses = ["out_for_delivery", "delivered"];
     if (restrictedStatuses.includes(nextStatus)) {
       return sendError(

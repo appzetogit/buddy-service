@@ -931,6 +931,7 @@ export async function sweepQuickSellerAcknowledgements() {
           workflowStatus: leg.workflowStatus,
           items: leg.items || [],
           pricing: leg.pricing || {},
+          note: leg.note || '',
           createdAt: leg.createdAt,
         };
         try {
