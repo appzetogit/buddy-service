@@ -3120,11 +3120,13 @@ export async function confirmPickupDelivery(
   orderId,
   deliveryPartnerId,
   billImageUrl,
+  pickupOtp,
 ) {
   return deliveryService.confirmPickupDelivery(
     orderId,
     deliveryPartnerId,
     billImageUrl,
+    pickupOtp,
   );
 }
 
