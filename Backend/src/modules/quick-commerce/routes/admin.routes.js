@@ -105,6 +105,11 @@ import {
   updateFaq,
   deleteFaq,
 } from "../controllers/faq.controller.js";
+import {
+  downloadProductBulkTemplateAdmin,
+  bulkUploadProductsExcelAdminController,
+} from "../seller/controllers/bulkImport.controller.js";
+import { bulkUpload } from "../../../middleware/bulkUpload.js";
 
 // Mounted behind `authMiddleware, requireRoles('ADMIN')` at the router.use() call site
 // (routes/index.js) — Buddy only has one admin role (superadmin), so there's no
@@ -147,6 +152,14 @@ router.put(
   updateProduct,
 );
 router.delete("/products/:productId", removeProduct);
+
+// Bulk Upload (Excel + images). Admin picks the seller via the `sellerId` form field.
+router.get("/products/bulk-template", downloadProductBulkTemplateAdmin);
+router.post(
+  "/products/bulk-upload",
+  bulkUpload.fields([{ name: "file", maxCount: 1 }, { name: "images", maxCount: 300 }]),
+  bulkUploadProductsExcelAdminController,
+);
 
 // Orders
 router.get("/orders", getAdminOrders);

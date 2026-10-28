@@ -268,6 +268,14 @@ export const adminApi = {
 
   deleteProduct: (id) => axiosInstance.delete(`/quick-commerce/admin/products/${id}`),
 
+  getProductBulkTemplate: () => axiosInstance.get('/quick-commerce/admin/products/bulk-template', {
+    responseType: 'blob',
+  }),
+
+  bulkUploadProductsExcel: (formData) => axiosInstance.post('/quick-commerce/admin/products/bulk-upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+
   getOrders: (params) => axiosInstance.get('/quick-commerce/admin/orders', { params }),
   deleteOrder: (orderId) => axiosInstance.delete(`/quick-commerce/admin/orders/${orderId}`),
   // Dispatch actions (same set Food's admin has)

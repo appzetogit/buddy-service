@@ -604,6 +604,15 @@ export const adminAPI = {
     }),
   deleteFood: (id) =>
     apiClient.delete(`/food/admin/foods/${id}`, { contextModule: "admin" }),
+  getFoodBulkTemplate: () =>
+    apiClient.get("/food/admin/foods/bulk-template", {
+      responseType: "blob",
+      contextModule: "admin",
+    }),
+  bulkUploadFoodsExcel: (formData) =>
+    apiClient.post("/food/admin/foods/bulk-upload", formData, {
+      contextModule: "admin",
+    }),
   /** Food approvals (admin) - pending items created by restaurants */
   getPendingFoodApprovals: (params = {}) =>
     apiClient.get("/food/admin/foods/pending-approvals", {

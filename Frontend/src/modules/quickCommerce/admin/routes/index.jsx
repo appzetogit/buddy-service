@@ -12,6 +12,7 @@ const Level2Categories = React.lazy(() => import("../pages/categories/Level2Cate
 const SubCategories = React.lazy(() => import("../pages/categories/SubCategories"))
 const CategoryHierarchy = React.lazy(() => import("../pages/categories/CategoryHierarchy"))
 const ProductManagement = React.lazy(() => import("../pages/ProductManagement"))
+const BulkUploadProducts = React.lazy(() => import("../pages/BulkUploadProducts"))
 const ActiveSellers = React.lazy(() => import("../pages/ActiveSellers"))
 const PendingSellers = React.lazy(() => import("../pages/PendingSellers"))
 const AdminWallet = React.lazy(() => import("../pages/AdminWallet"))
@@ -51,6 +52,7 @@ function QuickCommerceAdminRoutesInner() {
       <Route path="/categories/sub" element={<SubCategories />} />
       <Route path="/categories/hierarchy" element={<CategoryHierarchy />} />
       <Route path="/products" element={<ProductManagement />} />
+      <Route path="/products/bulk-upload" element={<BulkUploadProducts />} />
       <Route path="/zone-setup" element={<QuickZoneSetup />} />
       <Route path="/zone-setup/add" element={<QuickAddZone />} />
       <Route path="/zone-setup/edit/:id" element={<QuickAddZone />} />

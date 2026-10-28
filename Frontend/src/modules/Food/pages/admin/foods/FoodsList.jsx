@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react"
-import { useSearchParams } from "react-router-dom"
-import { Search, Trash2, Loader2, Eye, Pencil, Plus, Save, ChevronDown, ChevronLeft, ChevronRight, Utensils, CheckCircle2, XCircle, RotateCw, MoreVertical } from "lucide-react"
+import { useSearchParams, useNavigate } from "react-router-dom"
+import { Search, Trash2, Loader2, Eye, Pencil, Plus, Save, ChevronDown, ChevronLeft, ChevronRight, Utensils, CheckCircle2, XCircle, RotateCw, MoreVertical, UploadCloud } from "lucide-react"
 import { adminAPI, uploadAPI } from "@food/api"
 import { getAdminFoodsCached, getAdminRestaurantsActiveCached, getAdminRestaurantsInactiveCached } from "@food/utils/foodListingsCache"
 import { toast } from "sonner"
@@ -35,6 +35,7 @@ const createVariantDraft = (variant = {}) => ({
 })
 
 export default function FoodsList() {
+  const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedRestaurant, setSelectedRestaurant] = useState("all")
   const [foodTypeFilter, setFoodTypeFilter] = useState("all")
@@ -518,6 +519,14 @@ export default function FoodsList() {
             >
               <Plus className="w-4 h-4" />
               <span>Add Food</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/admin/food/foods/bulk-upload")}
+              className="px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-2"
+            >
+              <UploadCloud className="w-4 h-4" />
+              <span>Bulk Upload (Excel)</span>
             </button>
             <div className="relative flex-1 sm:flex-initial min-w-[200px]">
               <input

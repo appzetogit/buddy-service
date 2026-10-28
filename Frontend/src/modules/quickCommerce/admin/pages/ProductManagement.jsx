@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Card from '@shared/components/ui/Card';
 import Badge from '@shared/components/ui/Badge';
 import { adminApi } from '../services/adminApi';
@@ -21,6 +22,7 @@ import {
     HiOutlineFolderOpen,
     HiOutlineSwatch,
     HiOutlineCurrencyDollar,
+    HiOutlineArrowUpTray,
 } from 'react-icons/hi2';
 import Modal from '@shared/components/ui/Modal';
 import Pagination from '@shared/components/ui/Pagination';
@@ -110,6 +112,7 @@ const mergeCurrentCategoriesIntoTree = (tree = [], product = null) => {
 };
 
 const ProductManagement = () => {
+    const navigate = useNavigate();
     const { user: authUser } = useAuth();
     const currentUser = useMemo(() => authUser || getCurrentUser("admin"), [authUser]);
     const [resolvedPermissions, setResolvedPermissions] = useState({});
@@ -583,6 +586,14 @@ const ProductManagement = () => {
                     </h1>
                     <p className="ds-description mt-0.5">Track your items, prices, and how many are left in stock.</p>
                 </div>
+                <button
+                    type="button"
+                    onClick={() => navigate('/admin/quick-commerce/products/bulk-upload')}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 shrink-0"
+                >
+                    <HiOutlineArrowUpTray className="h-4 w-4" />
+                    Bulk Upload (Excel)
+                </button>
             </div>
 
             {/* Quick Stats */}
