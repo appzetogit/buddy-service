@@ -2738,6 +2738,19 @@ export default function Inventory() {
         >
           <span className="text-sm font-medium text-gray-900">Add item</span>
         </button>
+        <button
+          onClick={() => {
+            setIsAddPopupOpen(false)
+            navigate(`/food/restaurant/hub-menu/bulk-upload`, {
+              state: {
+                backTo: "/food/restaurant/inventory",
+              },
+            })
+          }}
+          className="w-full rounded-lg px-4 py-3 text-left transition-colors hover:bg-gray-50"
+        >
+          <span className="text-sm font-medium text-gray-900">Bulk upload (Excel)</span>
+        </button>
       </RestaurantPanelModal>
 
       {/* Floating add button */}

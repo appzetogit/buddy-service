@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Card from "@shared/components/ui/Card";
 import Badge from "@shared/components/ui/Badge";
+import Button from "@shared/components/ui/Button";
 import {
   HiOutlinePlus,
+  HiOutlineArrowUpTray,
   HiOutlineCube,
   HiOutlineMagnifyingGlass,
   HiOutlineFunnel,
@@ -697,6 +699,13 @@ const ProductManagement = () => {
             </p>
           </div>
           <div className="flex flex-row items-center gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              onClick={() => navigate("/seller/products/add?method=bulk")}
+              className="flex-1 sm:flex-none px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center space-x-1.5">
+              <HiOutlineArrowUpTray className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 shrink-0" />
+              <span className="truncate">BULK UPLOAD</span>
+            </Button>
             <ShimmerButton
               onClick={() => navigate("/seller/products/add")}
               className="flex-1 sm:flex-none px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold shadow-md flex items-center justify-center space-x-1.5 text-white"
