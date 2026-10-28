@@ -93,3 +93,66 @@ https://sooperbuddy.in/uploads/appzeto/food/<uuid>.webp
 **One thing to check:** if any code hardcodes or special-cases the `cloudinary.com` domain (e.g. for a specific image transform, CDN check, or URL pattern match), that logic will no longer apply to new uploads. Old images uploaded before this change are untouched and will still be served from Cloudinary, so both domains can appear in the same list of images for a while — don't assume every image URL is from one host or the other.
 
 No new fields, no new response shape — just a different domain in the URL string.
+
+---
+
+## 3. Bulk Excel upload for restaurants & sellers (web panel, not rider app)
+
+Restaurants (Food) and sellers (Quick Commerce) can now bulk-upload their own menu items / products from their own panel, using an Excel file plus a folder of images — the same tool admin already had, now self-service. **This section is only relevant if the Flutter app has a restaurant/seller panel; it does not affect the rider or customer apps.**
+
+### Food — restaurant self-service
+
+```
+GET  /food/restaurant/foods/bulk-template      -> downloads an .xlsx template
+POST /food/restaurant/foods/bulk-upload        -> multipart: file (xlsx) + images[] (jpg/png)
+
+GET  /food/restaurant/addons/bulk-template     -> downloads an .xlsx template
+POST /food/restaurant/addons/bulk-upload       -> multipart: file (xlsx) + images[] (jpg/png)
+```
+
+Both upload endpoints require the restaurant's normal auth token (same header as every other restaurant-panel call). Every row in the sheet is created under the authenticated restaurant automatically — there's no restaurant-picker field, unlike the admin version.
+
+**Excel columns — Foods:**
+`Food Name, Description, Price, Other Price, Food Type (Veg/Non-Veg), Variants, Category Name, Image, Tags, Is Recommended`
+- `Variants` (optional): `Name:Price:Unit` separated by `;`, e.g. `Small:149:piece;Large:299:piece`. Leave blank to use the `Price` column for a single-variant item.
+- `Image`: exact filename of one of the images uploaded alongside the Excel (e.g. `margherita.jpg`) — it is matched by filename, not by order.
+
+**Excel columns — Addons:**
+`Addon Name, Description, Price, Food Type (Veg/Non-Veg), Image`
+
+**Response (both):**
+```json
+{
+  "success": true,
+  "message": "Bulk upload processed",
+  "data": {
+    "created": [{ "row": 2, "id": "650f...", "name": "Margherita Pizza" }],
+    "failed": [{ "row": 3, "name": "Paneer Tikka", "reason": "Price is required when no Variants are given" }],
+    "totalRows": 2
+  }
+}
+```
+Each row succeeds or fails independently — a bad row does not stop the rest of the sheet from importing.
+
+### Quick Commerce — seller self-service
+
+```
+GET  /quick-commerce/seller/products/bulk-template   -> downloads an .xlsx template
+POST /quick-commerce/seller/products/bulk-upload      -> multipart: file (xlsx) + images[] (jpg/png)
+```
+
+Requires the seller's normal auth token. Every row is created under the authenticated seller.
+
+**Excel columns:**
+`Product Name, Description, Brand, Header Category, Category, Subcategory, Tags, Price, Sale Price, Stock, Variant Label, Images, Variants, Variant Images`
+- Either fill `Variants` (for multiple sizes/packs) **or** just `Price` / `Stock` / `Images` for a single-variant product.
+- `Variants` format: `Name:Price:SalePrice:Stock` separated by `;`, e.g. `Small:100:90:20;Large:150:140:10` (leave SalePrice blank if none: `Small:100::20`).
+- `Variant Images`: one filename-group per variant, groups separated by `|`, filenames within a group separated by `,`, in the same order as `Variants` — e.g. `small1.jpg,small2.jpg|large1.jpg`. Each variant needs 1–3 images.
+- `Header Category` / `Category` / `Subcategory` must exactly match existing category names in that seller's store.
+
+**Response:** same shape as the Food endpoints — `{ created: [...], failed: [...], totalRows: N }`.
+
+### Notes for both
+- The uploaded images are matched to Excel rows purely by filename (case-insensitive, ignoring spaces/underscores) — there is no need to upload them in any particular order.
+- Images end up on local server storage (see section 2) just like any other upload — the created items' image URLs look like `https://sooperbuddy.in/uploads/...`.
+- This is a web-panel feature (multipart file + folder picker); it is not something the rider or customer mobile app needs to call. Only build this if/when the Flutter app has a restaurant-owner or seller-owner panel.
