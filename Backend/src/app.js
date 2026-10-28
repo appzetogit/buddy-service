@@ -7,7 +7,7 @@ import mongoSanitize from 'mongo-sanitize';
 import xssClean from 'xss-clean';
 import routes from './routes/index.js';
 import errorHandler from './middleware/errorHandler.js';
-import { apiRateLimiter } from './middleware/rateLimit.js';
+import { apiRateLimiter, adminApiRateLimiter } from './middleware/rateLimit.js';
 import { responseTimeLogger } from './middleware/responseTimeLogger.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
 import { healthCheck } from './config/health.js';
@@ -72,6 +72,10 @@ app.use((req, _res, next) => {
     next();
 });
 app.use(xssClean());
+
+// Admin dashboards (Food, Quick Commerce, Taxi) get their own, higher-ceiling bucket — mounted
+// first so it, not the public apiRateLimiter below, is what actually counts their requests.
+app.use(/^\/api\/.*\/admin(\/|$)/, adminApiRateLimiter);
 
 // Global rate limiting for API routes
 app.use('/api', apiRateLimiter);

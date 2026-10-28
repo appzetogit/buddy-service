@@ -21,8 +21,31 @@ export const apiRateLimiter = rateLimit({
      */
     skip: (req) => {
         const url = req.originalUrl || req.url || '';
-        return url.includes('/payments/webhook/');
+        if (url.includes('/payments/webhook/')) return true;
+        // /admin/* routes use their own, separately-bucketed adminApiRateLimiter (see below),
+        // mounted ahead of this one in app.js — never double-count them against the public bucket.
+        return /\/admin(\/|$)/.test(url);
     },
+    message: {
+        success: false,
+        message: 'Too many requests, please try again later.'
+    }
+});
+
+/**
+ * Separate, higher-ceiling bucket for /admin routes (Food, Quick Commerce, Taxi).
+ *
+ * The office IP running the admin panels was sharing apiRateLimiter's single public-traffic
+ * bucket with every customer/rider/restaurant request from that IP, and three dashboards
+ * (each auto-polling on its own interval) burn through it in a couple of minutes — seen live
+ * as repeated 429s on /taxi/admin/dashboard/data. Still bounded and still per-IP, just sized
+ * for "a handful of staff, each with a few panels open" instead of public traffic.
+ */
+export const adminApiRateLimiter = rateLimit({
+    windowMs,
+    max: config.nodeEnv === 'development' ? 5000 : Math.max(config.rateLimitMaxRequests * 10, 2000),
+    standardHeaders: true,
+    legacyHeaders: false,
     message: {
         success: false,
         message: 'Too many requests, please try again later.'
