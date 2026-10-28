@@ -215,7 +215,7 @@ export const reachedPickupController = riderStep('mark reached pickup', 'Marked 
 
 /** Rider collected the parcel from the store (one store at a time on multi-store orders). */
 export const confirmPickupController = riderStep('confirm pickup', 'Pickup confirmed', (req, partnerId) =>
-  confirmPickup(req.params.orderId, partnerId, { billImageUrl: req.body?.billImageUrl }),
+  confirmPickup(req.params.orderId, partnerId, { billImageUrl: req.body?.billImageUrl, pickupOtp: req.body?.pickupOtp }),
 );
 
 export const reachedDropController = riderStep('mark reached drop', 'Marked as reached drop', (req, partnerId) =>

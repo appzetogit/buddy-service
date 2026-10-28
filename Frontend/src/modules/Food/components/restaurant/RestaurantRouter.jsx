@@ -20,6 +20,7 @@ const RestaurantOnboarding = lazy(() => import("@food/pages/restaurant/Onboardin
 const PrivacyPolicyPage = lazy(() => import("@food/pages/restaurant/PrivacyPolicyPage"))
 const TermsAndConditionsPage = lazy(() => import("@food/pages/restaurant/TermsAndConditionsPage"))
 const MenuCategoriesPage = lazy(() => import("@food/pages/restaurant/MenuCategoriesPage"))
+const BulkUploadFoods = lazy(() => import("@food/pages/restaurant/BulkUploadFoods"))
 const RestaurantStatus = lazy(() => import("@food/pages/restaurant/RestaurantStatus"))
 const ExploreMore = lazy(() => import("@food/pages/restaurant/ExploreMore"))
 const DeliverySettings = lazy(() => import("@food/pages/restaurant/DeliverySettings"))
@@ -116,6 +117,7 @@ export default function RestaurantRouter() {
             <Route path="fssai/update" element={<FssaiUpdate />} />
             <Route path="hyperpure" element={<Hyperpure />} />
             <Route path="hub-menu/item/:id" element={<ItemDetailsPage />} />
+            <Route path="hub-menu/bulk-upload" element={<BulkUploadFoods />} />
             <Route path="hub-finance" element={<HubFinance />} />
             <Route path="withdrawal-history" element={<WithdrawalHistoryPage />} />
             <Route path="finance-details" element={<FinanceDetailsPage />} />

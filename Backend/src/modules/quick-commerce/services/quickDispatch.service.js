@@ -114,6 +114,10 @@ export const buildQuickOfferPayload = (orderDoc) => {
     userPhone: address.phone || '',
     note: order?.note || '',
     riderEarning,
+    // Single-store orders carry the OTP on the top-level field (select:false), so this is only
+    // ever true/false here — never the real code, even if a caller forgot to strip it upstream.
+    hasPickupOtp: Boolean(order?.pickupOtp),
+    pickupOtpVerified: Boolean(order?.pickupOtpVerified),
     sharedRiderEarning: Number(order?.sharedRiderEarning || 0),
     earnings: riderEarning,
     deliveryBoyFee: riderEarning,
@@ -132,6 +136,8 @@ export const buildQuickOfferPayload = (orderDoc) => {
         items: p?.items || [],
         permanentlyDropped: Boolean(p?.permanentlyDropped),
         pickedAt: p?.pickedAt || null,
+        hasPickupOtp: Boolean(p?.pickupOtp),
+        pickupOtpVerified: Boolean(p?.pickupOtpVerified),
         location: { coordinates: p?.location?.coordinates, latitude: lat, longitude: lng },
       };
     }),

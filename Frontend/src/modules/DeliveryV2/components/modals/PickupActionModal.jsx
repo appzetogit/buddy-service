@@ -41,6 +41,7 @@ export const PickupActionModal = ({
   const [isUploadingBill, setIsUploadingBill] = useState(false);
   const [billImageUploaded, setBillImageUploaded] = useState(false);
   const [billImageUrl, setBillImageUrl] = useState(null);
+  const [pickupOtp, setPickupOtp] = useState('');
   const [isSharing, setIsSharing] = useState(false);
   const [splitThreshold, setSplitThreshold] = useState(20);
   const [showDelayPicker, setShowDelayPicker] = useState(false);
@@ -119,7 +120,13 @@ export const PickupActionModal = ({
     setBillImageUploaded(false);
     setBillImageUrl(null);
     setIsUploadingBill(false);
+    setPickupOtp('');
   }, [currentPickupKey]);
+
+  // Multi-restaurant: the current stop carries its own OTP flag; single-restaurant: the order does.
+  const needsPickupOtp = currentPickup
+    ? Boolean(currentPickup.hasPickupOtp) && !currentPickup.pickupOtpVerified
+    : Boolean(order?.hasPickupOtp) && !order?.pickupOtpVerified;
 
   const handleReportDelay = async (reason) => {
     try {
@@ -648,16 +655,36 @@ export const PickupActionModal = ({
                 </div>
               ) : (
                 <div>
+                  {needsPickupOtp && billImageUploaded && (
+                    <div className="mb-3">
+                      <p className="text-center text-[10px] font-bold uppercase tracking-widest mb-2 text-gray-400">
+                        Ask {currentPickupName} for the pickup OTP
+                      </p>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        maxLength={4}
+                        value={pickupOtp}
+                        onChange={(e) => setPickupOtp(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="Enter 4-digit OTP"
+                        className="w-full text-center text-lg font-bold tracking-[0.3em] py-3 rounded-2xl border-2 border-gray-200 focus:border-orange-400 focus:outline-none"
+                      />
+                    </div>
+                  )}
                   <p className={`text-center text-[10px] font-bold uppercase tracking-widest mb-3 ${billImageUploaded ? 'text-green-600' : 'text-gray-400'}`}>
-                    {billImageUploaded ? "Check the restaurant logo - Swipe to pick up" : "Capture bill to unlock swipe"}
+                    {!billImageUploaded
+                      ? "Capture bill to unlock swipe"
+                      : needsPickupOtp && pickupOtp.length < 4
+                        ? "Enter the pickup OTP to unlock swipe"
+                        : "Check the restaurant logo - Swipe to pick up"}
                   </p>
                   {canActOnPickup && (
                     <ActionSlider
                       key="action-pickup"
                       label="Slide to Pick Up"
                       successLabel="Picked Up!"
-                      disabled={!billImageUploaded}
-                      onConfirm={() => onPickedUp(billImageUrl)}
+                      disabled={!billImageUploaded || (needsPickupOtp && pickupOtp.length < 4)}
+                      onConfirm={() => onPickedUp(billImageUrl, pickupOtp)}
                       color="bg-orange-500"
                     />
                   )}

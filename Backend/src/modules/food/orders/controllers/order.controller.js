@@ -290,8 +290,8 @@ export async function confirmPickupDeliveryController(req, res, next) {
     try {
         const deliveryPartnerId = req.user?.userId;
         const orderId = req.params.orderId;
-        const { billImageUrl } = req.body;
-        const order = await orderService.confirmPickupDelivery(orderId, deliveryPartnerId, billImageUrl);
+        const { billImageUrl, pickupOtp } = req.body;
+        const order = await orderService.confirmPickupDelivery(orderId, deliveryPartnerId, billImageUrl, pickupOtp);
         return sendResponse(res, 200, 'Pickup confirmed', { order });
     } catch (err) {
         next(err);

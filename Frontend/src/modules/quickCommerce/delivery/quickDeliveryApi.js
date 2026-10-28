@@ -29,7 +29,7 @@ export const quickDeliveryAPI = {
   confirmOrderId: (orderId, _confirmedOrderId, location = {}, data = {}) =>
     apiClient.patch(
       `${base(orderId)}/confirm-pickup`,
-      { latitude: location.lat, longitude: location.lng, billImageUrl: data.billImageUrl },
+      { latitude: location.lat, longitude: location.lng, billImageUrl: data.billImageUrl, pickupOtp: data.pickupOtp },
       opts,
     ),
 

@@ -2591,7 +2591,7 @@ export async function updateOrderStatusRestaurant(
       { restaurantId: new mongoose.Types.ObjectId(restaurantId) },
       { 'pickups.restaurantId': new mongoose.Types.ObjectId(restaurantId) },
     ],
-  });
+  }).select('+pickupOtp');
   if (!order) throw new NotFoundError("Order not found");
   const from = order.orderStatus;
 
@@ -2696,6 +2696,17 @@ export async function updateOrderStatusRestaurant(
   const historyNote = isMulti
     ? `${note ? `${note} - ` : ''}restaurant_status:${orderStatus}`
     : (note || '');
+  // The restaurant is handing the order to a rider soon — generate its pickup OTP now, once,
+  // so the restaurant can show it immediately rather than waiting for the rider to request it
+  // (the drop-off OTP is rider-triggered; this one is restaurant-triggered, by design, since the
+  // restaurant is the party that needs to display it before the rider even arrives).
+  let generatedPickupOtp = null;
+  if (pickup && pickup.status === 'ready' && !pickup.pickupOtp) {
+    pickup.pickupOtp = generateFourDigitDeliveryOtp();
+    pickup.pickupOtpVerified = false;
+    generatedPickupOtp = pickup.pickupOtp;
+  }
+
   pushStatusHistory(order, {
     byRole: "RESTAURANT",
     byId: restaurantId,
@@ -2745,6 +2756,17 @@ export async function updateOrderStatusRestaurant(
     const io = getIO();
     if (io) {
       const actingScoped = buildRestaurantScopedOrder(order, restaurantId);
+      // Each restaurant's pickup OTP must only ever reach that restaurant's own room — not the
+      // customer, not other restaurants on a multi-restaurant order, and not the rider below
+      // (same rule as the drop-off OTP, which only the customer ever sees).
+      const sanitizePickupsForBroadcast = (pickups) =>
+        Array.isArray(pickups)
+          ? pickups.map((p) => {
+              const { pickupOtp, ...rest } = p?.toObject?.() || p || {};
+              return { ...rest, hasPickupOtp: Boolean(pickupOtp), pickupOtpVerified: Boolean(rest.pickupOtpVerified) };
+            })
+          : [];
+      const publicPickups = sanitizePickupsForBroadcast(order.pickups);
       const payload = {
         orderMongoId: order._id?.toString?.(),
         orderId: order._id.toString(),
@@ -2755,7 +2777,7 @@ export async function updateOrderStatusRestaurant(
         myPickupStatus: actingScoped.myPickupStatus,
         title,
         message: body,
-        pickups: order.pickups || [],
+        pickups: publicPickups,
         pickupProgress: getPickupProgress(order),
         dispatch: order.dispatch || null,
         deliveryState: order.deliveryState || null,
@@ -2766,7 +2788,12 @@ export async function updateOrderStatusRestaurant(
       const restRoom = rooms.restaurant(restaurantId);
       const userRoom = rooms.user(order.userId);
 
-      io.to(restRoom).emit("order_status_update", payload);
+      // The acting restaurant gets its OWN unsanitized pickup (with its real OTP) — everyone
+      // else in this function only ever gets the sanitized `publicPickups` above.
+      io.to(restRoom).emit("order_status_update", {
+        ...payload,
+        pickups: actingScoped.pickups || publicPickups,
+      });
       // User/DP keep aggregate status
       io.to(userRoom).emit("order_status_update", {
         ...payload,
@@ -2785,6 +2812,8 @@ export async function updateOrderStatusRestaurant(
             orderStatus: otherScoped.orderStatus,
             status: otherScoped.status,
             myPickupStatus: otherScoped.myPickupStatus,
+            // This restaurant gets its OWN unsanitized pickup too.
+            pickups: otherScoped.pickups || publicPickups,
             restaurantId: rid,
             title: 'Multi-restaurant order update',
             message: 'Another restaurant updated this shared order. Your items still need your action.',
@@ -2857,6 +2886,24 @@ export async function updateOrderStatusRestaurant(
         },
       },
     );
+
+    // Pickup OTP — restaurant-only, never folded into the shared push above (that one also
+    // reaches the customer and rider).
+    if (generatedPickupOtp) {
+      await notifyOwnerSafely(
+        { ownerType: "RESTAURANT", ownerId: restaurantId },
+        {
+          title: "Pickup OTP",
+          body: `Share this code with the rider when they collect order #${order.order_id || order._id}: ${generatedPickupOtp}`,
+          data: {
+            type: "pickup_otp",
+            orderId: order._id.toString(),
+            orderMongoId: order._id?.toString?.() || "",
+            pickupOtp: generatedPickupOtp,
+          },
+        },
+      );
+    }
   } catch (err) {
     console.error("[DEBUG] Error emitting status update to restaurant:", err);
   }

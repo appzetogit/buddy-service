@@ -153,6 +153,11 @@ const OrderMobileCard = React.memo(({
                 : ""}
             </p>
           ) : null}
+          {order.pickupOtp && !order.pickupOtpVerified ? (
+            <p className="text-[11px] font-black text-orange-700 mt-1 tracking-widest">
+              OTP: {order.pickupOtp}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <Badge
@@ -316,6 +321,11 @@ const OrderRow = React.memo(({
         {(order.hasReturn || order.returnStatus) ? (
           <p className="mt-1 text-center text-[9px] font-black uppercase tracking-wider text-amber-700">
             {order.returnStatusLabel || String(order.returnStatus).replace(/_/g, " ")}
+          </p>
+        ) : null}
+        {order.pickupOtp && !order.pickupOtpVerified ? (
+          <p className="mt-1 text-center text-[10px] font-black tracking-widest text-orange-700">
+            OTP: {order.pickupOtp}
           </p>
         ) : null}
       </td>
@@ -585,6 +595,8 @@ const Orders = () => {
         netAfterReturn: Number(order.netAfterReturn || 0),
         createdAt: order.createdAt || null,
         updatedAt: order.updatedAt || null,
+        pickupOtp: order.pickupOtp || "",
+        pickupOtpVerified: Boolean(order.pickupOtpVerified),
       }));
 
       setOrders(formattedOrders);
@@ -736,10 +748,12 @@ const Orders = () => {
 
   const handleStatusUpdate = useCallback(async (orderId, newStatus) => {
     try {
-      await sellerApi.updateOrderStatus(orderId, {
+      const response = await sellerApi.updateOrderStatus(orderId, {
         status: newStatus.toLowerCase(),
       });
       const normalizedStatus = String(newStatus || "").toLowerCase();
+      const resultData = response?.data?.result || response?.data?.data || {};
+      const pickupOtp = resultData.pickupOtp || "";
 
       setOrders((prev) =>
         (Array.isArray(prev) ? prev : []).map((order) =>
@@ -747,6 +761,7 @@ const Orders = () => {
             ? {
               ...order,
               status: normalizedStatus,
+              ...(pickupOtp ? { pickupOtp, pickupOtpVerified: false } : {}),
             }
             : order,
         ),
@@ -754,9 +769,17 @@ const Orders = () => {
 
       setSelectedOrder((prev) => {
         if (prev && prev.id === orderId)
-          return { ...prev, status: normalizedStatus };
+          return {
+            ...prev,
+            status: normalizedStatus,
+            ...(pickupOtp ? { pickupOtp, pickupOtpVerified: false } : {}),
+          };
         return prev;
       });
+
+      if (pickupOtp) {
+        showToast(`Pickup OTP: ${pickupOtp} — share this with the rider`, "success");
+      }
 
       const nextTabLabel =
         normalizedStatus === "out_for_delivery"
@@ -1393,6 +1416,16 @@ const Orders = () => {
                             </p>
                           </div>
                         </div>
+                        {selectedOrder.pickupOtp && !selectedOrder.pickupOtpVerified ? (
+                          <div className="rounded-2xl border border-orange-200 bg-orange-50 p-3 sm:p-4 flex items-center justify-between">
+                            <h4 className="text-xs font-black text-orange-600 uppercase tracking-widest">
+                              Pickup OTP — share with rider
+                            </h4>
+                            <p className="text-lg font-black tracking-widest text-orange-700">
+                              {selectedOrder.pickupOtp}
+                            </p>
+                          </div>
+                        ) : null}
                         {String(selectedOrder.status || "").toLowerCase().includes("cancel") &&
                           selectedOrder.cancellationReason ? (
                           <div className="rounded-2xl border border-rose-100 bg-rose-50 p-3 sm:p-4">

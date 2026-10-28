@@ -1,6 +1,6 @@
 import express from 'express';
 import { upload } from '../../../middleware/upload.js';
-import { uploadFileBuffer, uploadImageBuffer, uploadVideoBuffer } from '../../../services/cloudinary.service.js';
+import { uploadFileBuffer, uploadImageBuffer, uploadVideoBuffer } from '../../../services/localUpload.service.js';
 
 const router = express.Router();
 

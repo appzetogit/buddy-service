@@ -1533,6 +1533,15 @@ export default function HubMenu() {
         >
           <span className="text-sm font-medium text-gray-900">Add item</span>
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            navigate(`/restaurant/hub-menu/bulk-upload`)
+          }}
+          className="w-full rounded-lg px-4 py-3 text-left transition-colors hover:bg-gray-50"
+        >
+          <span className="text-sm font-medium text-gray-900">Bulk upload (Excel)</span>
+        </button>
       </RestaurantPanelModal>
 
       {/* Availability Popup */}

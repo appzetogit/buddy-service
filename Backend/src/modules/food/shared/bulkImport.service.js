@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { ValidationError } from '../../../core/auth/errors.js';
 import { FoodRestaurant } from '../restaurant/models/restaurant.model.js';
-import { uploadImageBuffer } from '../../../services/cloudinary.service.js';
+import { uploadImageBuffer } from '../../../services/localUpload.service.js';
 
 // Bulk Excel import for Foods and Addons, shared by both the admin panel and
 // the restaurant dashboard so every caller reuses the exact same per-item
@@ -136,8 +136,7 @@ export async function bulkCreateFoods({ rows, imagesMap, isAdmin, restaurantId, 
     return { created, failed, totalRows: rows.length };
 }
 
-export async function bulkCreateAddons({ rows, imagesMap, isAdmin, restaurantId, performer = null, folder = 'appzeto/bulk/addons' }) {
-    const { createRestaurantAddonAdmin } = await import('../admin/services/admin.service.js');
+export async function bulkCreateAddons({ rows, imagesMap, isAdmin, restaurantId, folder = 'appzeto/bulk/addons' }) {
     const { createRestaurantAddon } = await import('../restaurant/services/restaurantAddon.service.js');
 
     const created = [];
@@ -161,7 +160,7 @@ export async function bulkCreateAddons({ rows, imagesMap, isAdmin, restaurantId,
             };
 
             const doc = isAdmin
-                ? await createRestaurantAddonAdmin({ ...body, restaurantId: await resolveRestaurantIdByName(row.restaurantname) }, performer)
+                ? await createRestaurantAddon(await resolveRestaurantIdByName(row.restaurantname), body)
                 : await createRestaurantAddon(restaurantId, body);
 
             created.push({ row: row.rowNumber, id: String(doc._id), name });

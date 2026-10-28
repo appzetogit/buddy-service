@@ -4,7 +4,7 @@ import {
     extractImagePublicIdFromUrl,
     replaceCloudinaryImage,
     uploadImageBufferDetailed,
-} from '../../../services/cloudinary.service.js';
+} from '../../../services/localUpload.service.js';
 import { logger } from '../../../utils/logger.js';
 
 export {

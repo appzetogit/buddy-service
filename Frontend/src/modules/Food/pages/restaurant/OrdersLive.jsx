@@ -2929,6 +2929,8 @@ function OrderCard({
   isMarkingReady = false,
   scheduledAt = null,
   restaurantNote = null,
+  pickupOtp = null,
+  pickupOtpVerified = false,
 }) {
   const selectedOrderId = useContext(SelectedOrderContext);
   const isSelected = selectedOrderId != null && String(selectedOrderId) === String(orderId);
@@ -2963,7 +2965,9 @@ function OrderCard({
           itemsSummary,
           paymentMethod,
           scheduledAt,
-          restaurantNote
+          restaurantNote,
+          pickupOtp,
+          pickupOtpVerified,
         })}
         className="flex gap-3 items-start cursor-pointer pl-1"
       >
@@ -3037,6 +3041,13 @@ function OrderCard({
               <p className="text-[10px] text-blue-700 font-semibold line-clamp-1">
                 📝 Note: {restaurantNote}
               </p>
+            </div>
+          )}
+
+          {pickupOtp && !pickupOtpVerified && (
+            <div className="mb-2 px-2.5 py-1.5 bg-orange-50 border border-orange-200 rounded-lg flex items-center justify-between">
+              <span className="text-[10px] text-orange-700 font-semibold">Pickup OTP — give to rider</span>
+              <span className="text-sm font-black tracking-widest text-orange-700">{pickupOtp}</span>
             </div>
           )}
 
@@ -3496,6 +3507,8 @@ function ReadyOrders({ onSelectOrder, refreshToken = 0 }) {
             dispatchStatus: order.dispatch?.status || null,
             scheduledAt: order.scheduledAt || null,
             restaurantNote: order.restaurantNote || null,
+            pickupOtp: order.pickupOtp || "",
+            pickupOtpVerified: Boolean(order.pickupOtpVerified),
           }));
 
           if (isMounted) {

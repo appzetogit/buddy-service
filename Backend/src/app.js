@@ -12,6 +12,7 @@ import { responseTimeLogger } from './middleware/responseTimeLogger.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
 import { healthCheck } from './config/health.js';
 import { config } from './config/env.js';
+import { ensureUploadRoot } from './services/localUpload.service.js';
 const app = express();
 
 // Trust first proxy (essential for express-rate-limit if behind a proxy)
@@ -46,6 +47,12 @@ app.use(helmet({
 }));
 app.use(cors());
 app.use(morgan('dev'));
+
+// Locally uploaded files (replaces Cloudinary). Served before the API's JSON body parser since
+// these are plain GETs, not API calls, and shouldn't count against /api rate limits.
+ensureUploadRoot();
+app.use(config.uploadPublicBaseUrl, express.static(config.uploadRoot, { maxAge: '30d', etag: true }));
+
 app.use(express.json({
     limit: '10mb',
     verify: (req, res, buf) => {

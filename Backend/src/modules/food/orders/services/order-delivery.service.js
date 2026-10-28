@@ -338,13 +338,21 @@ function emitOrderUpdate(order, deliveryPartnerId, options = {}) {
             return { ...rest, hasOtp: Boolean(otp), otpVerified: Boolean(rest.otpVerified) };
           })
         : [];
+      // This same payload goes to the rider and customer rooms too (below) — the restaurant's
+      // own pickup OTP must never reach either of them, only "a code exists" + verified state.
+      const publicPickups = Array.isArray(order.pickups)
+        ? order.pickups.map((pickup) => {
+            const { pickupOtp, ...rest } = pickup?.toObject?.() || pickup || {};
+            return { ...rest, hasPickupOtp: Boolean(pickupOtp), pickupOtpVerified: Boolean(rest.pickupOtpVerified) };
+          })
+        : [];
       const payload = {
         orderMongoId: order._id?.toString?.(),
         orderId: order._id.toString(),
         orderStatus: order.orderStatus,
         deliveryState: order.deliveryState,
         deliveryVerification: dv,
-        pickups: order.pickups || [],
+        pickups: publicPickups,
         pickupProgress: getPickupProgress(order),
         isDualLeg: isDualLegActive(order),
         legs: publicLegs,
@@ -636,6 +644,7 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
 
   const [docs, total] = await Promise.all([
     FoodOrder.find(filter)
+      .select('-pickups.pickupOtp -legs.pickupOtp')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -1506,7 +1515,25 @@ export async function confirmReachedPickupDelivery(orderId, deliveryPartnerId) {
   return order.toObject();
 }
 
-export async function confirmPickupDelivery(orderId, deliveryPartnerId, billImageUrl) {
+/**
+ * A restaurant's pickup OTP is optional-by-data: orders placed before this feature shipped (or
+ * a pickup whose status never passed through 'ready', e.g. legacy/edge paths) have no OTP set.
+ * Only enforce the check when the pickup actually has one — never invent a new hard-block for
+ * pre-existing orders.
+ */
+function assertPickupOtpVerified(pickup, otp) {
+  const expected = String(pickup?.pickupOtp || '').trim();
+  if (!expected) return; // nothing to verify — behaves exactly like before this feature.
+  if (pickup?.pickupOtpVerified) return;
+  if (!isOtpMatch(expected, otp)) {
+    throw new ValidationError(
+      'Invalid pickup OTP. Ask the restaurant for the code shown on their order screen.',
+    );
+  }
+  pickup.pickupOtpVerified = true;
+}
+
+export async function confirmPickupDelivery(orderId, deliveryPartnerId, billImageUrl, pickupOtp) {
   const identity = buildOrderIdentityFilter(orderId);
   const order = await FoodOrder.findOne(identity).select('+deliveryOtp');
   if (!order) throw new NotFoundError('Order not found');
@@ -1543,6 +1570,7 @@ export async function confirmPickupDelivery(orderId, deliveryPartnerId, billImag
     }
 
     if (currentPickup) {
+      assertPickupOtpVerified(currentPickup, pickupOtp);
       currentPickup.status = 'picked_up';
       currentPickup.pickedAt = new Date();
       if (billImageUrl) currentPickup.billImageUrl = billImageUrl;
@@ -1623,6 +1651,10 @@ export async function confirmPickupDelivery(orderId, deliveryPartnerId, billImag
           'You can only pick up the order after the restaurant marks it ready for pickup.',
         );
       }
+      // Both legs collect from the same restaurant and the same OTP — each driver enters it
+      // independently when THEY collect their half, verified flag lives on the shared pickup row.
+      const sharedPickup = (order.pickups || [])[0];
+      if (sharedPickup) assertPickupOtpVerified(sharedPickup, pickupOtp);
       pickupLeg.status = 'picked_up';
       pickupLeg.pickedAt = pickupLeg.pickedAt || new Date();
       if (billImageUrl) order.deliveryState = {
@@ -1662,6 +1694,7 @@ export async function confirmPickupDelivery(orderId, deliveryPartnerId, billImag
     // Keep single-restaurant pickup row in sync so restaurant-scoped reads see the handover.
     const soloPickup = (order.pickups || [])[0];
     if (soloPickup) {
+      assertPickupOtpVerified(soloPickup, pickupOtp);
       soloPickup.status = 'picked_up';
       soloPickup.pickedAt = soloPickup.pickedAt || new Date();
       if (billImageUrl) soloPickup.billImageUrl = billImageUrl;

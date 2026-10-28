@@ -1474,6 +1474,24 @@ export const restaurantAPI = {
     apiClient.delete(`/food/restaurant/foods/${String(id)}`, {
       contextModule: "restaurant",
     }),
+  getFoodBulkTemplate: () =>
+    apiClient.get("/food/restaurant/foods/bulk-template", {
+      responseType: "blob",
+      contextModule: "restaurant",
+    }),
+  bulkUploadFoodsExcel: (formData) =>
+    apiClient.post("/food/restaurant/foods/bulk-upload", formData, {
+      contextModule: "restaurant",
+    }),
+  getAddonBulkTemplate: () =>
+    apiClient.get("/food/restaurant/addons/bulk-template", {
+      responseType: "blob",
+      contextModule: "restaurant",
+    }),
+  bulkUploadAddonsExcel: (formData) =>
+    apiClient.post("/food/restaurant/addons/bulk-upload", formData, {
+      contextModule: "restaurant",
+    }),
   /** Orders (restaurant dashboard) */
   getOrders: (() => {
     // Single-flight de-dupe to avoid duplicate GETs in React StrictMode / double-mount.
@@ -2412,6 +2430,7 @@ export const deliveryAPI = {
         latitude: location.lat,
         longitude: location.lng,
         billImageUrl: data.billImageUrl,
+        pickupOtp: data.pickupOtp,
       },
       {
         contextModule: "delivery",

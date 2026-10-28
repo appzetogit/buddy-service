@@ -298,6 +298,10 @@ const pickupSchema = new mongoose.Schema(
         pickedAt: { type: Date, default: null },
         droppedAt: { type: Date, default: null },
         billImageUrl: { type: String, default: null },
+        /** Restaurant-side handover OTP for this pickup stop, shown to the restaurant and
+         *  entered by the rider alongside the bill photo. Mirrors the drop-off OTP pattern. */
+        pickupOtp: { type: String, default: '' },
+        pickupOtpVerified: { type: Boolean, default: false },
     },
     { _id: false }
 );

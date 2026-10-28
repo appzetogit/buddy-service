@@ -44,7 +44,13 @@ export const config = {
     // Security
     bcryptSaltRounds: Number(process.env.BCRYPT_SALT_ROUNDS || 10),
 
-    // Uploads
+    // Uploads — served from disk instead of Cloudinary. uploadRoot is where files are written;
+    // uploadPublicBaseUrl is the path express.static mounts at; uploadPublicHost is prefixed onto
+    // that to build the full absolute URL stored in the DB (every consumer today expects an
+    // absolute URL, same as Cloudinary's secure_url).
+    uploadRoot: process.env.UPLOAD_ROOT || '/var/www/uploads',
+    uploadPublicBaseUrl: process.env.UPLOAD_PUBLIC_BASE_URL || '/uploads',
+    uploadPublicHost: (process.env.UPLOAD_PUBLIC_HOST || 'https://sooperbuddy.in').replace(/\/$/, ''),
     uploadPath: process.env.UPLOAD_PATH || 'uploads/',
 
     // Redis

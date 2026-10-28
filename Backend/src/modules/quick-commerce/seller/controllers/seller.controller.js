@@ -14,7 +14,7 @@ import { FoodRefreshToken } from "../../../../core/refreshTokens/refreshToken.mo
 import { config } from "../../../../config/env.js";
 import { getIO, rooms } from "../../../../config/socket.js";
 import { logger } from "../../../../utils/logger.js";
-import { uploadImageBuffer } from "../../../../services/cloudinary.service.js";
+import { uploadImageBuffer } from "../../../../services/localUpload.service.js";
 import { sendError, sendResponse } from "../../../../utils/response.js";
 import { Seller } from "../models/seller.model.js";
 import { SellerNotification } from "../models/sellerNotification.model.js";
@@ -2743,6 +2743,7 @@ export const getSellerOrdersController = async (req, res) => {
 
     const [parentOrders, total, sellerDoc] = await Promise.all([
       QuickOrder.find(parentQuery)
+        .select("+pickupOtp")
         .populate("userId", "name phone email")
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -2943,8 +2944,18 @@ export const getSellerOrdersController = async (req, res) => {
           : "Hidden until photo upload";
       }
 
+      // Pickup OTP: seller sees only their own code (multi-store stop, or the whole order
+      // when single-store). Never another seller's stop OTP.
+      const ownPickupStop = Array.isArray(quickOrder?.pickups)
+        ? quickOrder.pickups.find((p) => String(p.restaurantId || p.sellerId || '') === sellerKey)
+        : null;
+      const ownPickupOtp = ownPickupStop ? ownPickupStop.pickupOtp : quickOrder?.pickupOtp;
+      const ownPickupOtpVerified = ownPickupStop ? ownPickupStop.pickupOtpVerified : quickOrder?.pickupOtpVerified;
+
       return {
         ...item,
+        pickupOtp: ownPickupOtp || '',
+        pickupOtpVerified: Boolean(ownPickupOtpVerified),
         customer: resolveQuickOrderCustomer(quickOrder, item),
         address: quickOrder?.deliveryAddress || item?.deliveryAddress || null,
         pricing: {

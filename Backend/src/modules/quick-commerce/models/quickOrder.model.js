@@ -354,6 +354,9 @@ const pickupStopSchema = new mongoose.Schema(
         pickedAt: { type: Date, default: null },
         droppedAt: { type: Date, default: null },
         billImageUrl: { type: String, default: null },
+        /** Seller-side handover OTP for this pickup stop — mirrors Food's pickupOtp. */
+        pickupOtp: { type: String, default: '' },
+        pickupOtpVerified: { type: Boolean, default: false },
     },
     { _id: false }
 );
@@ -631,6 +634,9 @@ const orderSchema = new mongoose.Schema(
             type: deliveryVerificationSchema,
             default: () => ({})
         },
+        /** Seller handover OTP for single-store orders (pickups[] is only filled for multi-store). */
+        pickupOtp: { type: String, default: '', select: false },
+        pickupOtpVerified: { type: Boolean, default: false },
         /** Latest rider location for this specific order (GeoJSON Point) */
         lastRiderLocation: {
             type: geoPointSchema,

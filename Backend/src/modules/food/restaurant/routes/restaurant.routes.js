@@ -1,5 +1,12 @@
 import express from 'express';
 import { upload } from '../../../../middleware/upload.js';
+import { bulkUpload } from '../../../../middleware/bulkUpload.js';
+import {
+    bulkUploadFoodsRestaurant,
+    bulkUploadAddonsRestaurant,
+    downloadFoodTemplateRestaurant,
+    downloadAddonTemplateRestaurant,
+} from '../../shared/bulkImport.controller.js';
 import {
     registerRestaurantController,
     listApprovedRestaurantsController,
@@ -209,11 +216,15 @@ router.get('/restaurants/:id/addons', cacheResponse(600, 'restaurant_addons'), g
 
 router.post('/foods', authMiddleware, requireRestaurant, invMenu, createRestaurantFoodController);
 router.post('/foods/bulk', authMiddleware, requireRestaurant, invMenu, bulkCreateRestaurantFoodController);
+router.get('/foods/bulk-template', authMiddleware, requireRestaurant, downloadFoodTemplateRestaurant);
+router.post('/foods/bulk-upload', authMiddleware, requireRestaurant, invMenu, bulkUpload.fields([{ name: 'file', maxCount: 1 }, { name: 'images', maxCount: 300 }]), bulkUploadFoodsRestaurant);
 router.patch('/foods/:id', authMiddleware, requireRestaurant, invMenu, updateRestaurantFoodController);
 router.delete('/foods/:id', authMiddleware, requireRestaurant, invMenu, deleteRestaurantFoodController);
 
 router.get('/addons', authMiddleware, requireRestaurant, listAddonsController);
 router.post('/addons', authMiddleware, requireRestaurant, invMenu, createAddonController);
+router.get('/addons/bulk-template', authMiddleware, requireRestaurant, downloadAddonTemplateRestaurant);
+router.post('/addons/bulk-upload', authMiddleware, requireRestaurant, invMenu, bulkUpload.fields([{ name: 'file', maxCount: 1 }, { name: 'images', maxCount: 300 }]), bulkUploadAddonsRestaurant);
 router.patch('/addons/:id', authMiddleware, requireRestaurant, invMenu, updateAddonController);
 router.delete('/addons/:id', authMiddleware, requireRestaurant, invMenu, deleteAddonController);
 

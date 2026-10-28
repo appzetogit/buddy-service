@@ -169,6 +169,16 @@ export default function OrderDetailPanel({ order, onClose, className = "" }) {
           </div>
         )}
 
+        {/* Pickup OTP */}
+        {order.pickupOtp && !order.pickupOtpVerified && (
+          <div className="rounded-xl border border-orange-200 bg-orange-50/70 px-4 py-3 flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600">
+              Pickup OTP — share with rider
+            </p>
+            <p className="text-lg font-black tracking-widest text-orange-700">{order.pickupOtp}</p>
+          </div>
+        )}
+
         {/* Restaurant Note */}
         {order.restaurantNote && (
           <div className="rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-3">

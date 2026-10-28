@@ -3,7 +3,7 @@ import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { isRestaurantBanned, LEGACY_ADMIN_BAN_REASON } from '../../restaurant/utils/restaurantBan.util.js';
 import { mergePendingProfileIntoSet } from '../../restaurant/services/restaurantProfileReview.service.js';
-import { buildRawDownloadUrlFromFileUrl } from '../../../../services/cloudinary.service.js';
+import { buildRawDownloadUrlFromFileUrl } from '../../../../services/localUpload.service.js';
 import {
     collectImageAssetsFromRestaurant,
     deleteCollectedImageAssets,

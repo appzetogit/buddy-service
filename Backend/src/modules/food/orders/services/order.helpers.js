@@ -938,6 +938,14 @@ export function sanitizeOrderForExternal(orderDoc) {
       return { ...rest, hasOtp: Boolean(otp) };
     });
   }
+  // Pickup OTPs are shown to the restaurant, never to the rider — same security model as the
+  // drop-off OTP (customer-only). The rider only ever submits a code, never reads one back.
+  if (Array.isArray(o.pickups)) {
+    o.pickups = o.pickups.map((pickup) => {
+      const { pickupOtp, ...rest } = pickup || {};
+      return { ...rest, hasPickupOtp: Boolean(pickupOtp) };
+    });
+  }
   const dv = o.deliveryVerification;
   if (dv && dv.dropOtp != null) {
     const d = dv.dropOtp;
@@ -951,7 +959,7 @@ export function sanitizeOrderForExternal(orderDoc) {
   }
   o.orderMongoId = (o._id || orderDoc?._id || "").toString();
   // Ensure orderId field for UI always contains the pretty ID
-  o.orderId = o.order_id || o.orderMongoId; 
+  o.orderId = o.order_id || o.orderMongoId;
   return o;
 }
 
@@ -1856,6 +1864,8 @@ export function toRestaurantOrderResponse(orderDoc) {
     status: order.orderStatus || order.status || '',
     aggregateOrderStatus: order.aggregateOrderStatus || undefined,
     myPickupStatus: order.myPickupStatus || order.pickups?.[0]?.status || null,
+    pickupOtp: order.pickups?.[0]?.pickupOtp || '',
+    pickupOtpVerified: Boolean(order.pickups?.[0]?.pickupOtpVerified),
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
     cancelledAt: order.cancelledAt || undefined,

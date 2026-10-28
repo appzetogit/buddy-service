@@ -51,7 +51,7 @@ const loadOrderForRider = async (orderId, partnerId, { withOtp = false } = {}) =
     _id: orderId,
     $or: [{ 'dispatch.deliveryPartnerId': id }, { 'dispatch.sharedPartnerId': id }],
   });
-  const order = await (withOtp ? query.select('+deliveryOtp') : query);
+  const order = await (withOtp ? query.select('+deliveryOtp +pickupOtp') : query.select('+pickupOtp'));
   if (!order) throw new NotFoundError('Order not found for this rider');
   // A shared slot that never filled in has no legs; a joined second rider always has them.
   if (order.dispatch?.sharedPartnerId && !isDualLegActive(order)) {
@@ -144,9 +144,15 @@ export async function reachedPickup(orderId, partnerId) {
   return order;
 }
 
+const otpMatchesPickup = (expected, supplied) => {
+  const a = String(expected || '').trim();
+  const b = String(supplied || '').trim();
+  return Boolean(a) && Boolean(b) && a === b;
+};
+
 /** Rider collected the parcel (one store at a time on multi-store orders). */
-export async function confirmPickup(orderId, partnerId, { billImageUrl = '' } = {}) {
-  const order = await loadOrderForRider(orderId, partnerId);
+export async function confirmPickup(orderId, partnerId, { billImageUrl = '', pickupOtp } = {}) {
+  const order = await loadOrderForRider(orderId, partnerId, { withOtp: true });
   if (order.orderStatus === 'picked_up') return order;
   if (order.orderStatus === 'delivered') throw new ValidationError('Order already delivered');
 
@@ -168,6 +174,12 @@ export async function confirmPickup(orderId, partnerId, { billImageUrl = '' } = 
       );
     }
     if (current) {
+      if (current.pickupOtp && !current.pickupOtpVerified) {
+        if (!otpMatchesPickup(current.pickupOtp, pickupOtp)) {
+          throw new ValidationError('Invalid pickup OTP. Ask the store for the code shown on their order screen.');
+        }
+        current.pickupOtpVerified = true;
+      }
       stopName = current.restaurantName || '';
       current.status = 'picked_up';
       current.pickedAt = new Date();
@@ -192,6 +204,12 @@ export async function confirmPickup(orderId, partnerId, { billImageUrl = '' } = 
     // Same rule as Food: the store must have marked the order ready first.
     if (from !== 'ready_for_pickup' && !(leg && from === 'picked_up')) {
       throw new ValidationError('You can only pick up the order after the store marks it ready for pickup.');
+    }
+    if (order.pickupOtp && !order.pickupOtpVerified) {
+      if (!otpMatchesPickup(order.pickupOtp, pickupOtp)) {
+        throw new ValidationError('Invalid pickup OTP. Ask the store for the code shown on their order screen.');
+      }
+      order.pickupOtpVerified = true;
     }
     if (leg) {
       leg.status = 'picked_up';

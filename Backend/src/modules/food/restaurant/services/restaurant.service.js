@@ -1,5 +1,5 @@
 import { FoodRestaurant } from '../models/restaurant.model.js';
-import { uploadFileBuffer } from '../../../../services/cloudinary.service.js';
+import { uploadFileBuffer } from '../../../../services/localUpload.service.js';
 import {
     normalizeImageAssetList,
     replaceCloudinaryImage,

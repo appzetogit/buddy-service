@@ -13,6 +13,7 @@ import {
   buildDeliverySocketPayload,
   enqueueOrderEvent,
   isStatusAdvance,
+  generateFourDigitDeliveryOtp,
 } from '../../food/orders/services/order.helpers.js';
 import { scorePointsByRoadDistance } from '../../../services/roadDistance.service.js';
 import { dispatchQuickOrder } from './quickDispatch.service.js';
@@ -86,11 +87,11 @@ export const updateSellerOrderStatus = async (sellerOrderId, sellerId, nextStatu
   if (!sellerOrder) throw new NotFoundError('Seller order not found');
 
   const parentOrder = sellerOrder.parentOrderId
-    ? await QuickOrder.findById(sellerOrder.parentOrderId)
+    ? await QuickOrder.findById(sellerOrder.parentOrderId).select('+pickupOtp')
     : await QuickOrder.findOne({
         orderType: { $in: ['quick', 'mixed'] },
         orderId: sellerOrder.orderId,
-      });
+      }).select('+pickupOtp');
 
   if (parentOrder && !isQuickOrderVisibleToSeller(parentOrder)) {
     throw new ValidationError('Payment is not completed for this order yet');
@@ -162,6 +163,7 @@ export const updateSellerOrderStatus = async (sellerOrderId, sellerId, nextStatu
   }
 
   // 2. Sync Parent Order
+  let generatedPickupOtp = null;
   if (parentOrder) {
     const isMultiStore = Boolean(parentOrder.isMultiSeller) && (parentOrder.pickups || []).length > 1;
 
@@ -188,14 +190,27 @@ export const updateSellerOrderStatus = async (sellerOrderId, sellerId, nextStatu
     }
 
     let parentNextStatus = SELLER_TO_PARENT_STATUS_MAP[nextStatus];
+    // Generated once, shown to the seller only — never exposed to the rider until they submit it
+    // back for verification (same rule as Food's restaurant pickup OTP).
     if (isMultiStore && SELLER_TO_PICKUP_STATUS_MAP[nextStatus]) {
       const stop = parentOrder.pickups.find((p) => String(p.restaurantId) === String(sellerId));
       if (stop && !stop.permanentlyDropped) {
         stop.status = SELLER_TO_PICKUP_STATUS_MAP[nextStatus];
-        if (stop.status === 'ready') stop.readyAt = stop.readyAt || new Date();
+        if (stop.status === 'ready') {
+          stop.readyAt = stop.readyAt || new Date();
+          if (!stop.pickupOtp) {
+            stop.pickupOtp = generateFourDigitDeliveryOtp();
+            stop.pickupOtpVerified = false;
+            generatedPickupOtp = stop.pickupOtp;
+          }
+        }
         parentOrder.markModified('pickups');
       }
       parentNextStatus = aggregateFromPickups(parentOrder);
+    } else if (!isMultiStore && nextStatus === 'ready_for_pickup' && !parentOrder.pickupOtp) {
+      parentOrder.pickupOtp = generateFourDigitDeliveryOtp();
+      parentOrder.pickupOtpVerified = false;
+      generatedPickupOtp = parentOrder.pickupOtp;
     }
     const fromStatus = parentOrder.orderStatus;
 
@@ -246,6 +261,24 @@ export const updateSellerOrderStatus = async (sellerOrderId, sellerId, nextStatu
 
       await parentOrder.save();
 
+      // Pickup OTP — seller-only, separate from the generic seller/customer/rider status
+      // broadcast above so it never ends up in a shared payload.
+      if (generatedPickupOtp) {
+        void notifyOwnerSafely(
+          { ownerType: 'SELLER', ownerId: sellerId },
+          {
+            title: 'Pickup OTP',
+            body: `Share this code with the rider when they collect order #${parentOrder.orderId}: ${generatedPickupOtp}`,
+            data: {
+              type: 'pickup_otp',
+              orderId: String(parentOrder.orderId),
+              orderMongoId: String(parentOrder._id),
+              pickupOtp: generatedPickupOtp,
+            },
+          },
+        ).catch((err) => logger.warn(`[QuickOrder] pickup OTP push failed: ${err?.message || err}`));
+      }
+
       // Handle Side Effects (Post-Save to avoid race conditions)
       const isAcceptedStatus = ['confirmed', 'preparing', 'packed', 'ready_for_pickup', 'out_for_delivery'].includes(nextStatus);
       const isDispatchUnassigned = !parentOrder.dispatch?.status || parentOrder.dispatch.status === 'unassigned';
@@ -286,6 +319,10 @@ export const updateSellerOrderStatus = async (sellerOrderId, sellerId, nextStatu
     }
   }
 
+  if (generatedPickupOtp) {
+    const plain = sellerOrder.toObject ? sellerOrder.toObject() : sellerOrder;
+    return { ...plain, pickupOtp: generatedPickupOtp, pickupOtpVerified: false };
+  }
   return sellerOrder;
 };
 

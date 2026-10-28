@@ -10,6 +10,13 @@ import * as diningAdminController from '../../dining/controllers/diningAdmin.con
 import * as orderController from '../../orders/controllers/order.controller.js';
 import { getAdminPageController, upsertAdminPageController } from '../controllers/pageContent.controller.js';
 import { upload } from '../../../../middleware/upload.js';
+import { bulkUpload } from '../../../../middleware/bulkUpload.js';
+import {
+    bulkUploadFoodsAdmin,
+    bulkUploadAddonsAdmin,
+    downloadFoodTemplateAdmin,
+    downloadAddonTemplateAdmin,
+} from '../../shared/bulkImport.controller.js';
 import {
     withFoodCacheInvalidation,
     invalidateAfterAdminRestaurantMutation,
@@ -131,6 +138,12 @@ router.delete('/foods/:id', invFood, adminController.deleteFood);
 router.get('/foods/pending-approvals', foodApprovalController.getPendingFoodApprovals);
 router.patch('/foods/:id/approve', invFood, foodApprovalController.approveFoodItemController);
 router.patch('/foods/:id/reject', invFood, foodApprovalController.rejectFoodItemController);
+
+// ----- Bulk Upload (Excel + images) -----
+router.get('/foods/bulk-template', downloadFoodTemplateAdmin);
+router.post('/foods/bulk-upload', invFood, bulkUpload.fields([{ name: 'file', maxCount: 1 }, { name: 'images', maxCount: 300 }]), bulkUploadFoodsAdmin);
+router.get('/addons/bulk-template', downloadAddonTemplateAdmin);
+router.post('/addons/bulk-upload', invAddon, bulkUpload.fields([{ name: 'file', maxCount: 1 }, { name: 'images', maxCount: 300 }]), bulkUploadAddonsAdmin);
 
 // ----- Offers & Coupons -----
 router.get('/offers', adminController.getAllOffers);
