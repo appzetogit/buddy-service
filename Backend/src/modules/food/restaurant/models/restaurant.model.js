@@ -192,6 +192,8 @@ const restaurantSchema = new mongoose.Schema(
     estimatedDeliveryTimeMinutes: { type: Number, index: true },
     featuredDish: { type: String },
     featuredPrice: { type: Number },
+    /** Median price of this restaurant's available menu items — used as "price for one" in listings. Recalculated on menu changes. */
+    avgPriceForOne: { type: Number, default: 0 },
     offer: { type: String },
     /** Rating fields for filtering/sorting (defaults to 0 if never rated). */
     rating: {

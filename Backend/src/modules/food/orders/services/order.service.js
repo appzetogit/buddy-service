@@ -2099,12 +2099,33 @@ export async function listOrdersRestaurant(restaurantId, query) {
     FoodOrder.countDocuments(filter),
   ]);
   const scopedDocs = docs.map((doc) => buildRestaurantScopedOrder(doc, restaurantId));
-  return buildPaginatedResult({
-    docs: scopedDocs.map((d) => toRestaurantOrderResponse(d)),
-    total,
-    page,
-    limit,
-  });
+
+  // Scheduled orders stay at orderStatus 'scheduled' (no rider assigned yet) until the
+  // 30-minute pre-activation job in processScheduledOrderAlerts() flips them to 'created' -
+  // that trigger is unchanged. This just lets the restaurant see them early, under "Upcoming".
+  const upcomingDocs = await FoodOrder.find({
+    $or: [
+      { restaurantId: restaurantObjectId },
+      { 'pickups.restaurantId': restaurantObjectId },
+    ],
+    orderStatus: 'scheduled',
+  })
+    .populate("userId", "name phone email profileImage")
+    .sort({ scheduledAt: 1 })
+    .lean();
+  const upcomingScheduledOrders = upcomingDocs
+    .map((doc) => buildRestaurantScopedOrder(doc, restaurantId))
+    .map((d) => toRestaurantOrderResponse(d));
+
+  return {
+    ...buildPaginatedResult({
+      docs: scopedDocs.map((d) => toRestaurantOrderResponse(d)),
+      total,
+      page,
+      limit,
+    }),
+    upcomingScheduledOrders,
+  };
 }
 
 function computeAggregateOrderStatus(orderDoc) {

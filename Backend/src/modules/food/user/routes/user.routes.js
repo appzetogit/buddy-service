@@ -37,6 +37,7 @@ import {
     validateCartRestaurantsController
 } from '../controllers/userCart.controller.js';
 import { saveUserCurrentLocationController } from '../../../../core/location/location.controller.js';
+import { getOrderedRestaurantsController } from '../controllers/userOrderHistory.controller.js';
 
 const router = express.Router();
 
@@ -74,6 +75,9 @@ router.post('/addresses', addAddressController);
 router.patch('/addresses/:addressId', updateAddressController);
 router.delete('/addresses/:addressId', deleteAddressController);
 router.patch('/addresses/:addressId/default', setDefaultAddressController);
+
+// Restaurants this user has ordered from before, excluding cancelled orders (Bearer USER)
+router.get('/ordered-restaurants', getOrderedRestaurantsController);
 
 // Delete account (Bearer USER)
 router.delete('/account', deleteUserAccountController);

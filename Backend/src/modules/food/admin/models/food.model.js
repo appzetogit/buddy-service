@@ -42,4 +42,31 @@ foodSchema.index({ restaurantId: 1, approvalStatus: 1, createdAt: -1 });
 foodSchema.index({ approvalStatus: 1, name: 1 });
 foodSchema.index({ name: 'text', description: 'text' }, { weights: { name: 10, description: 2 } });
 
+// Keep the restaurant's cached "price for one" (median of available items) in sync
+// with every create/update/delete, however it happens, instead of hooking every
+// call site across admin + restaurant services.
+async function syncAvgPriceForOne(restaurantId) {
+    if (!restaurantId) return;
+    try {
+        const { recalculateAvgPriceForOne } = await import('../../restaurant/services/avgPriceForOne.service.js');
+        await recalculateAvgPriceForOne(restaurantId);
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[FoodItem] avgPriceForOne recalculation failed:', err?.message || err);
+    }
+}
+
+foodSchema.post('save', function (doc) {
+    void syncAvgPriceForOne(doc.restaurantId);
+});
+foodSchema.post('findOneAndUpdate', function (doc) {
+    void syncAvgPriceForOne(doc?.restaurantId || this.getQuery()?.restaurantId);
+});
+foodSchema.post('findOneAndDelete', function (doc) {
+    void syncAvgPriceForOne(doc?.restaurantId);
+});
+foodSchema.post('deleteOne', { document: true, query: false }, function (doc) {
+    void syncAvgPriceForOne(doc?.restaurantId);
+});
+
 export const FoodItem = mongoose.model('FoodItem', foodSchema);

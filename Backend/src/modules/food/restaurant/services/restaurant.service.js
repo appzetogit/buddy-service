@@ -1,4 +1,5 @@
 import { FoodRestaurant } from '../models/restaurant.model.js';
+import { FoodFeeSettings } from '../../admin/models/feeSettings.model.js';
 import { uploadFileBuffer } from '../../../../services/localUpload.service.js';
 import {
     normalizeImageAssetList,
@@ -83,11 +84,19 @@ const normalizeTotalRatingsValue = (value) => {
 
 const mapRestaurantListItem = (r, extras = {}) => {
     const distanceMeters = Number.isFinite(r.distanceMeters) ? r.distanceMeters : null;
+    const { defaultPackagingFee: defaultPackagingFeeRaw, ...restExtras } = extras;
+    const defaultPackagingFee = Number(defaultPackagingFeeRaw) || 0;
+    const packagingFee =
+        r.packagingFee != null && Number.isFinite(Number(r.packagingFee))
+            ? Number(r.packagingFee)
+            : defaultPackagingFee;
     return {
         ...r,
         restaurantId: r._id,
         id: r._id,
         name: r.restaurantName || '',
+        packagingFee: Math.max(0, packagingFee),
+        priceForOne: Number(r.avgPriceForOne) || 0,
         rating: normalizeRatingValue(r.rating),
         totalRatings: normalizeTotalRatingsValue(r.totalRatings),
         addressSummary: getRestaurantAddressSummary(r),
@@ -100,7 +109,7 @@ const mapRestaurantListItem = (r, extras = {}) => {
         profileImage: r.profileImage ? { url: r.profileImage } : null,
         coverImages: Array.isArray(r.coverImages) ? r.coverImages : [],
         menuImages: Array.isArray(r.menuImages) ? r.menuImages : [],
-        ...extras,
+        ...restExtras,
     };
 };
 
@@ -1639,6 +1648,12 @@ export const listApprovedRestaurants = async (query = {}) => {
     const radiusKm = toFiniteNumber(query.radiusKm) ?? toFiniteNumber(query.maxDistance);
     const sortBy = parseSortBy(query.sortBy);
 
+    const feeSettingsDoc = await FoodFeeSettings.findOne({ isActive: true })
+        .sort({ createdAt: -1 })
+        .select('packagingFee')
+        .lean();
+    const defaultPackagingFee = feeSettingsDoc?.packagingFee != null ? Number(feeSettingsDoc.packagingFee) : 0;
+
     const projection = {
         restaurantName: 1,
         area: 1,
@@ -1661,7 +1676,9 @@ export const listApprovedRestaurants = async (query = {}) => {
         location: 1,
         openingTime: 1,
         closingTime: 1,
-        openDays: 1
+        openDays: 1,
+        packagingFee: 1,
+        avgPriceForOne: 1,
     };
 
     // Use $geoNear only when geo is explicitly needed (radius filter or nearest sorting).
@@ -1722,6 +1739,7 @@ export const listApprovedRestaurants = async (query = {}) => {
             const rid = String(r._id);
             return mapRestaurantListItem(r, {
                 outletTimings: outletTimingsMap.get(rid) || defaultOutletTimings,
+                defaultPackagingFee,
             });
         });
         const enriched = await enrichRestaurantsWithDistance(restaurants, { lat, lng });
@@ -1792,6 +1810,7 @@ export const listApprovedRestaurants = async (query = {}) => {
         return mapRestaurantListItem(r, {
             featuredItems: featuredItemsMap.get(rid) || [],
             outletTimings: outletTimingsMap.get(rid) || defaultOutletTimings,
+            defaultPackagingFee,
         });
     });
 
@@ -1882,11 +1901,22 @@ export const getApprovedRestaurantByIdOrSlug = async (idOrSlug, origin = {}) => 
 
     const timingsMap = await getOutletTimingsMapForRestaurants([doc._id]);
     const rid = String(doc._id);
+    const feeSettingsDoc = await FoodFeeSettings.findOne({ isActive: true })
+        .sort({ createdAt: -1 })
+        .select('packagingFee')
+        .lean();
+    const defaultPackagingFee = feeSettingsDoc?.packagingFee != null ? Number(feeSettingsDoc.packagingFee) : 0;
+    const packagingFee =
+        doc.packagingFee != null && Number.isFinite(Number(doc.packagingFee))
+            ? Number(doc.packagingFee)
+            : defaultPackagingFee;
     const restaurant = {
         ...doc,
         rating: normalizeRatingValue(doc.rating),
         totalRatings: normalizeTotalRatingsValue(doc.totalRatings),
-        outletTimings: timingsMap.get(rid) || getDefaultOutletTimingsShape()
+        outletTimings: timingsMap.get(rid) || getDefaultOutletTimingsShape(),
+        packagingFee: Math.max(0, packagingFee),
+        priceForOne: Number(doc.avgPriceForOne) || 0,
     };
 
     const lat = toFiniteNumber(origin.lat);
