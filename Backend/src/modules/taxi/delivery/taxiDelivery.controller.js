@@ -177,7 +177,7 @@ export const listScheduledRides = async (req, res) => {
     const partnerId = await resolveRider(req);
     if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
 
-    const partner = await Driver.findById(partnerId).select('deliveryServices vehicleType').lean();
+    const partner = await Driver.findById(partnerId).select('deliveryServices vehicleType taxiVehicleType taxiServiceCategories').lean();
     if (!partner || !(partner.deliveryServices || []).includes('taxi')) {
       return sendResponse(res, 200, 'Scheduled rides', { orders: [], results: [], totalCount: 0 });
     }

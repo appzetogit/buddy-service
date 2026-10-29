@@ -1,6 +1,7 @@
 import { ValidationError, NotFoundError, ConflictError } from '../auth/errors.js';
 import { BuddyIdentity } from './buddyIdentity.model.js';
 import { FoodDeliveryPartner } from '../../modules/food/delivery/models/deliveryPartner.model.js';
+import { normalizeTaxiCategories, syncTaxiProfileToPartner } from './taxiPartnerSync.js';
 
 import {
   initServiceStatusesForOnboarding,
@@ -273,8 +274,9 @@ export const updateFoodVehicle = async (identity, body) => {
 };
 
 export const updateTaxiVehicle = async (identity, body) => {
-  const { type, vehicleTypeId, number, make, model, color, photoUrl, rcUrl, insuranceUrl, commercialPermitUrl, pucUrl } = body || {};
+  const { type, vehicleTypeId, number, make, model, color, photoUrl, rcUrl, insuranceUrl, commercialPermitUrl, pucUrl, serviceCategories } = body || {};
   const vehicleType = normalizeTaxiVehicleType(type);
+  const categories = normalizeTaxiCategories(serviceCategories);
   if (!vehicleType) {
     throw new ValidationError('Select a valid taxi vehicle type');
   }
@@ -301,8 +303,32 @@ export const updateTaxiVehicle = async (identity, body) => {
   };
   await assertUniqueVehicleNumber(identity, identity.taxiVehicle.number);
   identity.markModified('taxiVehicle');
+  // The kinds of taxi work the driver wants (city / outstation / parcel). Not sent by an older app:
+  // leave what is saved (unset = all).
+  if (categories) {
+    identity.taxiServiceCategories = categories;
+    identity.markModified('taxiServiceCategories');
+  }
   await advanceStep(identity, 'vehicle_taxi');
+  // A partner profile that already exists (resubmission, or added Taxi later) gets it now.
+  await syncTaxiProfileToPartner(identity);
   return identity;
+};
+
+/**
+ * Changes the kinds of taxi work after onboarding (Taxi settings in the driver app). Takes effect on
+ * the next ride offer.
+ */
+export const updateTaxiServiceCategories = async (identity, body) => {
+  const categories = normalizeTaxiCategories(body?.serviceCategories);
+  if (!categories) throw new ValidationError('serviceCategories is required');
+  const doc = await BuddyIdentity.findById(identity._id);
+  if (!doc) throw new NotFoundError('Identity not found');
+  doc.taxiServiceCategories = categories;
+  doc.markModified('taxiServiceCategories');
+  await doc.save();
+  await syncTaxiProfileToPartner(doc);
+  return doc;
 };
 
 export const updateBasics = async (identity, body) => {
@@ -603,6 +629,7 @@ export const completeOnboarding = async (identity, body) => {
   // (vehicle/KYC/bank record) — create it whenever any of the three is selected, not just food.
   const needsPartner = services.some((svc) => ['food', 'quickCommerce', 'taxi'].includes(svc));
   const createdPartner = needsPartner ? await ensureFoodPartner(identityDoc) : null;
+  if (createdPartner) await syncTaxiProfileToPartner(identityDoc);
 
   if (isResubmit) {
     for (const svc of services) {
@@ -655,7 +682,7 @@ const buildFoodPartnerFields = (identity) => ({
   countryCode: identity.countryCode || '+91',
   city: identity.city || '',
   state: identity.state || '',
-  vehicleType: identity.foodVehicle?.type || identity.vehicle?.type || '',
+  vehicleType: identity.foodVehicle?.type || identity.vehicle?.type || identity.taxiVehicle?.type || '',
   vehicleName:
     [identity.foodVehicle?.make, identity.foodVehicle?.model]
       .filter(Boolean)
@@ -663,6 +690,7 @@ const buildFoodPartnerFields = (identity) => ({
       .trim() ||
     identity.vehicle?.make ||
     identity.vehicle?.model ||
+    [identity.taxiVehicle?.make, identity.taxiVehicle?.model].filter(Boolean).join(' ').trim() ||
     '',
   vehicleNumber: identity.foodVehicle?.number || identity.vehicle?.number || '',
   aadharNumber: identity.kyc?.aadhaar?.number || '',
@@ -809,6 +837,10 @@ export const getOnboardingState = async (identity) => {
     resubmitAllowed,
     onboardingStep: normalizeOnboardingStepForClient(identity.onboardingStep, identity),
     onboardingServices: getSelectedServices(identity),
+    // The kinds of taxi work chosen (city / outstation / parcel); null = never chosen (takes all).
+    taxiServiceCategories: Array.isArray(identity.taxiServiceCategories) && identity.taxiServiceCategories.length
+      ? identity.taxiServiceCategories
+      : null,
     capabilities,
     serviceStatuses: {
       food: foodStatus,

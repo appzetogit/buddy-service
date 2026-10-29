@@ -3,6 +3,7 @@ import { BuddyIdentity } from './buddyIdentity.model.js';
 import { FoodDeliveryPartner } from '../../modules/food/delivery/models/deliveryPartner.model.js';
 import { FoodOrder } from '../../modules/food/orders/models/order.model.js';
 import { getEffectiveServiceStatus } from './driverOnboardingAdmin.service.js';
+import { syncTaxiProfileToPartner } from './taxiPartnerSync.js';
 
 const VALID_MODES = ['off', 'food', 'taxi'];
 const OFF_ALIASES = new Set(['off', 'none', 'offline', '', null, undefined]);
@@ -124,11 +125,17 @@ export const setDriverMode = async (identity, mode, options = {}) => {
       update.lastLocationAt = now;
     }
     await FoodDeliveryPartner.updateOne({ _id: partner._id }, { $set: update });
+    // Taxi riders registered before the taxi vehicle was copied onto the partner profile (it is what
+    // ride matching reads) are put right here, the moment they switch Taxi on.
+    if (mode === 'food' && (services || []).includes('taxi')) {
+      await syncTaxiProfileToPartner(setIdentity).catch(() => null);
+    }
   }
 
   return {
     activeService: mode,
     services: services || partner?.deliveryServices || null,
+    taxiServiceCategories: setIdentity.taxiServiceCategories?.length ? setIdentity.taxiServiceCategories : null,
     capabilities: {
       food: partner ? partner.status || 'approved' : 'not_enabled',
       quickCommerce: getEffectiveServiceStatus(identity, 'quickCommerce', partner).status,
@@ -146,6 +153,7 @@ export const getDriverMode = async (identity) => {
   return {
     activeService: isOffMode(identity.activeService) ? 'off' : identity.activeService,
     services: partner?.deliveryServices?.length ? partner.deliveryServices : null,
+    taxiServiceCategories: identity.taxiServiceCategories?.length ? identity.taxiServiceCategories : null,
     capabilities: {
       food: partner ? partner.status || 'approved' : 'not_enabled',
       quickCommerce: getEffectiveServiceStatus(identity, 'quickCommerce', partner).status,
