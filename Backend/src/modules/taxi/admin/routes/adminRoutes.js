@@ -20,10 +20,7 @@ import {
   createPaymentMethod,
   createServiceLocation,
   createSetPrice,
-  createUser,
   createZone,
-  bulkImportUsers,
-  approveUserDeletionRequest,
   approveDriverDeletionRequest,
   deleteAppModule,
   deleteDriver,
@@ -88,7 +85,6 @@ import {
   getUser,
   getUsers,
   getDeletedUsers,
-  getUserDeletionRequests,
   restoreDeletedUser,
   permanentlyDeleteDeletedUser,
   restoreDeletedDriver,
@@ -96,7 +92,6 @@ import {
   getRideRequests,
   getPayments,
   getPaymentInvoice,
-  rejectUserDeletionRequest,
   rejectDriverDeletionRequest,
   getUserRequests,
   getUserWalletHistory,
@@ -165,14 +160,9 @@ adminRouter.patch('/admin/admin-management/admins/:id', updateAdminAccount);
 adminRouter.delete('/admin/admin-management/admins/:id', deleteAdminAccount);
 
 adminRouter.get('/admin/users', getUsers);
-adminRouter.post('/admin/users/bulk-import', bulkImportUsers);
-adminRouter.post('/admin/users', createUser);
 adminRouter.get('/admin/users/deleted', getDeletedUsers);
 adminRouter.patch('/admin/users/deleted/:id/restore', restoreDeletedUser);
 adminRouter.delete('/admin/users/deleted/:id', permanentlyDeleteDeletedUser);
-adminRouter.get('/admin/users/delete-requests', getUserDeletionRequests);
-adminRouter.patch('/admin/users/delete-requests/:id/approve', approveUserDeletionRequest);
-adminRouter.patch('/admin/users/delete-requests/:id/reject', rejectUserDeletionRequest);
 adminRouter.get('/admin/users/:id', getUser);
 adminRouter.patch('/admin/users/:id', updateUser);
 adminRouter.delete('/admin/users/:id', deleteUser);

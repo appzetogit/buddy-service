@@ -89,8 +89,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
         label: 'Customer Management',
         subItems: [
           { label: 'User List', path: '/admin/users', permission: 'users.view' },
-          { label: 'Delete Request Users', path: '/admin/users/delete-requests', permission: 'users.view' },
-          { label: 'User Bulk Upload', path: '/admin/users/bulk-upload', permission: 'users.view' },
         ],
       },
       { icon: Wallet, label: 'Wallet Payment', path: '/admin/wallet/payment', permission: 'wallet.view' },

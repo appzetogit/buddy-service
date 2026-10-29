@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { useNavigate } from '@taxi/shared/router';
 import { 
-  Search, Download, UserPlus, MoreHorizontal,
+  Search, Download, MoreHorizontal,
   ChevronRight, UserCheck, Edit2, Lock, Trash2,
   Loader2, Ban, FileText
 } from 'lucide-react';
@@ -70,6 +70,8 @@ const UserList = () => {
           profileImage: u.profileImage || '',
           governmentIdProof: u.governmentIdProof || null,
           status: u.active ? 'Active' : 'Suspended',
+          walletBalance: Number(u.wallet_balance || 0),
+          joinedAt: u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A',
         }));
         setUsers(mapped);
         setPaginator(resData.data?.paginator || null);
@@ -138,7 +140,6 @@ const UserList = () => {
     setActiveMenu(null);
   };
 
-  const handleAddUser = () => { navigate('/admin/users/create'); };
   const handleEditUser = (user) => { setEditingUser(user); setIsModalOpen(true); };
 
   const handleDeleteUser = async (userId) => {
@@ -155,9 +156,7 @@ const UserList = () => {
   const handleModalSubmit = async (formData) => {
     try {
       setIsSubmitting(true);
-      const resData = editingUser 
-        ? await adminService.updateUser(editingUser.id, formData)
-        : await adminService.createUser(formData);
+      const resData = await adminService.updateUser(editingUser.id, formData);
       if (resData.success) {
         setIsModalOpen(false);
         fetchUsers();
@@ -227,12 +226,6 @@ const UserList = () => {
           <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition-colors">
             <Download size={14} /> Export
           </button>
-          <button 
-            onClick={handleAddUser}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-400 text-black text-sm font-semibold rounded-lg shadow-sm hover:bg-yellow-500 transition-colors"
-          >
-            <UserPlus size={14} /> New User
-          </button>
         </div>
       </div>
 
@@ -294,6 +287,8 @@ const UserList = () => {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900">Mobile</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900">Email</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900">ID Proof</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900">Wallet</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900">Joined</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-gray-900">Status</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-gray-900">Action</th>
               </tr>
@@ -340,6 +335,8 @@ const UserList = () => {
                       <span className="text-xs font-medium text-rose-500">Missing</span>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">₹{user.walletBalance.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700">{user.joinedAt}</td>
                   <td className="px-4 py-3 text-center">
                     <StatusToggle status={user.status} onToggle={() => handleToggleStatus(user.id, user.status)} />
                   </td>

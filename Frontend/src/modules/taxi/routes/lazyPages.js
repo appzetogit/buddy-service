@@ -49,11 +49,7 @@ export const AdminDeliveries = lazy(() => import('../modules/admin/pages/operati
 export const AdminOngoing = lazy(() => import('../modules/admin/pages/operations/Ongoing'));
 export const AdminWalletPayment = lazy(() => import('../modules/admin/pages/wallet/WalletPayment'));
 export const AdminUserList = lazy(() => import('../modules/admin/pages/users/UserList'));
-export const AdminUserCreate = lazy(() => import('../modules/admin/pages/users/UserCreate'));
 export const AdminUserDetails = lazy(() => import('../modules/admin/pages/users/UserDetails'));
-export const AdminDeleteRequestUsers = lazy(() => import('../modules/admin/pages/users/DeleteRequestUsers'));
-export const AdminUserBulkUpload = lazy(() => import('../modules/admin/pages/users/UserBulkUpload'));
-export const AdminUserImportCreate = lazy(() => import('../modules/admin/pages/users/UserImportCreate'));
 export const AdminDriverList = lazy(() => import('../modules/admin/pages/drivers/DriverList'));
 export const AdminDriverDetails = lazy(() => import('../modules/admin/pages/drivers/DriverDetails'));
 export const AdminPendingDrivers = lazy(() => import('../modules/admin/pages/drivers/PendingDrivers'));

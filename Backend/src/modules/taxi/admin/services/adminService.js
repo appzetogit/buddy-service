@@ -46,7 +46,6 @@ import {
   cancelRideByAdmin,
   emitToDriver,
   getSocketServer,
-  notifyUserAccountDeleted,
 } from '../../services/dispatchService.js';
 import { getPresenceRoleRoom } from '../../socket/presenceRooms.js';
 import { SafetyAlert } from '../../common/models/SafetyAlert.js';
@@ -1951,7 +1950,9 @@ const USER_LIST_SELECT = [
   'updatedAt',
 ].join(' ');
 
-const serializeUserListItem = (user) => ({
+// wallet_balance never lived on the User doc itself (see UserWallet.js) — listUsers batches a
+// real lookup and passes each user's balance in here instead of trusting the (always-absent) field.
+const serializeUserListItem = (user, walletBalance = 0) => ({
   _id: user._id,
   id: user._id,
   name: user.name || '',
@@ -1966,7 +1967,7 @@ const serializeUserListItem = (user) => ({
   },
   mobile: user.phone || user.mobile || '',
   phone: user.phone || user.mobile || '',
-  wallet_balance: Number(user.wallet_balance || 0),
+  wallet_balance: Number(walletBalance || 0),
   active:
     (user.active ?? user.isActive) !== false &&
     !user.deletedAt,
@@ -2659,88 +2660,19 @@ export const listUsers = async ({
     User.countDocuments(query),
   ]);
 
+  const wallets = await UserWallet.find({ userId: { $in: users.map((u) => u._id) } })
+    .select('userId balance')
+    .lean();
+  const balanceByUserId = new Map(wallets.map((w) => [String(w.userId), w.balance]));
+
   return {
-    results: users.map((user) => serializeUserListItem(user)),
+    results: users.map((user) => serializeUserListItem(user, balanceByUserId.get(String(user._id)))),
     paginator: {
       current_page: safePage,
       per_page: safeLimit,
       total,
       last_page: Math.max(1, Math.ceil(total / safeLimit)),
     },
-  };
-};
-
-export const bulkImportUsers = async (payload = {}) => {
-  const incomingUsers = Array.isArray(payload.users) ? payload.users : [];
-
-  if (!incomingUsers.length) {
-    throw new ApiError(400, 'users array is required');
-  }
-
-  if (incomingUsers.length > 2000) {
-    throw new ApiError(400, 'Too many users in one import (max 2000)');
-  }
-
-  const errors = [];
-  const created = [];
-  const skipped = [];
-
-  for (let index = 0; index < incomingUsers.length; index += 1) {
-    const raw = incomingUsers[index] || {};
-    const name = String(raw.name || '').trim();
-    const phone = String(raw.phone || raw.mobile || '').replace(/\D/g, '');
-    const email = String(raw.email || '').trim().toLowerCase();
-    const gender = String(raw.gender || '').trim().toLowerCase();
-    const countryCode = String(raw.countryCode || raw.country_code || raw.country || '').trim();
-
-    if (!name) {
-      errors.push({ index, field: 'name', message: 'Name is required' });
-      continue;
-    }
-
-    if (!/^\d{10}$/.test(phone)) {
-      errors.push({ index, field: 'phone', message: 'A valid 10-digit phone number is required' });
-      continue;
-    }
-
-    if (email && !EMAIL_REGEX.test(email)) {
-      errors.push({ index, field: 'email', message: 'A valid email address is required' });
-      continue;
-    }
-
-    const normalizedGender = VALID_USER_GENDERS.has(gender) ? gender : '';
-    const normalizedCountryCode = countryCode && countryCode.startsWith('+') ? countryCode : '+91';
-
-    const existingUser = await User.findOne({ phone }).lean();
-    if (existingUser) {
-      skipped.push({ index, phone, id: String(existingUser._id) });
-      continue;
-    }
-
-    try {
-      const user = await User.create({
-        name,
-        phone,
-        email,
-        gender: normalizedGender,
-        countryCode: normalizedCountryCode,
-        isVerified: true,
-        active: raw.active ?? true,
-      });
-      created.push(serializeUser(user.toObject()));
-    } catch (error) {
-      const message = error?.message || 'Failed to create user';
-      errors.push({ index, message });
-    }
-  }
-
-  return {
-    created_count: created.length,
-    skipped_count: skipped.length,
-    error_count: errors.length,
-    created,
-    skipped: skipped.slice(0, 200),
-    errors: errors.slice(0, 200),
   };
 };
 
@@ -2862,46 +2794,6 @@ export const bulkImportDrivers = async (payload = {}) => {
   };
 };
 
-export const createUser = async (payload) => {
-  const name = String(payload.name || '').trim();
-  const phone = String(payload.phone || payload.mobile || '').replace(/\D/g, '');
-  const email = String(payload.email || '').trim().toLowerCase();
-  const password = String(payload.password || '');
-  const passwordConfirmation = String(payload.password_confirmation ?? payload.confirmPassword ?? '');
-  const gender = String(payload.gender || '').trim().toLowerCase();
-  const profileImage = String(payload.profileImage || '').trim();
-
-  if (!name) throw new ApiError(400, 'User name is required');
-  if (!/^\d{10}$/.test(phone)) throw new ApiError(400, 'A valid 10-digit phone number is required');
-  if (!email) throw new ApiError(400, 'Email is required');
-  if (!EMAIL_REGEX.test(email)) throw new ApiError(400, 'A valid email address is required');
-  if (!gender || !VALID_USER_GENDERS.has(gender)) throw new ApiError(400, 'A valid gender is required');
-  if (!password.trim()) throw new ApiError(400, 'Password is required');
-  if (password.length < 5) throw new ApiError(400, 'Password must be at least 5 characters');
-  if (!passwordConfirmation) throw new ApiError(400, 'Confirm password is required');
-  if (password !== passwordConfirmation) throw new ApiError(400, 'Passwords do not match');
-
-  const existingUser = await User.findOne({ phone });
-  if (existingUser) {
-    throw new ApiError(409, 'Phone number already exists');
-  }
-
-  const user = await User.create({
-    name,
-    phone,
-    email,
-    gender,
-    profileImage,
-    password: await hashPassword(password),
-    wallet_balance: Number(payload.wallet_balance || 0),
-    active: payload.active ?? true,
-    isActive: payload.active ?? true,
-  });
-
-  return serializeUser(user.toObject());
-};
-
-
 export const updateUser = async (id, payload) => {
   const update = {};
 
@@ -2925,7 +2817,8 @@ export const updateUser = async (id, payload) => {
     }
   }
   if (payload.profileImage !== undefined) update.profileImage = String(payload.profileImage || '').trim();
-  if (payload.wallet_balance !== undefined) update.wallet_balance = Number(payload.wallet_balance || 0);
+  // Wallet balance is not a User field (see UserWallet.js) — adjust it via
+  // POST /admin/wallet/users/:id/adjust, not through this profile update.
   if (payload.active !== undefined) {
     update.active = Boolean(payload.active);
     update.isActive = Boolean(payload.active);
@@ -3018,86 +2911,6 @@ export const permanentlyDeleteDeletedUser = async (id) => {
   return true;
 };
 
-export const listUserDeletionRequests = async ({ page = 1, limit = 50, status = 'pending' } = {}) => {
-  const safePage = Number(page) || 1;
-  const safeLimit = Number(limit) || 50;
-  const requestedStatus = String(status || 'pending').toLowerCase();
-  const start = (safePage - 1) * safeLimit;
-  const statusQuery =
-    requestedStatus === 'all'
-      ? { $in: ['pending', 'approved', 'rejected'] }
-      : requestedStatus;
-  const query = {
-    'deletionRequest.status': statusQuery,
-    deletedAt: null,
-  };
-
-  const [users, total] = await Promise.all([
-    User.find(query)
-      .sort({ 'deletionRequest.requestedAt': -1, createdAt: -1 })
-      .skip(start)
-      .limit(safeLimit)
-      .lean(),
-    User.countDocuments(query),
-  ]);
-
-  return {
-    results: users.map(serializeUser),
-    paginator: {
-      current_page: safePage,
-      per_page: safeLimit,
-      total,
-      last_page: Math.max(1, Math.ceil(total / safeLimit)),
-    },
-  };
-};
-
-export const approveUserDeletionRequest = async (id, adminId) => {
-  const now = new Date();
-  const user = await User.findOneAndUpdate(
-    { _id: id, deletedAt: null, 'deletionRequest.status': 'pending' },
-    {
-      $set: {
-        deletedAt: now,
-        active: false,
-        isActive: false,
-        deletion_reason: 'user_delete_request',
-        'deletionRequest.status': 'approved',
-        'deletionRequest.reviewedAt': now,
-        'deletionRequest.reviewedBy': adminId || null,
-        'deletionRequest.adminNote': '',
-      },
-    },
-    { returnDocument: 'after', runValidators: true },
-  );
-
-  if (!user) throw new ApiError(404, 'Pending user deletion request not found');
-  notifyUserAccountDeleted(user._id);
-  return serializeUser(user.toObject());
-};
-
-export const rejectUserDeletionRequest = async (id, payload = {}, adminId) => {
-  const now = new Date();
-  const adminNote = String(payload.adminNote || payload.note || '').trim();
-  const user = await User.findOneAndUpdate(
-    { _id: id, deletedAt: null, 'deletionRequest.status': 'pending' },
-    {
-      $set: {
-        active: true,
-        isActive: true,
-        'deletionRequest.status': 'rejected',
-        'deletionRequest.reviewedAt': now,
-        'deletionRequest.reviewedBy': adminId || null,
-        'deletionRequest.adminNote': adminNote,
-      },
-    },
-    { returnDocument: 'after', runValidators: true },
-  );
-
-  if (!user) throw new ApiError(404, 'Pending user deletion request not found');
-  return serializeUser(user.toObject());
-};
-
 export const getUserById = async (id) => {
   const user = await User.findById(id).lean();
 
@@ -3105,16 +2918,21 @@ export const getUserById = async (id) => {
     throw new ApiError(404, 'User not found');
   }
 
-  const rides = await Ride.find({
-    userId: id,
-    'feedback.rating': { $gte: 1 },
-  })
-    .sort({ completedAt: -1, createdAt: -1 })
-    .populate('driverId', 'name')
-    .lean();
+  const [rides, wallet] = await Promise.all([
+    Ride.find({
+      userId: id,
+      'feedback.rating': { $gte: 1 },
+    })
+      .sort({ completedAt: -1, createdAt: -1 })
+      .populate('driverId', 'name')
+      .lean(),
+    // wallet_balance never lived on the User doc — the real figure is UserWallet.balance.
+    UserWallet.findOne({ userId: id }).select('balance').lean(),
+  ]);
 
   return {
     ...serializeUser(user),
+    wallet_balance: Number(wallet?.balance || 0),
     reviews: rides.map((ride) => ({
       _id: ride._id,
       request_id: String(ride._id),
@@ -3166,7 +2984,7 @@ export const listUserRequests = async (id) => {
       is_completed: String(ride.status).toLowerCase() === 'completed',
       is_cancelled: String(ride.status).toLowerCase() === 'cancelled',
       is_paid: String(ride.status).toLowerCase() === 'completed',
-      payment_type: 'cash',
+      payment_type: String(ride.paymentMethod || 'cash').toLowerCase(),
       status: ride.status,
     })),
   };

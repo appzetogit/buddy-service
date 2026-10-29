@@ -10,7 +10,6 @@ import {
   AdminBidRideSettings,
   AdminCountryManagement,
   AdminDashboard,
-  AdminDeleteRequestUsers,
   AdminDeliveries,
   AdminDriverAudit,
   AdminDriverBulkUpload,
@@ -56,10 +55,7 @@ import {
   AdminTransportRideSettings,
   AdminTrips,
   AdminUserAppManagement,
-  AdminUserBulkUpload,
-  AdminUserCreate,
   AdminUserDetails,
-  AdminUserImportCreate,
   AdminUserList,
   AdminUserReport,
   AdminVehicleType,
@@ -131,11 +127,7 @@ export default function TaxiAdminRoutes() {
       <Route path="ongoing" element={<AdminOngoing />} />
       <Route path="wallet/payment" element={<AdminWalletPayment />} />
       <Route path="users" element={<AdminUserList />} />
-      <Route path="users/create" element={<AdminUserCreate />} />
       <Route path="users/:id" element={<AdminUserDetails />} />
-      <Route path="users/delete-requests" element={<AdminDeleteRequestUsers />} />
-      <Route path="users/bulk-upload" element={<AdminUserBulkUpload />} />
-      <Route path="user-import/create" element={<AdminUserImportCreate />} />
 
       <Route path="drivers" element={<AdminDriverList />} />
       <Route path="drivers/active" element={<AdminDriverList mode="active" />} />
