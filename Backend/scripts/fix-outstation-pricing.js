@@ -1,6 +1,7 @@
 /**
- * Enable outstation pricing for the Bike (taxi) vehicle in every zone that currently has none —
- * the gap diagnose-taxi-driver.js found for driver 9301988718.
+ * Enable outstation pricing for a taxi vehicle in every zone that currently has none — the gap
+ * diagnose-taxi-driver.js found for driver 9301988718 (Bike). Run once per vehicle that's missing
+ * it; Bike, Auto and any future vehicle all use the same fix.
  *
  * Derives the outstation rate from each zone's own existing city (regular ride) rate on the same
  * SetPrice row, instead of a made-up number, and only touches rows that are currently missing
@@ -8,8 +9,9 @@
  * fields at 0) — a row that already has outstation pricing is printed but left untouched.
  *
  * USAGE
- *   node scripts/fix-bike-outstation-pricing.js            # dry run: prints what it WOULD change
- *   node scripts/fix-bike-outstation-pricing.js --apply     # writes the changes
+ *   node scripts/fix-outstation-pricing.js <vehicle name>            # dry run
+ *   node scripts/fix-outstation-pricing.js <vehicle name> --apply    # writes the changes
+ *   node scripts/fix-outstation-pricing.js                           # defaults to Bike
  */
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
@@ -22,27 +24,29 @@ import { tariffSupportsOutstation } from '../src/modules/taxi/services/outstatio
 dotenv.config();
 
 const APPLY = process.argv.includes('--apply');
+const vehicleName = (process.argv[2] && process.argv[2] !== '--apply' ? process.argv[2] : 'Bike').trim();
 
 await mongoose.connect(config.mongodbUri || config.mongoUri || process.env.MONGO_URI || process.env.MONGODB_URI);
 
-const bikeVehicles = await Vehicle.find({
-  name: { $regex: /^bike$/i },
+const escapedName = vehicleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const vehicles = await Vehicle.find({
+  name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
   transport_type: 'taxi',
 }).lean();
 
-if (!bikeVehicles.length) {
-  console.log('No Bike (taxi) vehicle catalog entry found.');
+if (!vehicles.length) {
+  console.log(`No "${vehicleName}" (taxi) vehicle catalog entry found.`);
   process.exit(0);
 }
 
-const vehicleIds = bikeVehicles.map((v) => v._id);
+const vehicleIds = vehicles.map((v) => v._id);
 const rows = await SetPrice.find({
   transport_type: 'taxi',
   vehicle_type: { $in: vehicleIds },
   pricing_scope: 'ride',
 });
 
-console.log(`Found ${rows.length} Bike (taxi) ride-pricing row(s) across zones.\n`);
+console.log(`Found ${rows.length} ${vehicleName} (taxi) ride-pricing row(s) across zones.\n`);
 
 let changed = 0;
 for (const row of rows) {
