@@ -19,6 +19,8 @@ import { Ride } from '../src/modules/taxi/user/models/Ride.js';
 import { Vehicle } from '../src/modules/taxi/admin/models/Vehicle.js';
 import { driverTakesRide, rideCategoryOf } from '../src/modules/taxi/shared/driverRideFilters.js';
 import { expandRiderVehicleKeys } from '../src/modules/taxi/shared/vehicleClasses.js';
+import { SetPrice } from '../src/modules/taxi/admin/models/SetPrice.js';
+import { tariffSupportsOutstation } from '../src/modules/taxi/services/outstationFareService.js';
 
 dotenv.config();
 
@@ -80,6 +82,35 @@ ok(partner.isOnRide !== true, 'not already on a ride');
 ok(ageMs <= FRESH_LOCATION_MS, 'location updated in the last 5 minutes', Number.isFinite(ageMs) ? `${Math.round(ageMs / 1000)}s ago` : 'never');
 ok(Boolean(partner.lastLocation?.coordinates?.length), 'has a lastLocation point');
 ok(Boolean(partner.vehicleType || partner.taxiVehicleType), 'has a vehicle type on the partner profile', `vehicleType='${partner.vehicleType || ''}' taxiVehicleType='${partner.taxiVehicleType || ''}'`);
+
+// Which catalog vehicles this driver can serve, and whether each has an outstation tariff.
+console.log(`\n== Driver's vehicle and outstation ==`);
+const driverType = String(partner.taxiVehicleType || partner.vehicleType || identity?.taxiVehicle?.type || '').trim().toLowerCase();
+console.log({
+  registeredTaxiVehicle: identity?.taxiVehicle
+    ? { type: identity.taxiVehicle.type, make: identity.taxiVehicle.make, model: identity.taxiVehicle.model, number: identity.taxiVehicle.number }
+    : null,
+  partnerVehicleName: partner.taxiVehicleName || partner.vehicleName,
+  vehicleClassUsedForMatching: driverType || '(none)',
+});
+if (!driverType) {
+  console.log('FAIL  no vehicle class on this driver, so no booked vehicle can match.');
+} else {
+  const catalog = await Vehicle.find({}).select('name vehicle_type icon_types status active transport_type').lean();
+  const served = catalog.filter((v) => expandRiderVehicleKeys([v.name, v.vehicle_type, v.icon_types]).includes(driverType));
+  if (!served.length) console.log(`FAIL  no vehicle in the catalog matches class '${driverType}' - passengers can never book a vehicle this driver is matched to.`);
+  let outstationCapable = false;
+  for (const v of served) {
+    const rows = await SetPrice.find({ vehicle_type: v._id, pricing_scope: { $ne: 'package' } }).lean();
+    const out = rows.filter((r) => tariffSupportsOutstation(r));
+    if (out.length) outstationCapable = true;
+    console.log(`- catalog vehicle '${v.name}' (${v.transport_type || 'taxi'}): ${rows.length} price row(s), ${out.length} with outstation pricing`);
+    for (const r of rows.slice(0, 6)) {
+      console.log(`    zone=${r.zone_id} enable_outstation_ride=${r.enable_outstation_ride} support_outstation=${r.support_outstation} base=${r.outstation_base_price} perKm=${r.outstation_price_per_distance} -> ${tariffSupportsOutstation(r) ? 'OUTSTATION OK' : 'no outstation tariff'}`);
+    }
+  }
+  ok(outstationCapable, 'this driver\'s vehicle class has at least one outstation tariff (Set Prices)');
+}
 
 if (rideId) {
   const ride = await Ride.findById(rideId).lean();
