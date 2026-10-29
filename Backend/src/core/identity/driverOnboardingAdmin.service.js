@@ -276,6 +276,11 @@ const syncFoodPartnerForService = async (identity, service, statusPatch) => {
   return partner;
 };
 
+/// Taxi has its own approval (the Food one lives in `partner.status`); ride matching reads this flag.
+const setTaxiApprovedOnPartner = async (identityId, approved) => {
+  await FoodDeliveryPartner.updateMany({ identityId }, { $set: { taxiApproved: Boolean(approved) } });
+};
+
 /**
  * The legacy taxi admin "Pending Drivers" screen filters by a loose `approve`/`status` field it
  * writes directly on the shared delivery-partner document (never through BuddyIdentity). That
@@ -321,6 +326,7 @@ export async function approveDriverService(requestId, service) {
   if (svc === 'taxi') {
     await syncLegacyTaxiApproveFlag(identity._id, true);
   }
+  if (svc === 'taxi') await setTaxiApprovedOnPartner(identity._id, true);
 
   const { partner } = await findProfilesForIdentity(identity._id);
   return buildJoinRequestRow(identity.toObject(), svc, partner);
@@ -360,6 +366,7 @@ export async function rejectDriverService(requestId, service, reason) {
   if (svc === 'taxi') {
     await syncLegacyTaxiApproveFlag(identity._id, false);
   }
+  if (svc === 'taxi') await setTaxiApprovedOnPartner(identity._id, false);
 
   const { partner } = await findProfilesForIdentity(identity._id);
   return buildJoinRequestRow(identity.toObject(), svc, partner);
@@ -395,6 +402,7 @@ export async function approveDriverAllServices(requestId) {
   if (applicable.includes('food')) {
     await syncFoodPartnerForService(identity, 'food', { status: 'approved', approvedAt });
   }
+  if (applicable.includes('taxi')) await setTaxiApprovedOnPartner(identity._id, true);
   await syncLegacyTaxiApproveFlag(identity._id, true);
 
   const { partner } = await findProfilesForIdentity(identity._id);
@@ -435,6 +443,7 @@ export async function rejectDriverAllServices(requestId, reason) {
       rejectedAt,
     });
   }
+  if (applicable.includes('taxi')) await setTaxiApprovedOnPartner(identity._id, false);
   await syncLegacyTaxiApproveFlag(identity._id, false);
 
   const { partner } = await findProfilesForIdentity(identity._id);

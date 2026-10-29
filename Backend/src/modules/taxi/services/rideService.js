@@ -649,14 +649,14 @@ const normalizeRideTransportType = (value = 'taxi') => {
 /// path.
 const explainWhyDriverCannotAccept = async ({ driverId, ride }) => {
   const driver = await Driver.findById(driverId)
-    .select('status availabilityStatus isOnRide deliveryServices vehicleType taxiVehicleType taxiServiceCategories')
+    .select('status availabilityStatus isOnRide deliveryServices vehicleType taxiVehicleType taxiServiceCategories taxiApproved')
     .lean();
 
   if (!driver) {
     return 'Driver account not found';
   }
 
-  if (driver.status && driver.status !== 'approved') {
+  if (driver.status && driver.status !== 'approved' && driver.taxiApproved !== true) {
     return 'Your delivery account is not approved yet';
   }
 
@@ -1697,7 +1697,6 @@ export const acceptRideAssignment = async ({ rideId, driverId }) => {
   const driverVehicleFilter = await buildDriverVehicleAcceptFilter(ride);
   const driverFilter = {
     _id: driverId,
-    status: 'approved',
     availabilityStatus: 'online',
     isOnRide: { $ne: true },
     deliveryServices: 'taxi',
@@ -2033,7 +2032,6 @@ export const submitRideBid = async ({ rideId, driverId, bidFare }) => {
   const driverVehicleFilter = await buildDriverVehicleAcceptFilter(ride);
   const driver = await Driver.findOne({
     _id: driverId,
-    status: 'approved',
     availabilityStatus: 'online',
     isOnRide: { $ne: true },
     deliveryServices: 'taxi',
@@ -2214,7 +2212,6 @@ export const acceptRideBidAssignment = async ({ rideId, bidId, userId }) => {
       const driverVehicleFilter = await buildDriverVehicleAcceptFilter(ride);
       const driver = await Driver.findOne({
         _id: bid.driverId,
-        status: 'approved',
         availabilityStatus: 'online',
         isOnRide: { $ne: true },
         deliveryServices: 'taxi',

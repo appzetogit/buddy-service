@@ -30,10 +30,12 @@ test('a rider who never chose takes every kind (as before)', () => {
 
 test('the Mongo filter has a vehicle clause (either field) and a category clause', () => {
   const f = driverRideFilter({ regexes: car, serviceType: 'intercity' });
-  assert.equal(f.$and.length, 2);
-  assert.deepEqual(f.$and[0].$or.map((c) => Object.keys(c)[0]), ['vehicleType', 'taxiVehicleType']);
-  assert.deepEqual(f.$and[1].$or.at(-1), { taxiServiceCategories: 'outstation' });
-  assert.equal(driverRideFilter({ serviceType: 'ride' }).$and.length, 1);
+  // approved (Food OR Taxi approval), vehicle (either field), category
+  assert.equal(f.$and.length, 3);
+  assert.deepEqual(f.$and[0].$or, [{ status: 'approved' }, { taxiApproved: true }]);
+  assert.deepEqual(f.$and[1].$or.map((c) => Object.keys(c)[0]), ['vehicleType', 'taxiVehicleType']);
+  assert.deepEqual(f.$and[2].$or.at(-1), { taxiServiceCategories: 'outstation' });
+  assert.equal(driverRideFilter({ serviceType: 'ride' }).$and.length, 2);
 });
 
 test('categories are validated', () => {

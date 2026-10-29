@@ -23,6 +23,10 @@ const vehicleClause = (regexes) => ({
   $or: [{ vehicleType: { $in: regexes } }, { taxiVehicleType: { $in: regexes } }],
 });
 
+/// A rider is approved for taxi work by the Food approval (`status`) OR by the admin approving their
+/// Taxi service (`taxiApproved`): a taxi-only driver never has a Food approval.
+const approvedClause = { $or: [{ status: 'approved' }, { taxiApproved: true }] };
+
 const categoryClause = (category) => ({
   $or: [
     { taxiServiceCategories: { $exists: false } },
@@ -33,7 +37,7 @@ const categoryClause = (category) => ({
 
 /** @param regexes RegExp[] of acceptable vehicle classes (empty = any), @param serviceType the ride's serviceType */
 export const driverRideFilter = ({ regexes = [], serviceType } = {}) => {
-  const and = [];
+  const and = [approvedClause];
   if (regexes.length) and.push(vehicleClause(regexes));
   and.push(categoryClause(rideCategoryOf(serviceType)));
   return { $and: and };

@@ -29,6 +29,8 @@ export const syncTaxiProfileToPartner = async (identity) => {
   const vehicle = identity.taxiVehicle || {};
   const name = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim();
   const set = {};
+  // The admin approved Taxi for this driver (identity), copied to where ride matching looks.
+  if (identity.serviceStatuses?.taxi?.status === 'approved') set.taxiApproved = true;
   if (vehicle.type) set.taxiVehicleType = vehicle.type;
   if (name) set.taxiVehicleName = name;
   if (vehicle.number) set.taxiVehicleNumber = vehicle.number;

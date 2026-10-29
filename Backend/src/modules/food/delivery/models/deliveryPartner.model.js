@@ -57,6 +57,10 @@ const deliveryPartnerSchema = new mongoose.Schema(
          * vehicle above because one rider can drive a bike for Food and a car for taxi; ride matching
          * accepts either (see taxi/shared/driverRideFilters.js).
          */
+        /** The admin approved the rider's Taxi service (separate from the Food approval in `status`). */
+        taxiApproved: {
+            type: Boolean
+        },
         taxiVehicleType: {
             type: String
         },

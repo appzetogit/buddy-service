@@ -46,7 +46,6 @@ const buildDriverMatchFilters = ({ vehicleTypeKeys, serviceType }) => {
     : [];
 
   return {
-    status: 'approved',
     availabilityStatus: 'online',
     // Taxi is an opt-in job type (the "Jobs you want" choice in the rider app).
     deliveryServices: 'taxi',
