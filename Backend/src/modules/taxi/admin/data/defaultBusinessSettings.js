@@ -69,6 +69,9 @@ export const createDefaultBusinessSettings = () => ({
     // around me", and the client asked for one km.
     nearby_driver_marker_radius: '1',
     bidding_ride_maximum_distance: '50',
+    // A drop further than this (straight line, km) makes a trip outstation, even inside one zone.
+    // 0 = only a different zone / city does.
+    outstation_min_distance_km: '40',
     user_can_make_a_ride_after_x_miniutes: '15',
     minimum_time_for_search_drivers_for_schedule_ride: '1',
     minimum_time_for_starting_trip_drivers_for_schedule_ride: '15',

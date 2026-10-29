@@ -31,6 +31,7 @@ import {
   notifyRideBiddingUpdated,
   restartRideDispatchWithLatestFare,
   startDispatchFlow,
+  announceScheduledRide,
 } from '../../services/dispatchService.js';
 import { getTipSettings } from '../../services/appSettingsService.js';
 import { getBidRideSettings, getTransportRideSettings } from '../../services/transportSettingsService.js';
@@ -342,6 +343,8 @@ export const createRide = async (req, res) => {
   });
 
   await startDispatchFlow(ride);
+  // A ride booked for later: nearby drivers can take it in advance.
+  announceScheduledRide(ride).catch((error) => console.error('Scheduled ride announcement failed', error));
 
   res.status(201).json({
     success: true,

@@ -175,6 +175,20 @@ const setPriceSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Round trip (see services/outstationFareService.js): per km on the chargeable km
+    // (0 = use the one-way per km), a minimum km per day, and a driver allowance (bata) per day.
+    outstation_round_trip_price_per_distance: {
+      type: Number,
+      default: 0,
+    },
+    outstation_min_km_per_day: {
+      type: Number,
+      default: 0,
+    },
+    outstation_driver_allowance_per_day: {
+      type: Number,
+      default: 0,
+    },
     free_waiting_before: {
       type: Number,
       default: null,

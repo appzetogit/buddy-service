@@ -100,6 +100,9 @@ const buildSetPriceGroupingSignature = (item = {}) => JSON.stringify({
   outstation_base_distance: Number(item.outstation_base_distance ?? 0),
   outstation_price_per_distance: Number(item.outstation_price_per_distance ?? 0),
   outstation_time_price: Number(item.outstation_time_price ?? 0),
+  outstation_round_trip_price_per_distance: Number(item.outstation_round_trip_price_per_distance ?? 0),
+  outstation_min_km_per_day: Number(item.outstation_min_km_per_day ?? 0),
+  outstation_driver_allowance_per_day: Number(item.outstation_driver_allowance_per_day ?? 0),
 });
 
 const collapseAllZonesSetPrices = (items = []) => {
@@ -158,6 +161,9 @@ const NON_NEGATIVE_FORM_FIELDS = new Set([
   'outstation_base_distance',
   'outstation_price_per_distance',
   'outstation_time_price',
+  'outstation_round_trip_price_per_distance',
+  'outstation_min_km_per_day',
+  'outstation_driver_allowance_per_day',
   'price_per_seat',
   'shared_price_per_distance',
   'shared_cancel_fee',
@@ -227,6 +233,9 @@ const initialFormState = {
   outstation_base_distance: '',
   outstation_price_per_distance: '',
   outstation_time_price: '',
+  outstation_round_trip_price_per_distance: '',
+  outstation_min_km_per_day: '',
+  outstation_driver_allowance_per_day: '',
   enable_ride_sharing: false,
   enable_shared_ride: 0,
   price_per_seat: '',
@@ -427,7 +436,10 @@ const SetPrices = ({ mode }) => {
         { name: 'Outstation Base Price', val: formData.outstation_base_price },
         { name: 'Outstation Base Distance', val: formData.outstation_base_distance },
         { name: 'Outstation Price Per Distance', val: formData.outstation_price_per_distance },
-        { name: 'Outstation Time Price', val: formData.outstation_time_price }
+        { name: 'Outstation Time Price', val: formData.outstation_time_price },
+        { name: 'Round Trip Price Per Distance', val: formData.outstation_round_trip_price_per_distance },
+        { name: 'Round Trip Minimum Km Per Day', val: formData.outstation_min_km_per_day },
+        { name: 'Round Trip Driver Allowance Per Day', val: formData.outstation_driver_allowance_per_day }
       ] : [])
     ];
     for (const field of numericFields) {
@@ -953,10 +965,26 @@ const SetPrices = ({ mode }) => {
                      )}
 
                      {formData.enable_outstation_ride && (
-                        <div className="col-span-1 sm:col-span-2 md:col-span-4 lg:col-span-6 flex gap-2">
-                           <div className="flex-1"><label className={labelClass}>Out. Base</label><input type="number" className={inputClass + " py-1"} value={formData.outstation_base_price} onChange={e => setFormData(p=>({...p, outstation_base_price: e.target.value}))} /></div>
-                           <div className="flex-1"><label className={labelClass}>Out. Dist</label><input type="number" className={inputClass + " py-1"} value={formData.outstation_base_distance} onChange={e => setFormData(p=>({...p, outstation_base_distance: e.target.value}))} /></div>
-                           <div className="flex-1"><label className={labelClass}>Out. Price/Dist</label><input type="number" className={inputClass + " py-1"} value={formData.outstation_price_per_distance} onChange={e => setFormData(p=>({...p, outstation_price_per_distance: e.target.value}))} /></div>
+                        <div className="col-span-1 sm:col-span-2 md:col-span-4 lg:col-span-6 space-y-1">
+                           {/* One way: base + per km beyond base km + per minute. */}
+                           <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Outstation - one way</p>
+                           <div className="flex gap-2">
+                              <div className="flex-1"><label className={labelClass}>Base Fare (₹)</label><input type="number" className={inputClass + " py-1"} value={formData.outstation_base_price} onChange={e => setFormData(p=>({...p, outstation_base_price: e.target.value}))} /></div>
+                              <div className="flex-1"><label className={labelClass}>Km in Base</label><input type="number" className={inputClass + " py-1"} value={formData.outstation_base_distance} onChange={e => setFormData(p=>({...p, outstation_base_distance: e.target.value}))} /></div>
+                              <div className="flex-1"><label className={labelClass}>Per Km (₹)</label><input type="number" className={inputClass + " py-1"} value={formData.outstation_price_per_distance} onChange={e => setFormData(p=>({...p, outstation_price_per_distance: e.target.value}))} /></div>
+                              <div className="flex-1"><label className={labelClass}>Per Minute (₹)</label><input type="number" className={inputClass + " py-1"} value={formData.outstation_time_price} onChange={e => setFormData(p=>({...p, outstation_time_price: e.target.value}))} /></div>
+                           </div>
+                           {/* Round trip: per km x max(both-way km, min km/day x days) + allowance x days. */}
+                           <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider pt-1">Outstation - round trip</p>
+                           <div className="flex gap-2">
+                              <div className="flex-1"><label className={labelClass}>Per Km (₹, blank = one-way rate)</label><input type="number" className={inputClass + " py-1"} value={formData.outstation_round_trip_price_per_distance} onChange={e => setFormData(p=>({...p, outstation_round_trip_price_per_distance: e.target.value}))} /></div>
+                              <div className="flex-1"><label className={labelClass}>Minimum Km Per Day</label><input type="number" className={inputClass + " py-1"} value={formData.outstation_min_km_per_day} onChange={e => setFormData(p=>({...p, outstation_min_km_per_day: e.target.value}))} /></div>
+                              <div className="flex-1"><label className={labelClass}>Driver Allowance Per Day (₹)</label><input type="number" className={inputClass + " py-1"} value={formData.outstation_driver_allowance_per_day} onChange={e => setFormData(p=>({...p, outstation_driver_allowance_per_day: e.target.value}))} /></div>
+                           </div>
+                           <p className="text-[10px] text-gray-500 leading-snug">
+                              Round trip = base fare + per km × the larger of (km both ways, minimum km per day × days) + driver allowance × days.
+                              Days run from the travel date to the return date, counted inclusively (same-day return = 1 day). The base fare applies to both.
+                           </p>
                         </div>
                      )}
                   </div>

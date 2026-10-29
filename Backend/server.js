@@ -74,7 +74,10 @@ const startServer = async () => {
             startDispatchRecoveryLoop();
             const { startSurgeEngineLoop } = await import('./src/modules/taxi/services/surgeService.js');
             startSurgeEngineLoop();
-            logger.info('Taxi module ready (socket, dispatch recovery, surge engine)');
+            // "Head out now" / "pickup time" reminders for rides booked ahead.
+            const { startScheduledRideReminderLoop } = await import('./src/modules/taxi/services/scheduledRideReminderService.js');
+            startScheduledRideReminderLoop();
+            logger.info('Taxi module ready (socket, dispatch recovery, surge engine, scheduled-ride reminders)');
         } catch (err) {
             logger.error(`Taxi module failed to start (Food / Quick Commerce unaffected): ${err.message}`);
         }

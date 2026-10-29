@@ -22,6 +22,7 @@ import {
   notifyLateAvailableDriver,
   setSocketServer,
   startDispatchFlow,
+  announceScheduledRide,
 } from '../services/dispatchService.js';
 import { createRideRecord, getRideRoom } from '../services/rideService.js';
 import { consumeScopedRateLimit } from '../middlewares/rateLimitMiddleware.js';
@@ -133,6 +134,7 @@ export const registerTaxiSocket = (io) => {
 
           joinRideRoom(socket, ride._id);
           await startDispatchFlow(ride);
+          announceScheduledRide(ride).catch((error) => console.error('Scheduled ride announcement failed', error));
 
           socket.emit('rideCreated', { rideId: String(ride._id), room: getRideRoom(ride._id), status: ride.status });
           socket.emit(SOCKET_EVENTS.RIDE_JOINED, { rideId: String(ride._id), room: getRideRoom(ride._id) });

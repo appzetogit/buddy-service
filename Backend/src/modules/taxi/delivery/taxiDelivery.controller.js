@@ -17,8 +17,11 @@ import { Ride } from '../user/models/Ride.js';
 import { Driver } from '../driver/models/Driver.js';
 import { resolvePartnerFromAccountId } from '../shared/partner.js';
 import {
+  SCHEDULED_RIDE_ACTIVE_LEAD_MS,
   acceptRideAssignment,
+  driverVehicleMatchesRide,
   getRideDetails,
+  isRideScheduledForFuture,
   getRideRoom,
   saveParcelProof,
   serializeRideRealtime,
@@ -26,6 +29,7 @@ import {
   updateRideLifecycle,
 } from '../services/rideService.js';
 import {
+  cancelScheduledRideByDriver,
   getSocketServer,
   markDriverRejectedFromDispatch,
   notifyRideAccepted,
@@ -148,11 +152,104 @@ export const listCurrentRides = async (req, res) => {
     const rides = await populateForJob(
       Ride.find({ driverId: partnerId, status: { $in: ACTIVE_RIDE_STATUSES } }).sort({ acceptedAt: -1 }),
     );
+    // A ride booked ahead is the rider's live trip only from the active lead before pickup; earlier it
+    // waits in their Scheduled rides list.
+    const activeFrom = new Date(Date.now() + SCHEDULED_RIDE_ACTIVE_LEAD_MS);
+    const live = rides.filter((ride) => !isRideScheduledForFuture(ride, activeFrom));
     const position = await riderPositionOf(partnerId);
-    const orders = await Promise.all(rides.map((ride) => buildRideJob(ride, { riderPosition: position, partnerId })));
+    const orders = await Promise.all(live.map((ride) => buildRideJob(ride, { riderPosition: position, partnerId })));
     return sendResponse(res, 200, 'Current rides', { orders });
   } catch (error) {
     return fail(res, error, 'Failed to load current rides');
+  }
+};
+
+/** Rides within this distance of the rider's last position are offered in Scheduled rides. */
+const SCHEDULED_LIST_RADIUS_KM = 50;
+
+/**
+ * Rides booked for later that this rider can take in advance (and the ones they already took),
+ * soonest first. Open ones are rides still searching for a driver, for this rider's vehicle class,
+ * near them, that they have not given back.
+ */
+export const listScheduledRides = async (req, res) => {
+  try {
+    const partnerId = await resolveRider(req);
+    if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
+
+    const partner = await Driver.findById(partnerId).select('deliveryServices vehicleType').lean();
+    if (!partner || !(partner.deliveryServices || []).includes('taxi')) {
+      return sendResponse(res, 200, 'Scheduled rides', { orders: [], results: [], totalCount: 0 });
+    }
+
+    const position = await riderPositionOf(partnerId);
+    const from = new Date();
+    const open = {
+      scheduledAt: { $gte: from },
+      status: RIDE_STATUS.SEARCHING,
+      liveStatus: RIDE_LIVE_STATUS.SEARCHING,
+      driverId: null,
+      bookingSource: { $ne: 'website' },
+      'dispatchTracking.rejectedDriverIds': { $ne: partnerId },
+      ...(position
+        ? { pickupLocation: { $geoWithin: { $centerSphere: [[position.lng, position.lat], SCHEDULED_LIST_RADIUS_KM / 6378.1] } } }
+        : {}),
+    };
+    const mine = {
+      scheduledAt: { $gte: from },
+      driverId: partnerId,
+      status: RIDE_STATUS.ACCEPTED,
+      liveStatus: { $in: [RIDE_LIVE_STATUS.ACCEPTED, RIDE_LIVE_STATUS.ARRIVING] },
+    };
+
+    const rides = await populateForJob(Ride.find({ $or: [open, mine] }).sort({ scheduledAt: 1 }).limit(200));
+    const visible = [];
+    for (const ride of rides) {
+      const isMine = ride.driverId && String(ride.driverId) === String(partnerId);
+      if (isMine || (await driverVehicleMatchesRide(ride, partner))) visible.push(ride);
+    }
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const pageRides = visible.slice((page - 1) * limit, page * limit);
+    const orders = await Promise.all(pageRides.map((ride) => buildRideJob(ride, { riderPosition: position, partnerId })));
+    return sendResponse(res, 200, 'Scheduled rides', {
+      orders,
+      results: orders,
+      totalCount: visible.length,
+      pagination: { page, limit, total: visible.length, totalPages: Math.max(1, Math.ceil(visible.length / limit)) },
+    });
+  } catch (error) {
+    return fail(res, error, 'Failed to load scheduled rides');
+  }
+};
+
+/**
+ * Gives a ride the rider took in advance back: the passenger keeps the booking (told "finding you
+ * another driver"), the ride goes to other riders, and the giving-back rider is charged the driver
+ * cancellation fee.
+ */
+export const giveBackRideController = async (req, res) => {
+  try {
+    const partnerId = await resolveRider(req);
+    if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
+    if (!mongoose.Types.ObjectId.isValid(String(req.params.rideId))) throw new ApiError(404, 'Ride not found');
+
+    let ride;
+    try {
+      ride = await cancelScheduledRideByDriver({ rideId: req.params.rideId, driverId: partnerId });
+    } catch (error) {
+      // The service throws plain Errors for "not upcoming" / "already completed".
+      throw error instanceof ApiError ? error : new ApiError(400, error.message || 'Could not give this ride back');
+    }
+    if (!ride) throw new ApiError(404, 'Scheduled ride not found for this driver');
+    return sendResponse(res, 200, 'Scheduled ride given back - it goes to other drivers', {
+      rideId: String(ride._id),
+      status: ride.status,
+      liveStatus: ride.liveStatus,
+    });
+  } catch (error) {
+    return fail(res, error, 'Failed to give the ride back');
   }
 };
 

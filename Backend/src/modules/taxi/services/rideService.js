@@ -25,6 +25,7 @@ import { getTipSettings } from './appSettingsService.js';
 import { getBidRideSettings } from './transportSettingsService.js';
 import { resolveBiddingPolicy } from './biddingPolicyService.js';
 import { resolveRideRoute } from './routeService.js';
+import { computeOutstationFare } from './outstationFareService.js';
 
 const clearUserActiveRideIfPresent = async (user) => {
   if (!user?.currentRideId) {
@@ -39,7 +40,9 @@ const clearUserActiveRideIfPresent = async (user) => {
     return;
   }
 
-  if ([RIDE_STATUS.COMPLETED, RIDE_STATUS.CANCELLED].includes(activeRide.status)) {
+  // A reservation (booked ahead, not yet due) is kept: it is only unlinked, and becomes the current
+  // ride again when it is due.
+  if ([RIDE_STATUS.COMPLETED, RIDE_STATUS.CANCELLED].includes(activeRide.status) || isReservation(activeRide.scheduledAt)) {
     user.currentRideId = null;
     await user.save();
     return;
@@ -179,6 +182,8 @@ const normalizeIntercityPayload = (intercity = {}) => ({
   toCity: String(intercity.toCity || '').trim(),
   tripType: String(intercity.tripType || '').trim(),
   travelDate: String(intercity.travelDate || intercity.date || '').trim(),
+  // The rider's return date/time for a round trip (the client's ISO string); blank for one way.
+  returnDate: String(intercity.returnDate || intercity.returnAt || '').trim(),
   passengers: Math.max(Number(intercity.passengers || 1), 1),
   distance: Math.max(Number(intercity.distance || 0), 0),
   vehicleName: String(intercity.vehicleName || '').trim(),
@@ -194,6 +199,22 @@ const normalizeScheduledAt = (value) => {
 };
 
 export const DRIVER_SCHEDULE_LOCK_WINDOW_MS = 30 * 60 * 1000;
+/// How long before pickup an accepted scheduled ride becomes the driver's active trip (and they get
+/// the "head out now" reminder). Same as the window in which they stop being offered other rides.
+export const SCHEDULED_RIDE_ACTIVE_LEAD_MS = DRIVER_SCHEDULE_LOCK_WINDOW_MS;
+/// Booking window for "ride later". A time closer than SCHEDULE_NOW_TOLERANCE_MS (clock skew or a slow
+/// tap on "now") is booked as a ride now; anything else under the minimum is refused.
+export const SCHEDULE_MIN_LEAD_MS = 15 * 60 * 1000;
+const SCHEDULE_NOW_TOLERANCE_MS = 5 * 60 * 1000;
+export const SCHEDULE_MAX_AHEAD_MS = 30 * 24 * 60 * 60 * 1000;
+
+/// A ride further out than the active lead is a reservation, not the rider's current trip: it does not
+/// take their active-ride slot until it is due, so they can keep booking and a new booking never
+/// cancels it.
+export const isReservation = (scheduledAt, now = Date.now()) => {
+  const time = scheduledAt ? new Date(scheduledAt).getTime() : NaN;
+  return Number.isFinite(time) && time - now > SCHEDULED_RIDE_ACTIVE_LEAD_MS;
+};
 const DRIVER_SCHEDULE_MIN_DURATION_MINUTES = 30;
 const DRIVER_SCHEDULE_TURNOVER_BUFFER_MS = 15 * 60 * 1000;
 
@@ -686,6 +707,13 @@ const buildDriverVehicleAcceptFilter = async (ride) => {
   return { vehicleType: { $in: unique.map((key) => new RegExp(`^${escape(key)}$`, 'i')) } };
 };
 
+/// Whether this rider's own vehicle is the class the ride was booked for (the same rule accepting
+/// a ride applies), for listing rides a rider could take in advance.
+export const driverVehicleMatchesRide = async (ride, driver) => {
+  const wanted = (await buildDriverVehicleAcceptFilter(ride))?.vehicleType?.$in || [];
+  return !wanted.length || wanted.some((matcher) => matcher.test(String(driver?.vehicleType || '')));
+};
+
 /// Waiting charge for a parcel, applied once when the trip completes.
 ///
 /// `arrivedAt` is stamped when the driver reaches the pickup and `startedAt`
@@ -838,11 +866,29 @@ export const createRideRecord = async ({
     throw new ApiError(404, 'User not found');
   }
 
-  await clearUserActiveRideIfPresent(user);
+  const requestedScheduledAt = normalizeScheduledAt(scheduledAt);
+  if (scheduledAt && !requestedScheduledAt) {
+    throw new ApiError(400, 'scheduledAt is invalid');
+  }
+  const scheduleAhead = requestedScheduledAt ? requestedScheduledAt.getTime() - Date.now() : 0;
+  if (requestedScheduledAt && scheduleAhead >= SCHEDULE_NOW_TOLERANCE_MS && scheduleAhead < SCHEDULE_MIN_LEAD_MS) {
+    throw new ApiError(400, 'Pick a pickup time at least 15 minutes from now, or book the ride now', { code: 'SCHEDULE_TOO_SOON' });
+  }
+  if (scheduleAhead > SCHEDULE_MAX_AHEAD_MS) {
+    throw new ApiError(400, 'Rides can be scheduled up to 30 days ahead', { code: 'SCHEDULE_TOO_FAR' });
+  }
+  // Under the tolerance (or in the past) it is a ride now.
+  const normalizedScheduledAt = scheduleAhead >= SCHEDULE_NOW_TOLERANCE_MS ? requestedScheduledAt : null;
+  const reservation = isReservation(normalizedScheduledAt);
+
+  // A ride now replaces whatever the rider was on; a reservation leaves it be.
+  if (!reservation) {
+    await clearUserActiveRideIfPresent(user);
+  }
 
   const riderOtp = await resolveRiderOtp(user);
 
-  const safeFare = Number(fare);
+  let safeFare = Number(fare);
   const safeEstimatedDistanceMeters = Math.max(0, Number(estimatedDistanceMeters || 0));
   const safeEstimatedDurationMinutes = Math.max(0, Number(estimatedDurationMinutes || 0));
 
@@ -904,6 +950,47 @@ export const createRideRecord = async ({
     : (allowedPaymentMethods[0] || 'cash');
   const requestedBookingMode = String(bookingMode || '').trim().toLowerCase();
   const normalizedServiceType = normalizeServiceType(serviceType);
+
+  // Never fatal: `resolveRideRoute` swallows its own failures and returns null,
+  // so a routing outage costs a polyline rather than the booking.
+  const resolvedRoute = await resolveRideRoute({ pickupCoords, dropCoords });
+
+  // Deliveries send neither figure, and a rider's estimate is only ever a
+  // guess, so the routed values win where we have them.
+  const routedDistanceMeters = resolvedRoute?.distanceMeters > 0
+    ? resolvedRoute.distanceMeters
+    : safeEstimatedDistanceMeters;
+  const routedDurationMinutes = resolvedRoute?.durationMinutes > 0
+    ? resolvedRoute.durationMinutes
+    : safeEstimatedDurationMinutes;
+  const routeDocument = resolvedRoute
+    ? {
+        polyline: resolvedRoute.polyline,
+        distanceMeters: resolvedRoute.distanceMeters,
+        durationMinutes: resolvedRoute.durationMinutes,
+        provider: resolvedRoute.provider,
+        fetchedAt: resolvedRoute.fetchedAt,
+      }
+    : undefined;
+
+  // Outstation (one way / round trip) is priced here from the vehicle's tariff, not taken from the
+  // app: the app sends the trip fare plus its platform fee, so that fee is kept and the trip part
+  // replaced. A tariff with no outstation pricing leaves the app's fare as it was.
+  const outstationQuote = normalizedServiceType === 'intercity'
+    ? computeOutstationFare({
+        setPrice: pricingRule,
+        distanceMeters: routedDistanceMeters,
+        durationMinutes: routedDurationMinutes,
+        tripType: intercity?.tripType,
+        travelDate: intercity?.travelDate || normalizedScheduledAt || null,
+        returnDate: intercity?.returnDate || intercity?.returnAt || null,
+      })
+    : null;
+  if (outstationQuote) {
+    const appPlatformFee = Math.max(0, Number(platformFee) || 0);
+    safeFare = Math.round((outstationQuote.total + appPlatformFee) * 100) / 100;
+  }
+
   const bidRideSettings = await getBidRideSettings();
   // Bidding wait window: 0 = instant (no cool-off between rider fare raises).
   // toPositiveNumber would reject a configured 0 and fall back, so read it as a
@@ -1059,33 +1146,6 @@ export const createRideRecord = async ({
   };
 
   const promoCode = typeof promo_code === 'string' ? promo_code.trim() : '';
-  const normalizedScheduledAt = normalizeScheduledAt(scheduledAt);
-
-  if (scheduledAt && !normalizedScheduledAt) {
-    throw new ApiError(400, 'scheduledAt is invalid');
-  }
-
-  // Never fatal: `resolveRideRoute` swallows its own failures and returns null,
-  // so a routing outage costs a polyline rather than the booking.
-  const resolvedRoute = await resolveRideRoute({ pickupCoords, dropCoords });
-
-  // Deliveries send neither figure, and a rider's estimate is only ever a
-  // guess, so the routed values win where we have them.
-  const routedDistanceMeters = resolvedRoute?.distanceMeters > 0
-    ? resolvedRoute.distanceMeters
-    : safeEstimatedDistanceMeters;
-  const routedDurationMinutes = resolvedRoute?.durationMinutes > 0
-    ? resolvedRoute.durationMinutes
-    : safeEstimatedDurationMinutes;
-  const routeDocument = resolvedRoute
-    ? {
-        polyline: resolvedRoute.polyline,
-        distanceMeters: resolvedRoute.distanceMeters,
-        durationMinutes: resolvedRoute.durationMinutes,
-        provider: resolvedRoute.provider,
-        fetchedAt: resolvedRoute.fetchedAt,
-      }
-    : undefined;
 
   if (!promoCode) {
     const ride = await Ride.create({
@@ -1121,13 +1181,13 @@ export const createRideRecord = async ({
       surge: rideSurge,
       trip_category: tripCategory,
       parcel: normalizeParcelPayload(parcel),
-      intercity: normalizeIntercityPayload(intercity),
+      intercity: { ...normalizeIntercityPayload(intercity), ...(outstationQuote ? { pricing: outstationQuote } : {}) },
       scheduledAt: normalizedScheduledAt,
       status: RIDE_STATUS.SEARCHING,
       liveStatus: RIDE_LIVE_STATUS.SEARCHING,
     });
 
-    user.currentRideId = ride._id;
+    if (!reservation) user.currentRideId = ride._id;
     await user.save();
     await syncDeliveryWithRide(ride);
 
@@ -1183,7 +1243,7 @@ export const createRideRecord = async ({
             surge: rideSurge,
             trip_category: tripCategory,
             parcel: normalizeParcelPayload(parcel),
-            intercity: normalizeIntercityPayload(intercity),
+            intercity: { ...normalizeIntercityPayload(intercity), ...(outstationQuote ? { pricing: outstationQuote } : {}) },
             scheduledAt: normalizedScheduledAt,
             status: RIDE_STATUS.SEARCHING,
             liveStatus: RIDE_LIVE_STATUS.SEARCHING,
@@ -1194,7 +1254,7 @@ export const createRideRecord = async ({
 
       const rideDoc = ride[0];
 
-      user.currentRideId = rideDoc._id;
+      if (!reservation) user.currentRideId = rideDoc._id;
       await user.save({ session });
 
       await applyPromoToRideInTransaction({
@@ -1410,11 +1470,31 @@ export const getActiveRideForIdentity = async ({ role, entityId }) => {
   if (role === 'user') {
     const user = await User.findById(entityId).select('currentRideId');
 
-    if (!user?.currentRideId) {
+    if (user?.currentRideId) {
+      return populateRideRealtime(user.currentRideId);
+    }
+
+    // A reservation takes the slot once it is due (the driver heads out then), so the rider's app
+    // opens it as their live trip.
+    const due = await Ride.findOne({
+      userId: entityId,
+      // Not one whose time is long gone and never finished: that would pin a dead trip on the rider.
+      scheduledAt: {
+        $gte: new Date(Date.now() - 12 * 60 * 60 * 1000),
+        $lte: new Date(Date.now() + SCHEDULED_RIDE_ACTIVE_LEAD_MS),
+      },
+      status: { $in: activeRideStatuses },
+      liveStatus: { $nin: [RIDE_LIVE_STATUS.CANCELLED, RIDE_LIVE_STATUS.COMPLETED] },
+    })
+      .sort({ scheduledAt: 1 })
+      .select('_id')
+      .lean();
+    if (!due) {
       return null;
     }
 
-    return populateRideRealtime(user.currentRideId);
+    await User.updateOne({ _id: entityId, currentRideId: null }, { currentRideId: due._id });
+    return populateRideRealtime(due._id);
   }
 
   if (role === 'driver') {
@@ -1426,7 +1506,10 @@ export const getActiveRideForIdentity = async ({ role, entityId }) => {
       .populate('userId', 'name phone profileImage')
       .populate('driverId', 'name phone profileImage profilePhoto vehicleName vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel vehicleImage rating bankDetails.upiId bankDetails.qrCodeImage bankDetails.upiVerificationStatus bankDetails.upiVerifiedName');
 
-    return rides.find((ride) => !isRideScheduledForFuture(ride)) || null;
+    // A scheduled ride becomes the driver's live trip this long before pickup, so they can drive there
+    // and the app opens it; earlier it waits in their Scheduled Rides list.
+    const activeFrom = new Date(Date.now() + SCHEDULED_RIDE_ACTIVE_LEAD_MS);
+    return rides.find((ride) => !isRideScheduledForFuture(ride, activeFrom)) || null;
   }
 
   return null;
@@ -1841,7 +1924,7 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymen
 
   if (nextStatus === RIDE_LIVE_STATUS.COMPLETED) {
     await Promise.all([
-      User.findByIdAndUpdate(ride.userId, { currentRideId: null }),
+      User.updateOne({ _id: ride.userId, currentRideId: ride._id }, { currentRideId: null }),
       Driver.findByIdAndUpdate(driverId, { isOnRide: false }),
     ]);
 

@@ -97,6 +97,13 @@ const rideSchema = new mongoose.Schema(
         default: '',
         trim: true,
       },
+      // The rider's chosen return date/time for a round trip, stored as the client's ISO string.
+      // Blank for one-way bookings.
+      returnDate: {
+        type: String,
+        default: '',
+        trim: true,
+      },
       passengers: {
         type: Number,
         default: 1,
@@ -111,6 +118,12 @@ const rideSchema = new mongoose.Schema(
         type: String,
         default: '',
         trim: true,
+      },
+      // Server-side outstation price: tripType, days, chargeableKm, ratePerKm, driverAllowance,
+      // serviceTax, total... See services/outstationFareService.js. Absent for non-outstation rides.
+      pricing: {
+        type: mongoose.Schema.Types.Mixed,
+        default: undefined,
       },
     },
     parcel: {
@@ -200,6 +213,12 @@ const rideSchema = new mongoose.Schema(
       type: Date,
       default: null,
       index: true,
+    },
+    // Reminders for a ride booked ahead: "head out now" (30 minutes before pickup) and "pickup time".
+    // Each is sent once. See services/scheduledRideReminderService.js.
+    scheduleReminders: {
+      leadSentAt: { type: Date, default: null },
+      dueSentAt: { type: Date, default: null },
     },
     status: {
       type: String,

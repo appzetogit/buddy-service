@@ -145,6 +145,8 @@ export const buildRideJob = async (ride, { riderPosition = null, partnerId = nul
       otpRequired: Boolean(raw.otp),
       otpVerified: Boolean(raw.startedAt),
       scheduledAt: raw.scheduledAt || null,
+      /** Outstation: tripType, returnDate, travelDate, fromCity, toCity, distance, vehicleName and the server's fare breakdown (pricing). */
+      intercity: raw.intercity || null,
       bookingMode: raw.bookingMode || 'normal',
       parcel: raw.parcel || null,
       stops: raw.stops || [],
@@ -156,6 +158,9 @@ export const buildRideJob = async (ride, { riderPosition = null, partnerId = nul
       startedAt: raw.startedAt || null,
       completedAt: raw.completedAt || null,
     },
+    scheduledAt: raw.scheduledAt || null,
+    intercity: raw.intercity || null,
+    isAssignedToCurrentDriver: Boolean(partnerId && raw.driverId && String(raw.driverId?._id || raw.driverId) === String(partnerId)),
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
     partnerId,
