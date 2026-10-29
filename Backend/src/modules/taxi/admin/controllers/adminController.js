@@ -252,9 +252,6 @@ export const rejectDriverDeletionRequest = asyncHandler(async (req, res) =>
   ),
 );
 
-export const createDriver = asyncHandler(async (req, res) =>
-  ok(res, await adminService.createDriver(req.body, req.auth?.admin)),
-);
 export const getDriver = asyncHandler(async (req, res) =>
   ok(res, await adminService.getDriverById(req.params.id, req.auth?.admin)),
 );

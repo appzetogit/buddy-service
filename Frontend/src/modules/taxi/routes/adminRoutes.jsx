@@ -13,7 +13,6 @@ import {
   AdminDeliveries,
   AdminDriverAudit,
   AdminDriverBulkUpload,
-  AdminDriverCreate,
   AdminDriverDeleteRequests,
   AdminDriverDetails,
   AdminDriverDocumentForm,
@@ -131,7 +130,6 @@ export default function TaxiAdminRoutes() {
 
       <Route path="drivers" element={<AdminDriverList />} />
       <Route path="drivers/active" element={<AdminDriverList mode="active" />} />
-      <Route path="drivers/create" element={<AdminDriverCreate />} />
       <Route path="drivers/edit/:id" element={<AdminDriverEdit />} />
       <Route path="drivers/:id" element={<AdminDriverDetails />} />
       <Route path="drivers/pending" element={<AdminPendingDrivers />} />

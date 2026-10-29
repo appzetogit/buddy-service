@@ -66,7 +66,6 @@ export const AdminDriverBulkUpload = lazy(() => import('../modules/admin/pages/d
 export const AdminDriverImportCreate = lazy(() => import('../modules/admin/pages/drivers/DriverImportCreate'));
 export const AdminDriverAudit = lazy(() => import('../modules/admin/pages/drivers/DriverAudit'));
 export const AdminPaymentMethods = lazy(() => import('../modules/admin/pages/drivers/PaymentMethods'));
-export const AdminDriverCreate = lazy(() => import('../modules/admin/pages/drivers/CreateDriver'));
 export const AdminDriverEdit = lazy(() => import('../modules/admin/pages/drivers/EditDriver'));
 export const AdminPromoCodes = lazy(() => import('../modules/admin/pages/promotions/PromoCodes'));
 export const AdminSendNotification = lazy(() => import('../modules/admin/pages/promotions/SendNotification'));

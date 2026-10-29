@@ -41,7 +41,6 @@ export const adminService = {
 
   bulkImportDrivers: (payload) => api.post('/admin/drivers/bulk-import', payload),
   getDriver: (id) => api.get(`/admin/drivers/${id}`),
-  createDriver: (driverData) => api.post('/admin/drivers', driverData),
   updateDriverStatus: (id, data) => api.patch(`/admin/drivers/${id}`, data),
   /**
    * Approve a driver's full onboarding application (Food + Quick Commerce + Taxi, whichever

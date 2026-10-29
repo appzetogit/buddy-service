@@ -9,7 +9,6 @@ import {
   Key,
   Lock,
   MoreVertical,
-  Plus,
   Search,
   Star,
   Trash2,
@@ -123,7 +122,9 @@ const PendingDrivers = () => {
     setError('');
     try {
       const responseData = await adminService.getDrivers(nextPage, nextLimit, {
-        approve: false,
+        // `approve` is a legacy flag that most approval paths never set — status is the one
+        // field every approve/reject path actually writes (see Driver model / onboarding service).
+        status: 'pending',
         search: String(nextSearch || '').trim(),
       });
       const driversList = responseData.data?.results || [];
@@ -226,12 +227,6 @@ const PendingDrivers = () => {
         </div>
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-base text-gray-900 font-bold">Pending Drivers</h1>
-          <button
-            onClick={() => navigate('/admin/drivers/create')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-black font-semibold bg-yellow-400 rounded-md shadow-sm hover:bg-yellow-500 transition-colors"
-          >
-            <Plus size={14} /> Add Drivers
-          </button>
         </div>
       </div>
 

@@ -11,7 +11,6 @@ import {
   getAdminActivitySummary,
   createAppModule,
   createGoodsType,
-  createDriver,
   createDriverNeededDocument,
   bulkImportDrivers,
   createOnboardingScreen,
@@ -177,7 +176,6 @@ adminRouter.patch('/admin/drivers/delete-requests/:id/approve', authenticate(['a
 adminRouter.patch('/admin/drivers/delete-requests/:id/reject', authenticate(['admin']), rejectDriverDeletionRequest);
 adminRouter.patch('/admin/drivers/deleted/:id/restore', authenticate(['admin']), restoreDeletedDriver);
 adminRouter.delete('/admin/drivers/deleted/:id', authenticate(['admin']), permanentlyDeleteDeletedDriver);
-adminRouter.post('/admin/drivers', createDriver);
 adminRouter.get('/admin/drivers/:id/profile', getDriverProfile);
 adminRouter.get('/admin/drivers/:id', getDriver);
 adminRouter.patch('/admin/drivers/:id', updateDriver);

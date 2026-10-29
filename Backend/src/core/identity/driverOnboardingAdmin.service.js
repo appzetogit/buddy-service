@@ -283,7 +283,7 @@ const syncFoodPartnerForService = async (identity, service, statusPatch) => {
  * everything else, so this keeps its own filter in sync instead of going stale. Written through
  * the `strict:false` Driver view, since FoodDeliveryPartner's schema doesn't declare this field.
  */
-const syncLegacyTaxiApproveFlag = async (identityId, approved) => {
+export const syncLegacyTaxiApproveFlag = async (identityId, approved) => {
   try {
     const partner = await FoodDeliveryPartner.findOne({ identityId }).select('_id').lean();
     if (!partner) return;
@@ -317,6 +317,9 @@ export async function approveDriverService(requestId, service) {
 
   if (svc === 'food') {
     await syncFoodPartnerForService(identity, svc, { status: 'approved', approvedAt });
+  }
+  if (svc === 'taxi') {
+    await syncLegacyTaxiApproveFlag(identity._id, true);
   }
 
   const { partner } = await findProfilesForIdentity(identity._id);
@@ -353,6 +356,9 @@ export async function rejectDriverService(requestId, service, reason) {
       rejectionReason: normalizedReason,
       rejectedAt,
     });
+  }
+  if (svc === 'taxi') {
+    await syncLegacyTaxiApproveFlag(identity._id, false);
   }
 
   const { partner } = await findProfilesForIdentity(identity._id);

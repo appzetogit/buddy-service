@@ -4,7 +4,6 @@ import {
   MoreVertical,
   FileText,
   Star,
-  Plus,
   Eye,
   Edit2,
   Key,
@@ -47,7 +46,9 @@ const DriverList = ({ mode = 'approved' }) => {
     setError('');
     try {
       const responseData = await adminService.getDrivers(nextPage, nextLimit, {
-        ...(mode === 'active' ? { isOnline: true } : { approve: true }),
+        // `approve` is a legacy flag only written by the taxi "approve all services" shortcut and
+        // the per-service sync — status is the one field every approval path actually sets.
+        ...(mode === 'active' ? { isOnline: true } : { status: 'approved' }),
         search: String(nextSearch || '').trim(),
       });
       const driversList = responseData.data?.results || [];
@@ -228,14 +229,6 @@ const DriverList = ({ mode = 'approved' }) => {
         </div>
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-base text-gray-900 font-bold">{mode === 'active' ? 'Active Drivers' : 'Approved Drivers'}</h1>
-          {mode !== 'active' ? (
-            <button
-              onClick={() => navigate('/admin/drivers/create')}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-black font-semibold bg-yellow-400 rounded-md shadow-sm hover:bg-yellow-500 transition-colors"
-            >
-              <Plus size={14} /> Add Drivers
-            </button>
-          ) : null}
         </div>
       </div>
 
