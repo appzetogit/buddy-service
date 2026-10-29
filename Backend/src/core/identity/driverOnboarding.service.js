@@ -804,10 +804,43 @@ export const enableCapability = async (identity, service) => {
   return { service: svc, status: svc === 'food' ? partner.status || 'pending' : 'pending' };
 };
 
+/**
+ * A driver whose onboarding is marked complete but who has no partner profile (it was deleted by an
+ * admin, or never created) can never sign in: every later call looks the partner up and fails with
+ * "Profile not found", so the app bounces back to the login screen. Open the onboarding again for
+ * them instead, so they register (their saved details are kept and pre-filled). Returns whether it
+ * had to.
+ */
+export const reopenOnboardingIfPartnerMissing = async (identity, partner) => {
+  if (!identity?.onboardingComplete || partner) return false;
+  for (const svc of ONBOARDING_SERVICES) {
+    setServiceStatusOnIdentity(identity, svc, {
+      status: 'not_enabled',
+      rejectionReason: '',
+      rejectedAt: null,
+      approvedAt: null,
+    });
+  }
+  identity.onboardingComplete = false;
+  identity.onboardingStep = 'services';
+  await BuddyIdentity.updateOne(
+    { _id: identity._id },
+    {
+      $set: {
+        onboardingComplete: false,
+        onboardingStep: 'services',
+        serviceStatuses: identity.serviceStatuses,
+      },
+    },
+  );
+  return true;
+};
+
 export const getOnboardingState = async (identity) => {
   if (!identity) throw new NotFoundError('Identity not found');
 
   const { partner } = await findPartnerProfiles(identity);
+  await reopenOnboardingIfPartnerMissing(identity, partner);
   const capabilities = summarisePartnerCapabilities(identity, partner);
   const foodStatus = getEffectiveServiceStatus(identity, 'food', partner);
   const quickCommerceStatus = getEffectiveServiceStatus(identity, 'quickCommerce', partner);

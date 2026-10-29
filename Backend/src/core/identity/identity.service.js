@@ -9,7 +9,7 @@ import { FoodRefreshToken } from '../refreshTokens/refreshToken.model.js';
 import { createOrUpdateOtp, verifyOtp, consumeOtp } from '../otp/otp.service.js';
 
 import { BuddyIdentity } from './buddyIdentity.model.js';
-import { normalizeOnboardingStepForClient } from './driverOnboarding.service.js';
+import { normalizeOnboardingStepForClient, reopenOnboardingIfPartnerMissing } from './driverOnboarding.service.js';
 import { normalizePhone, normalizeRoleKey } from './identity.helpers.js';
 
 import { FoodUser } from '../users/user.model.js';
@@ -296,6 +296,8 @@ export const verifyOtpUnified = async ({
 
   if (normalizedRole === ROLE_DRIVER) {
     const partner = await findFoodPartnerForIdentity(identity);
+    // Onboarded on paper but no partner profile: register again instead of dead-ending at login.
+    await reopenOnboardingIfPartnerMissing(identity, partner);
 
     if (!identity.onboardingComplete) {
       const tokenPayload = buildTokenPayload(identity, ROLE_DRIVER, {
