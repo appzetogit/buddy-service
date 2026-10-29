@@ -392,6 +392,8 @@ export const adminAPI = {
     apiClient.get(`/food/admin/delivery/${id}`, { contextModule: "admin" }),
   updateDeliveryPartner: (id, body) =>
     apiClient.patch(`/food/admin/delivery/${id}`, body ?? {}, { contextModule: "admin" }),
+  deleteDeliveryPartner: (id) =>
+    apiClient.delete(`/food/admin/delivery/${id}`, { contextModule: "admin" }),
   getDeliveryBoySettings: (config = {}) => getDeliveryBoySettingsOnce(config),
   updateDeliveryBoySettings: (body) => {
     deliveryBoySettingsCache.clear("settings");

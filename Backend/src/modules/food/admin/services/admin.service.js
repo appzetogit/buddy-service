@@ -6247,6 +6247,12 @@ export async function rejectDeliveryPartnerAllServices(id, reason) {
     return { ...updated, rejectedServices };
 }
 
+export async function deleteDeliveryPartner(id) {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+    const { deleteDeliveryAccount } = await import('../../delivery/services/deleteAccount.service.js');
+    return await deleteDeliveryAccount(id);
+}
+
 // ----- Zones CRUD -----
 export async function getZones(query) {
     const limit = Math.min(Math.max(parseInt(query.limit, 10) || 100, 1), 1000);

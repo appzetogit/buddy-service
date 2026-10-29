@@ -4,14 +4,12 @@ import {
   Clock,
   FileText,
   Gavel,
-  Globe,
   Home,
   IndianRupee,
   Receipt,
   Layers,
   MapPin,
   MessageCircle,
-  Monitor,
   Package,
   Settings,
   Settings2,
@@ -69,20 +67,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
         ],
       },
       { icon: Gavel, label: 'Bidding', path: '/admin/settings/business/bid-ride', permission: 'settings.view' },
-      {
-        icon: TrendingUp,
-        label: 'Price Hike',
-        subItems: [
-          { label: 'Hike Slots', path: '/admin/pricing/price-hike', permission: 'set_prices.view' },
-        ],
-      },
-      {
-        icon: IndianRupee,
-        label: 'Package Pricing',
-        subItems: [
-          { label: 'Set Prices', path: '/admin/pricing/package-pricing', permission: 'set_prices.view' },
-        ],
-      },
       {
         icon: MapPin,
         label: 'Geofencing',
@@ -153,14 +137,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
     ],
   },
   {
-    title: 'Masters',
-    items: [
-      { icon: Globe, label: 'Language', path: '/admin/masters/languages', permission: 'settings.view' },
-      // { icon: Star, label: 'Preferences', path: '/admin/masters/preferences' },
-      // { icon: ShieldCheck, label: 'Roles', path: '/admin/masters/roles' },
-    ],
-  },
-  {
     title: 'Settings',
     items: [
       {
@@ -196,21 +172,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
           { label: 'Promo Banners', path: '/admin/settings/user-app/promo-banners', permission: 'settings.view' },
           { label: 'Go Places', path: '/admin/settings/user-app/go-places', permission: 'settings.view' },
           { label: 'Footer Content', path: '/admin/settings/user-app/footer-content', permission: 'settings.view' },
-        ],
-      },
-      // {
-      //   icon: PlusCircle,
-      // },
-      // Only the sections that are actually editable are listed. The rest of
-      // the marketing site is still hardcoded in modules/landing; add entries
-      // here as those sections move into the CMS.
-      {
-        icon: Monitor,
-        label: 'Website Content',
-        permission: 'landing_content.view',
-        subItems: [
-          { label: 'Landing Page', path: '/admin/settings/cms/landing', permission: 'landing_content.view' },
-          { label: 'Enquiries', path: '/admin/settings/cms/enquiries', permission: 'enquiries.view' },
         ],
       },
     ],

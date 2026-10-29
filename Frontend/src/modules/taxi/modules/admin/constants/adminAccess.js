@@ -146,10 +146,8 @@ export const ADMIN_PERMISSION_GROUPS = [
     ],
   },
   {
-    title: 'Website & Settings',
+    title: 'Settings',
     items: [
-      { key: 'landing_content.view', label: 'Website Content (CMS)' },
-      { key: 'enquiries.view', label: 'Website Enquiries' },
       { key: 'settings.view', label: 'Settings' },
     ],
   },

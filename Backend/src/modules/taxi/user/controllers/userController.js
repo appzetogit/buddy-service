@@ -511,60 +511,9 @@ const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g,
 
 
 export const getIntercityPackageCatalog = async (_req, res) => {
-  const items = await SetPrice.find({
-    pricing_scope: 'package',
-    active: 1,
-    status: 'active',
-    package_availability: 'available',
-  })
-    .populate('service_location_id', 'name service_location_name')
-    .populate('package_type_id', 'name')
-    .populate('package_vehicle_prices.vehicle_type', 'name capacity icon map_icon image icon_types dispatch_type')
-    .sort({ package_destination: 1, createdAt: -1 })
-    .lean();
-
-  const results = items.map((item) => {
-    const serviceLocation = item.service_location_id || {};
-    const packageType = item.package_type_id || {};
-
-    return {
-      id: String(item._id),
-      serviceLocationId: serviceLocation._id ? String(serviceLocation._id) : '',
-      serviceLocationName: serviceLocation.name || serviceLocation.service_location_name || '',
-      packageTypeId: packageType._id ? String(packageType._id) : '',
-      packageTypeName: packageType.name || '',
-      destination: String(item.package_destination || '').trim(),
-      availability: String(item.package_availability || 'available').trim().toLowerCase(),
-      vehicles: Array.isArray(item.package_vehicle_prices)
-        ? item.package_vehicle_prices
-            .filter((row) => row?.vehicle_type)
-            .map((row, index) => ({
-              id: `${String(item._id)}:${String(row.vehicle_type?._id || index)}`,
-              vehicleTypeId: row.vehicle_type?._id ? String(row.vehicle_type._id) : '',
-              vehicleName: row.vehicle_type?.name || 'Vehicle',
-              capacity: Number(row.vehicle_type?.capacity || 0),
-              icon: row.vehicle_type?.map_icon || row.vehicle_type?.icon || row.vehicle_type?.image || '',
-              iconType: row.vehicle_type?.icon_types || row.vehicle_type?.name || '',
-              dispatchType: String(row.vehicle_type?.dispatch_type || 'normal').trim().toLowerCase(),
-              basePrice: Number(row.base_price ?? 0),
-              freeDistance: Number(row.free_distance ?? 0),
-              distancePrice: Number(row.distance_price ?? 0),
-              freeTime: Number(row.free_time ?? 0),
-              timePrice: Number(row.time_price ?? 0),
-              adminCommisionType: Number(row.admin_commision_type ?? 1),
-              adminCommision: Number(row.admin_commision ?? 0),
-              adminCommissionTypeFromDriver: Number(row.admin_commission_type_from_driver ?? 1),
-              adminCommissionFromDriver: Number(row.admin_commission_from_driver ?? 0),
-              serviceTax: Number(row.service_tax ?? 0),
-              cancellationFee: Number(row.cancellation_fee ?? 0),
-            }))
-        : [],
-    };
-  });
-
   res.json({
     success: true,
-    results,
+    results: [],
   });
 };
 

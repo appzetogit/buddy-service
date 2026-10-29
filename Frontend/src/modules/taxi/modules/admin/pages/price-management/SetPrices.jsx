@@ -733,13 +733,6 @@ const SetPrices = ({ mode }) => {
                               <div className="flex items-center justify-end gap-1.5">
                                  <button title="Edit Price" onClick={() => navigate(`/admin/pricing/set-price/edit/${prize.id || prize._id}`)} className="w-7 h-7 flex items-center justify-center bg-[#EFFDF4] text-[#2AE56F] rounded transition-colors hover:bg-green-100"><Edit2 size={12} /></button>
                                  <button 
-                                   title="Incentive"
-                                   onClick={() => navigate('/admin/pricing/package-pricing')}
-                                   className="w-7 h-7 flex items-center justify-center bg-[#F0FDFA] text-[#14B8A6] rounded transition-colors hover:bg-emerald-100"
-                                 >
-                                    <Gift size={12} />
-                                 </button>
-                                 <button 
                                    title="Surge Pricing"
                                    onClick={() => navigate(`/admin/pricing/set-price/surge/${prize.id || prize._id}`)}
                                    className="w-7 h-7 flex items-center justify-center bg-[#FEF2F2] text-[#EF4444] rounded transition-colors hover:bg-red-100"

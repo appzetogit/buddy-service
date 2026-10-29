@@ -9,7 +9,6 @@ import {
   AdminBannerImage,
   AdminBidRideSettings,
   AdminCountryManagement,
-  AdminCreatePackagePrice,
   AdminDashboard,
   AdminDeleteRequestUsers,
   AdminDeliveries,
@@ -38,21 +37,17 @@ import {
   AdminGodsEye,
   AdminGoodsTypes,
   AdminHeatMap,
-  AdminLanguages,
   AdminNegativeBalanceDrivers,
   AdminOnboardingScreens,
   AdminOngoing,
   AdminPaymentMethods,
   AdminPayments,
   AdminPendingDrivers,
-  AdminPreferences,
-  AdminPriceHike,
   AdminPromoCodes,
   AdminRideVoiceSettings,
   AdminSafetyCenter,
   AdminSendNotification,
   AdminServiceLocation,
-  AdminSetPackagePrices,
   AdminSetPrices,
   AdminSupportTicketTitle,
   AdminSupportTickets,
@@ -202,15 +197,8 @@ export default function TaxiAdminRoutes() {
         <Route path="set-price" element={<AdminSetPrices />} />
         <Route path="set-price/create" element={<AdminSetPrices mode="create" />} />
         <Route path="set-price/edit/:id" element={<AdminSetPrices mode="edit" />} />
-        <Route path="set-price/packages/:id" element={<AdminSetPackagePrices />} />
-        <Route path="set-price/packages/create/:id" element={<AdminCreatePackagePrice mode="create" />} />
-        <Route path="set-price/packages/edit/:packageId" element={<AdminCreatePackagePrice mode="edit" />} />
-        <Route path="package-pricing" element={<AdminSetPackagePrices />} />
-        <Route path="package-pricing/create" element={<AdminCreatePackagePrice mode="create" />} />
-        <Route path="package-pricing/edit/:packageId" element={<AdminCreatePackagePrice mode="edit" />} />
         <Route path="set-price/incentive/:id" element={<AdminDriverIncentive />} />
         <Route path="set-price/surge/:id" element={<AdminSurgePricing />} />
-        <Route path="price-hike" element={<AdminPriceHike />} />
         <Route path="goods-types" element={<AdminGoodsTypes />} />
         <Route path="goods-types/create" element={<AdminGoodsTypes mode="create" />} />
         <Route path="goods-types/edit/:id" element={<AdminGoodsTypes mode="edit" />} />
@@ -223,11 +211,6 @@ export default function TaxiAdminRoutes() {
       <Route path="reports/driver" element={<AdminDriverReport />} />
       <Route path="reports/driver-duty" element={<AdminDriverDutyReport />} />
       <Route path="reports/finance" element={<AdminFinanceReport />} />
-
-      <Route path="masters/languages" element={<AdminLanguages />} />
-      <Route path="masters/countries" element={<AdminCountryManagement />} />
-      <Route path="masters/preferences" element={<AdminPreferences />} />
-      <Route path="masters/roles" element={<Navigate to="/admin/management/admins" replace />} />
 
       <Route path="settings/business/general" element={<AdminGeneralSettings />} />
       <Route path="settings/business/transport-ride" element={<AdminTransportRideSettings />} />

@@ -30,7 +30,6 @@ import {
   deleteDriverNeededDocument,
   deleteGoodsType,
   deleteOnboardingScreen,
-  deleteLanguage,
   deleteOngoingRide,
   cancelRideRequest,
   deleteRideRequest,
@@ -50,13 +49,6 @@ import {
   getAdminEarnings,
   getAdminEarningDetails,
   getAirports,
-  getPriceHikes,
-  getAutomaticSurge,
-  updateAutomaticSurge,
-  resetVehicleAutomaticSurge,
-  createPriceHike,
-  updatePriceHike,
-  deletePriceHike,
   getAppModules,
   getCancelChart,
   getCountries,
@@ -81,7 +73,6 @@ import {
   getGoodsTypes,
   getIntercityTrips,
   getGeneralSettingsCategory,
-  getLanguages,
   getNearbyServiceLocations,
   getOngoingRides,
   getOverallEarnings,
@@ -102,10 +93,6 @@ import {
   permanentlyDeleteDeletedUser,
   restoreDeletedDriver,
   permanentlyDeleteDeletedDriver,
-  getAdminLandingContent,
-  getWebsiteEnquiries,
-  patchWebsiteEnquiry,
-  saveAdminLandingContent,
   getRideRequests,
   getPayments,
   getPaymentInvoice,
@@ -135,7 +122,6 @@ import {
   updateOnboardingScreen,
   updateGoodsType,
   updateGeneralSettingsCategory,
-  updateLanguageStatus,
   updatePaymentMethod,
   updatePreferenceStatus,
   updateSetPrice,
@@ -275,10 +261,6 @@ adminRouter.get('/admin/payments', getPayments);
 adminRouter.get('/admin/payments/:kind/:id/invoice', getPaymentInvoice);
 adminRouter.post('/admin/ride-requests/:id/cancel', cancelRideRequest);
 adminRouter.delete('/admin/ride-requests/:id', deleteRideRequest);
-adminRouter.get('/admin/enquiries', getWebsiteEnquiries);
-adminRouter.patch('/admin/enquiries/:id', patchWebsiteEnquiry);
-adminRouter.get('/admin/landing-content', getAdminLandingContent);
-adminRouter.put('/admin/landing-content', saveAdminLandingContent);
 adminRouter.delete('/admin/ongoing-rides/:id', deleteOngoingRide);
 adminRouter.get('/admin/deliveries', getDeliveries);
 adminRouter.get('/admin/trips', getIntercityTrips);
@@ -290,10 +272,6 @@ adminRouter.post('/admin/zones', createZone);
 adminRouter.patch('/admin/zones/:id', updateZone);
 adminRouter.delete('/admin/zones/:id', deleteZone);
 adminRouter.patch('/admin/zones/:id/toggle-status', toggleZoneStatus);
-
-adminRouter.get('/admin/languages', getLanguages);
-adminRouter.patch('/admin/languages/:id/status', updateLanguageStatus);
-adminRouter.delete('/admin/languages/:id', deleteLanguage);
 
 adminRouter.get('/admin/preferences', getPreferences);
 adminRouter.post('/admin/preferences', createPreference);
@@ -337,12 +315,3 @@ adminRouter.get('/admin/reports/driver-duty/download', downloadDriverDutyReport)
 adminRouter.get('/admin/reports/finance/download', downloadFinanceReport);
 
 adminRouter.use('/', promotionsRouter);
-
-// Price hike (surge). Sits under the authenticate(['admin']) mount above.
-adminRouter.get('/admin/price-hikes', getPriceHikes);
-adminRouter.get('/admin/surge', getAutomaticSurge);
-adminRouter.patch('/admin/surge', updateAutomaticSurge);
-adminRouter.delete('/admin/surge/vehicles/:vehicleTypeId', resetVehicleAutomaticSurge);
-adminRouter.post('/admin/price-hikes', createPriceHike);
-adminRouter.patch('/admin/price-hikes/:id', updatePriceHike);
-adminRouter.delete('/admin/price-hikes/:id', deletePriceHike);

@@ -11,12 +11,28 @@ import { AccountDeletion } from '../../admin/models/accountDeletion.model.js';
  * 4. Delete the delivery partner document itself
  */
 export async function deleteDeliveryAccount(userId) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+        return null;
+    }
+
+    let session = null;
+    try {
+        session = await mongoose.startSession();
+        session.startTransaction();
+    } catch (_) {
+        session = null;
+    }
+
+    const sessionOpt = session ? { session } : {};
 
     try {
-        const partner = await FoodDeliveryPartner.findById(userId).session(session).lean();
-        if (!partner) throw new Error('Delivery partner not found');
+        const partner = await FoodDeliveryPartner.findById(userId)
+            .session(session || null)
+            .lean();
+        if (!partner) {
+            if (session) await session.abortTransaction();
+            return null;
+        }
 
         // --- 1. Collect financial snapshot ---
         let walletBalance = 0;
@@ -46,51 +62,70 @@ export async function deleteDeliveryAccount(userId) {
             pendingWithdrawals = withdrawalAgg[0]?.total || 0;
         } catch (_) {}
 
-        const orderStats = await FoodOrder.aggregate([
-            { $match: { deliveryPartnerId: new mongoose.Types.ObjectId(userId) } },
-            {
-                $group: {
-                    _id: null,
-                    totalAmount: { $sum: { $ifNull: ['$pricing.deliveryFee', 0] } },
-                    count: { $sum: 1 }
+        let stats = { totalAmount: 0, count: 0 };
+        try {
+            const orderStats = await FoodOrder.aggregate([
+                {
+                    $match: {
+                        $or: [
+                            { deliveryPartnerId: new mongoose.Types.ObjectId(userId) },
+                            { 'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(userId) }
+                        ]
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalAmount: { $sum: { $ifNull: ['$pricing.deliveryFee', 0] } },
+                        count: { $sum: 1 }
+                    }
                 }
-            }
-        ]).session(session);
-
-        const stats = orderStats[0] || { totalAmount: 0, count: 0 };
+            ]).session(session || null);
+            stats = orderStats[0] || { totalAmount: 0, count: 0 };
+        } catch (_) {}
 
         // --- 2. Save financial snapshot ---
-        await AccountDeletion.create(
-            [
-                {
-                    accountType: 'DELIVERY_PARTNER',
-                    originalId: partner._id,
-                    phone: partner.phone || '',
-                    name: partner.name || 'Unknown',
-                    email: partner.email || '',
-                    financialSnapshot: {
-                        totalOrderAmount: stats.totalAmount,
-                        walletBalance,
-                        totalEarnings,
-                        pendingWithdrawals
-                    },
-                    orderCount: stats.count
-                }
-            ],
-            { session }
-        );
+        try {
+            await AccountDeletion.create(
+                [
+                    {
+                        accountType: 'DELIVERY_PARTNER',
+                        originalId: partner._id,
+                        phone: partner.phone || '',
+                        name: partner.name || 'Unknown',
+                        email: partner.email || '',
+                        financialSnapshot: {
+                            totalOrderAmount: stats.totalAmount,
+                            walletBalance,
+                            totalEarnings,
+                            pendingWithdrawals
+                        },
+                        orderCount: stats.count
+                    }
+                ],
+                sessionOpt
+            );
+        } catch (e) {
+            console.error('[deleteDeliveryAccount] Warning creating AccountDeletion snapshot:', e.message);
+        }
 
         // --- 3. Anonymize orders ---
         await FoodOrder.updateMany(
-            { deliveryPartnerId: new mongoose.Types.ObjectId(userId) },
+            {
+                $or: [
+                    { deliveryPartnerId: new mongoose.Types.ObjectId(userId) },
+                    { 'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(userId) }
+                ]
+            },
             {
                 $set: {
                     deliveryPartnerId: null,
+                    'dispatch.deliveryPartnerId': null,
                     'deliveryPartner.name': 'Deleted Partner',
                     'deliveryPartner.phone': ''
                 }
             },
-            { session }
+            sessionOpt
         );
 
         // --- 4. Anonymize transactions ---
@@ -98,37 +133,90 @@ export async function deleteDeliveryAccount(userId) {
             await mongoose.connection.db.collection('food_transactions').updateMany(
                 { deliveryPartnerId: new mongoose.Types.ObjectId(userId) },
                 { $set: { deliveryPartnerId: null, deliveryPartnerName: 'Deleted Partner' } },
-                { session }
+                sessionOpt
             );
         } catch (_) {}
 
-        // --- 5. Delete delivery-specific data ---
+        // --- 5. Clean delivery-specific collections ---
         const collectionsToClean = [
             { col: 'food_delivery_wallets', field: 'deliveryPartnerId' },
             { col: 'delivery_support_tickets', field: 'deliveryPartnerId' },
             { col: 'food_delivery_withdrawals', field: 'deliveryPartnerId' },
             { col: 'food_delivery_cash_deposits', field: 'deliveryPartnerId' },
-            { col: 'food_referral_logs', field: 'referrer' }
+            { col: 'food_referral_logs', field: 'referrer' },
+            { col: 'food_delivery_bonus_transactions', field: 'deliveryPartnerId' },
+            { col: 'food_delivery_salary_payments', field: 'deliveryPartnerId' },
+            { col: 'delivery_earning_addon_histories', field: 'deliveryPartnerId' },
+            { col: 'delivery_partner_reviews', field: 'deliveryPartnerId' }
         ];
 
         for (const { col, field } of collectionsToClean) {
             try {
                 await mongoose.connection.db.collection(col).deleteMany(
                     { [field]: new mongoose.Types.ObjectId(userId) },
-                    { session }
+                    sessionOpt
                 );
             } catch (_) {}
         }
 
-        // --- 6. Delete the delivery partner document ---
-        await FoodDeliveryPartner.deleteOne({ _id: userId }, { session });
+        // --- 6. Update BuddyIdentity if present ---
+        try {
+            const identityId = partner.identityId;
+            if (identityId) {
+                await mongoose.connection.db.collection('buddy_identities').updateOne(
+                    { _id: new mongoose.Types.ObjectId(identityId) },
+                    {
+                        $pull: { roles: 'DRIVER' },
+                        $set: {
+                            activeService: 'off',
+                            onboardingServices: [],
+                            'serviceStatuses.food.status': 'not_enabled',
+                            'serviceStatuses.quickCommerce.status': 'not_enabled',
+                            'serviceStatuses.taxi.status': 'not_enabled'
+                        }
+                    },
+                    sessionOpt
+                );
+            }
+        } catch (e) {
+            console.error('[deleteDeliveryAccount] Warning updating buddy_identities:', e.message);
+        }
 
-        await session.commitTransaction();
-        return { success: true, message: 'Account deleted successfully' };
+        // --- 7. Clean image assets (Cloudinary) safely ---
+        try {
+            const { deleteFromCloudinary } = await import('../../../../services/localUpload.service.js');
+            const publicIds = [];
+            if (partner.imagePublicIds && typeof partner.imagePublicIds === 'object') {
+                Object.values(partner.imagePublicIds).forEach((pid) => {
+                    if (pid && typeof pid === 'string') publicIds.push(pid);
+                });
+            }
+            for (const pid of publicIds) {
+                try {
+                    await deleteFromCloudinary(pid, { ignoreErrors: true });
+                } catch (_) {}
+            }
+        } catch (_) {}
+
+        // --- 8. Delete the delivery partner document ---
+        await FoodDeliveryPartner.deleteOne({ _id: userId }, sessionOpt);
+
+        if (session) {
+            await session.commitTransaction();
+        }
+        return { success: true, message: 'Delivery partner deleted successfully' };
     } catch (error) {
-        await session.abortTransaction();
+        if (session) {
+            try {
+                await session.abortTransaction();
+            } catch (_) {}
+        }
         throw error;
     } finally {
-        session.endSession();
+        if (session) {
+            try {
+                session.endSession();
+            } catch (_) {}
+        }
     }
 }
