@@ -170,6 +170,11 @@ const buddyIdentitySchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    // The kinds of taxi work the driver chose (city, outstation, parcel). Unset = all.
+    taxiServiceCategories: {
+      type: [String],
+      default: undefined,
+    },
     serviceStatuses: {
       food: { type: serviceStatusSchema, default: () => ({ status: 'not_enabled' }) },
       quickCommerce: { type: serviceStatusSchema, default: () => ({ status: 'not_enabled' }) },

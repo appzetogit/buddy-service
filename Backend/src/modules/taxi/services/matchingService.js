@@ -1,5 +1,6 @@
 import { ApiError } from '../../../utils/ApiError.js';
 import { expandRiderVehicleKeys } from '../shared/vehicleClasses.js';
+import { driverRideFilter } from '../shared/driverRideFilters.js';
 import { normalizePoint } from '../../../utils/geo.js';
 import { DISPATCH_TOP_DRIVERS } from '../constants/index.js';
 import { Vehicle } from '../admin/models/Vehicle.js';
@@ -39,7 +40,7 @@ const FRESH_LOCATION_MS = 5 * 60 * 1000;
 
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const buildDriverMatchFilters = ({ vehicleTypeKeys }) => {
+const buildDriverMatchFilters = ({ vehicleTypeKeys, serviceType }) => {
   const normalizedVehicleTypeKeys = Array.isArray(vehicleTypeKeys)
     ? expandRiderVehicleKeys([...new Set(vehicleTypeKeys.map(normalizeVehicleKey).filter(Boolean))])
     : [];
@@ -51,14 +52,12 @@ const buildDriverMatchFilters = ({ vehicleTypeKeys }) => {
     deliveryServices: 'taxi',
     isOnRide: { $ne: true },
     lastLocationAt: { $gte: new Date(Date.now() - FRESH_LOCATION_MS) },
-    // The rider's own vehicle (bike, auto, car...) has to be the class the passenger asked for.
-    ...(normalizedVehicleTypeKeys.length
-      ? {
-          vehicleType: {
-            $in: normalizedVehicleTypeKeys.map((key) => new RegExp(`^${escapeRegex(key)}$`, 'i')),
-          },
-        }
-      : {}),
+    // The rider's own vehicle (bike, auto, car...) has to be the class the passenger asked for, and
+    // they must take this kind of work (city / outstation / parcel).
+    ...driverRideFilter({
+      regexes: normalizedVehicleTypeKeys.map((key) => new RegExp(`^${escapeRegex(key)}$`, 'i')),
+      serviceType,
+    }),
   };
 };
 
@@ -341,9 +340,10 @@ const findDriversForZone = async ({
   limit,
   normalizedVehicleTypeIds,
   vehicleTypeKeys,
+  serviceType,
   strictZoneOnly = false,
 }) => {
-  const commonFilters = buildDriverMatchFilters({ vehicleTypeKeys });
+  const commonFilters = buildDriverMatchFilters({ vehicleTypeKeys, serviceType });
   const selectedFields =
     'name phone vehicleType vehicleName vehicleNumber rating profilePhoto lastLocation currentLocation lastLat lastLng lastLocationAt isOnRide deliveryServices';
 
@@ -378,6 +378,8 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     serviceLocationId = null,
     allowCrossZoneFallback = true,
     strictZoneOnly = false,
+    // The kind of ride (ride / intercity / parcel): riders only get the kinds of work they chose.
+    serviceType,
   } = options;
   const normalizedVehicleTypeIds = normalizeVehicleTypeIds(vehicleTypeIds, vehicleTypeId);
   const allowedVehicles = normalizedVehicleTypeIds.length
@@ -399,6 +401,7 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     limit,
     normalizedVehicleTypeIds,
     vehicleTypeKeys,
+    serviceType,
     strictZoneOnly,
   });
   drivers = filterDriversForMatchedZone({
@@ -422,6 +425,7 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
       limit,
       normalizedVehicleTypeIds,
       vehicleTypeKeys,
+      serviceType,
       strictZoneOnly,
     });
     drivers = filterDriversForMatchedZone({

@@ -26,6 +26,7 @@ import { getBidRideSettings } from './transportSettingsService.js';
 import { resolveBiddingPolicy } from './biddingPolicyService.js';
 import { resolveRideRoute } from './routeService.js';
 import { computeOutstationFare } from './outstationFareService.js';
+import { driverRideFilter, driverTakesRide } from '../shared/driverRideFilters.js';
 
 const clearUserActiveRideIfPresent = async (user) => {
   if (!user?.currentRideId) {
@@ -648,7 +649,7 @@ const normalizeRideTransportType = (value = 'taxi') => {
 /// path.
 const explainWhyDriverCannotAccept = async ({ driverId, ride }) => {
   const driver = await Driver.findById(driverId)
-    .select('status availabilityStatus isOnRide deliveryServices vehicleType')
+    .select('status availabilityStatus isOnRide deliveryServices vehicleType taxiVehicleType taxiServiceCategories')
     .lean();
 
   if (!driver) {
@@ -671,10 +672,12 @@ const explainWhyDriverCannotAccept = async ({ driverId, ride }) => {
     return 'Turn on Taxi in "Jobs you want" to accept rides';
   }
 
-  const vehicleFilter = await buildDriverVehicleAcceptFilter(ride);
-  const wantedTypes = vehicleFilter?.vehicleType?.$in || [];
-  if (wantedTypes.length && !wantedTypes.some((matcher) => matcher.test(String(driver.vehicleType || '')))) {
+  const taken = driverTakesRide(driver, { regexes: await getDriverVehicleRegexes(ride), serviceType: ride.serviceType });
+  if (!taken.vehicleOk) {
     return 'This ride is for a different vehicle type than yours';
+  }
+  if (!taken.categoryOk) {
+    return 'Turn on this kind of ride (city / outstation / parcel) in your taxi settings to accept it';
   }
 
   return 'Driver is unavailable to accept this ride';
@@ -685,7 +688,7 @@ const explainWhyDriverCannotAccept = async ({ driverId, ride }) => {
  * booked. Matched on the vehicle name against the platform's rider vehicle field, so a ride for a
  * class nobody on the road matches simply stays unassigned.
  */
-const buildDriverVehicleAcceptFilter = async (ride) => {
+const getDriverVehicleRegexes = async (ride) => {
   const vehicleTypeIds = normalizeVehicleTypeIds(ride.dispatchVehicleTypeIds || [], ride.vehicleTypeId);
   const vehicles = vehicleTypeIds.length
     ? await Vehicle.find({ _id: { $in: vehicleTypeIds } }).select('name vehicle_type icon_types').lean()
@@ -701,18 +704,17 @@ const buildDriverVehicleAcceptFilter = async (ride) => {
     .filter(Boolean);
 
   const unique = expandRiderVehicleKeys([...new Set(keys)]);
-  if (!unique.length) return {};
-
   const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return { vehicleType: { $in: unique.map((key) => new RegExp(`^${escape(key)}$`, 'i')) } };
+  return unique.map((key) => new RegExp(`^${escape(key)}$`, 'i'));
 };
+
+const buildDriverVehicleAcceptFilter = async (ride) =>
+  driverRideFilter({ regexes: await getDriverVehicleRegexes(ride), serviceType: ride.serviceType });
 
 /// Whether this rider's own vehicle is the class the ride was booked for (the same rule accepting
 /// a ride applies), for listing rides a rider could take in advance.
-export const driverVehicleMatchesRide = async (ride, driver) => {
-  const wanted = (await buildDriverVehicleAcceptFilter(ride))?.vehicleType?.$in || [];
-  return !wanted.length || wanted.some((matcher) => matcher.test(String(driver?.vehicleType || '')));
-};
+export const driverVehicleMatchesRide = async (ride, driver) =>
+  driverTakesRide(driver, { regexes: await getDriverVehicleRegexes(ride), serviceType: ride.serviceType }).ok;
 
 /// Waiting charge for a parcel, applied once when the trip completes.
 ///

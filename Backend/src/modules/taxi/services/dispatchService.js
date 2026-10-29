@@ -262,6 +262,7 @@ const matchDispatchDrivers = async ({
     maxDistance: radius,
     vehicleTypeId: ride.vehicleTypeId,
     vehicleTypeIds: dispatchVehicleTypeIds,
+    serviceType: ride.serviceType,
   };
 
   let result = await matchDrivers(ride.pickupLocation.coordinates, {

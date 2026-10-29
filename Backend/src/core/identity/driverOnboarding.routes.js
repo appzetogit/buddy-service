@@ -9,6 +9,7 @@ import {
   updateServices,
   updateFoodVehicle,
   updateTaxiVehicle,
+  updateTaxiServiceCategories,
   updateSelfie,
   completeOnboarding,
   enableCapability,
@@ -91,6 +92,17 @@ router.patch('/vehicle-taxi', driverOnly, async (req, res, next) => {
     const updated = await updateTaxiVehicle(req.identity, req.body);
     return sendResponse(res, 200, 'Taxi vehicle saved', {
       onboardingStep: updated.onboardingStep,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/taxi-services', driverOnly, async (req, res, next) => {
+  try {
+    const updated = await updateTaxiServiceCategories(req.identity, req.body);
+    return sendResponse(res, 200, 'Taxi ride types saved', {
+      taxiServiceCategories: updated.taxiServiceCategories || null,
     });
   } catch (err) {
     next(err);

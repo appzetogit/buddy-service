@@ -52,6 +52,28 @@ const deliveryPartnerSchema = new mongoose.Schema(
             unique: true,
             sparse: true
         },
+        /**
+         * The rider's taxi vehicle, from the taxi vehicle they registered. Kept apart from the Food
+         * vehicle above because one rider can drive a bike for Food and a car for taxi; ride matching
+         * accepts either (see taxi/shared/driverRideFilters.js).
+         */
+        taxiVehicleType: {
+            type: String
+        },
+        taxiVehicleName: {
+            type: String
+        },
+        taxiVehicleNumber: {
+            type: String
+        },
+        /**
+         * The kinds of taxi work the rider chose: city, outstation, parcel. Unset means all (riders
+         * from before the choice existed).
+         */
+        taxiServiceCategories: {
+            type: [{ type: String, enum: ['city', 'outstation', 'parcel'] }],
+            default: undefined,
+        },
         panNumber: {
             type: String
         },
