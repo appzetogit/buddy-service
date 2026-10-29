@@ -144,7 +144,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
         label: 'Business Settings',
         permission: 'settings.view',
         subItems: [
-          { label: 'General Settings', path: '/admin/settings/business/general', permission: 'settings.view' },
           { label: 'Transport Ride Settings', path: '/admin/settings/business/transport-ride', permission: 'settings.view' },
         ],
       },
