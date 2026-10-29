@@ -17,6 +17,9 @@ import { FoodDeliveryPartner } from '../../modules/food/delivery/models/delivery
 
 const ROLE_USER = 'USER';
 const ROLE_DRIVER = 'DRIVER';
+// How long a retried verify-otp call (client timeout, double-tap) is still allowed to succeed
+// after the first call already consumed the OTP and logged the phone in. See verifyOtpUnified.
+const RECENT_LOGIN_GRACE_MS = 60 * 1000;
 
 const buildTokenPayload = (identity, role, ids) => ({
   identityId: String(identity._id),
@@ -213,7 +216,22 @@ export const verifyOtpUnified = async ({
 
   const otpResult = await verifyOtp(phoneLast10, otp, { consume: false });
   if (!otpResult.valid) {
-    throw new AuthError(otpResult.reason || 'OTP verification failed');
+    // A retried/duplicate verify call (client timeout, double-tap) arrives after the first call
+    // already succeeded and consumed the OTP — this record is correctly gone, but the login did
+    // not actually fail. Treat it as a repeat of that recent success rather than a hard error,
+    // instead of leaving the app stuck on a confusing "OTP not found" after it already logged in.
+    if (otpResult.reason === 'OTP not found') {
+      const recentIdentity = await BuddyIdentity.findOne({ phone: phoneLast10 });
+      const loggedInRecently =
+        recentIdentity?.lastLoginAt &&
+        Date.now() - new Date(recentIdentity.lastLoginAt).getTime() < RECENT_LOGIN_GRACE_MS;
+      if (!loggedInRecently) {
+        throw new AuthError(otpResult.reason || 'OTP verification failed');
+      }
+      logger.info(`[unified-auth] Re-verify after recent success for ${phoneLast10} (role=${normalizedRole}) — reissuing tokens`);
+    } else {
+      throw new AuthError(otpResult.reason || 'OTP verification failed');
+    }
   }
 
   const identity = await upsertIdentity(phoneLast10, normalizedRole, trimmedName);
