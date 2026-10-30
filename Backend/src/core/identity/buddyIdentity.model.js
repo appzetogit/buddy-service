@@ -50,7 +50,7 @@ const bankDetailsSchema = new mongoose.Schema(
 
 const vehicleSchema = new mongoose.Schema(
   {
-    type: { type: String, default: '', trim: true },
+    type: { type: mongoose.Schema.Types.Mixed, default: '' },
     make: { type: String, default: '', trim: true },
     model: { type: String, default: '', trim: true },
     vehicleTypeId: { type: String, default: '', trim: true },

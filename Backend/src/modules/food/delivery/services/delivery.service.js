@@ -383,7 +383,10 @@ export const updateDeliveryAvailability = async (userId, payload) => {
     }
 
     partner.availabilityStatus = validStatus;
-    await partner.save();
+    await FoodDeliveryPartner.updateOne(
+        { _id: partner._id },
+        { $set: { availabilityStatus: validStatus } }
+    );
 
     if (typeof latitude === 'number' && typeof longitude === 'number') {
         // Single write path shared with the live-tracking socket handler -
