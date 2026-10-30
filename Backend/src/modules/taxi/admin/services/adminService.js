@@ -8705,7 +8705,6 @@ export const ensureAppModules = async () => {
 const businessSettingsCategoryMap = {
   customize: 'customization',
   'transport-ride': 'transport_ride',
-  'bid-ride': 'bid_ride',
   general: 'general',
   'user-home-management': 'user_home_settings',
 };

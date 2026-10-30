@@ -1379,10 +1379,8 @@ const VehicleType = ({ mode: propMode }) => {
 
           <div>
             <label className={labelClass}>Trip Dispatch Type *</label>
-            <select value={formData.dispatch_type} onChange={(e) => updateForm('dispatch_type', e.target.value)} className={inputClass}>
+            <select value={formData.dispatch_type || 'normal'} onChange={(e) => updateForm('dispatch_type', e.target.value)} className={inputClass}>
               <option value="normal">Normal</option>
-              <option value="bidding">Bidding</option>
-              <option value="both">Both</option>
             </select>
           </div>
 

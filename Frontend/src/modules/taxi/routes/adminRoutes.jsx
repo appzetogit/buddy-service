@@ -7,7 +7,6 @@ import {
   AdminAirportManagement,
   AdminAppModules,
   AdminBannerImage,
-  AdminBidRideSettings,
   AdminCountryManagement,
   AdminDashboard,
   AdminDeliveries,
@@ -200,7 +199,6 @@ export default function TaxiAdminRoutes() {
 
       <Route path="settings/business/general" element={<AdminGeneralSettings />} />
       <Route path="settings/business/transport-ride" element={<AdminTransportRideSettings />} />
-      <Route path="settings/business/bid-ride" element={<AdminBidRideSettings />} />
 
       <Route path="settings/app/wallet" element={<AdminWalletSettings />} />
       <Route path="settings/app/country" element={<AdminCountryManagement />} />

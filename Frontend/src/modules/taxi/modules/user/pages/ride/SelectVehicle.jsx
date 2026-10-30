@@ -1051,7 +1051,7 @@ const normalizeVehicleType = (type, index) => {
     sublabel: type?.short_description || type?.description || 'Available ride',
     price: getFallbackVehicleEstimate(type),
     dispatchType,
-    supportsBidding: dispatchType === 'bidding' || dispatchType === 'both',
+    supportsBidding: false,
     bidStepAmount: 10,
     maxBidSteps: 5,
     raw: type,
@@ -1077,7 +1077,7 @@ const createHistorySafeVehicle = (vehicle) => {
     sublabel: vehicle.sublabel,
     price: vehicle.price,
     dispatchType: vehicle.dispatchType,
-    supportsBidding: vehicle.supportsBidding,
+    supportsBidding: false,
     bidStepAmount: vehicle.bidStepAmount,
     maxBidSteps: vehicle.maxBidSteps,
   };
@@ -2027,12 +2027,8 @@ const SelectVehicle = () => {
         promo_code: appliedPromo?.promo?.code || '',
         promo: appliedPromo?.promo || null,
         promoBreakdown: appliedPromo?.breakdown || null,
-        bookingMode: selectedVehicle.supportsBidding ? 'bidding' : 'normal',
-        pricingNegotiationMode: selectedVehicle.supportsBidding
-          ? shouldUseDriverBidding
-            ? 'driver_bid'
-            : 'user_increment_only'
-          : 'none',
+        bookingMode: 'normal',
+        pricingNegotiationMode: 'none',
         bidStepAmount: selectedBidStepAmount,
         bidFloorFare: selectedBidFloorFare,
         bidCeilingMaxFare: selectedBidCeilingMaxFare,

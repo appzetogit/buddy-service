@@ -3,7 +3,6 @@ import {
   Car,
   Clock,
   FileText,
-  Gavel,
   Home,
   IndianRupee,
   Receipt,
@@ -65,7 +64,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
           //{ label: 'Goods Types', path: '/admin/pricing/goods-types', permission: 'goods_types.view' },
         ],
       },
-      { icon: Gavel, label: 'Bidding', path: '/admin/settings/business/bid-ride', permission: 'settings.view' },
       {
         icon: MapPin,
         label: 'Geofencing',

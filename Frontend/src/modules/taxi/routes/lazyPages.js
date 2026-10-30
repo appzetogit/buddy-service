@@ -92,7 +92,6 @@ export const AdminWebsiteEnquiries = lazy(() => import('../modules/admin/pages/c
 export const AdminHeaderFooter = lazy(() => import('../modules/admin/pages/cms/HeaderFooter'));
 export const AdminGeneralSettings = lazy(() => import('../modules/admin/pages/settings/GeneralSettings'));
 export const AdminTransportRideSettings = lazy(() => import('../modules/admin/pages/settings/TransportRideSettings'));
-export const AdminBidRideSettings = lazy(() => import('../modules/admin/pages/settings/BidRideSettings'));
 export const AdminWalletSettings = lazy(() => import('../modules/admin/pages/settings/WalletSettings'));
 export const AdminAppModules = lazy(() => import('../modules/admin/pages/settings/AppModules'));
 export const AdminOnboardingScreens = lazy(() => import('../modules/admin/pages/settings/OnboardingScreens'));
