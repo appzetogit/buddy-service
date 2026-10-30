@@ -104,9 +104,6 @@ import {
   resetPassword,
   verifyResetOtp,
   toggleZoneStatus,
-  adjustUserWallet,
-  listDriverWalletHistory,
-  adjustDriverWallet,
   updateAppModule,
   updateAirport,
   updateAdminAccount,
@@ -181,11 +178,7 @@ adminRouter.get('/admin/drivers/:id', getDriver);
 adminRouter.patch('/admin/drivers/:id', updateDriver);
 adminRouter.patch('/admin/drivers/update-password/:id', updateDriverPassword);
 adminRouter.delete('/admin/drivers/:id', deleteDriver);
-adminRouter.post('/admin/wallet/users/:id/adjust', adjustUserWallet);
-adminRouter.get('/admin/wallet/users/:id/history', getUserWalletHistory);
 
-adminRouter.post('/admin/wallet/drivers/:id/adjust', adjustDriverWallet);
-adminRouter.get('/admin/wallet/drivers/:id/history', listDriverWalletHistory);
 
 adminRouter.get('/admin/wallet/drivers/negative-balance', authenticate(['admin']), getNegativeBalanceDrivers);
 adminRouter.get('/admin/wallet/drivers/withdrawals', authenticate(['admin']), getDriverWithdrawalSummaries);

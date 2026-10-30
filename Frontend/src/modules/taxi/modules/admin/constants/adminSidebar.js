@@ -20,7 +20,6 @@ import {
   TrendingUp,
   UserCog,
   Users,
-  Wallet,
 } from 'lucide-react';
 
 /**
@@ -91,7 +90,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
           { label: 'User List', path: '/admin/users', permission: 'users.view' },
         ],
       },
-      { icon: Wallet, label: 'Wallet Payment', path: '/admin/wallet/payment', permission: 'wallet.view' },
       {
         icon: Car,
         label: 'Driver Management',
@@ -151,8 +149,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
         permission: 'settings.view',
         subItems: [
           { label: 'Wallet Settings', path: '/admin/settings/app/wallet', permission: 'settings.view' },
-          { label: 'Tip Settings', path: '/admin/settings/app/tip', permission: 'settings.view' },
-          { label: 'Ride Voice Announcements', path: '/admin/settings/app/ride-voice', permission: 'settings.view' },
           // { label: 'Mobile App Landing/Onboard Screens Settings', path: '/admin/settings/app/onboard', permission: 'settings.view' },
         ],
       },

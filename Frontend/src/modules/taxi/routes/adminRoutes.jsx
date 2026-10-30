@@ -42,7 +42,6 @@ import {
   AdminPayments,
   AdminPendingDrivers,
   AdminPromoCodes,
-  AdminRideVoiceSettings,
   AdminSafetyCenter,
   AdminSendNotification,
   AdminServiceLocation,
@@ -50,7 +49,6 @@ import {
   AdminSupportTicketTitle,
   AdminSupportTickets,
   AdminSurgePricing,
-  AdminTipSettings,
   AdminTransportRideSettings,
   AdminTrips,
   AdminUserAppManagement,
@@ -58,7 +56,6 @@ import {
   AdminUserList,
   AdminUserReport,
   AdminVehicleType,
-  AdminWalletPayment,
   AdminWalletSettings,
   AdminWithdrawalRequestDetail,
   AdminWithdrawalRequestDrivers,
@@ -124,7 +121,6 @@ export default function TaxiAdminRoutes() {
       <Route path="trips" element={<AdminTrips />} />
       <Route path="deliveries" element={<AdminDeliveries />} />
       <Route path="ongoing" element={<AdminOngoing />} />
-      <Route path="wallet/payment" element={<AdminWalletPayment />} />
       <Route path="users" element={<AdminUserList />} />
       <Route path="users/:id" element={<AdminUserDetails />} />
 
@@ -207,8 +203,6 @@ export default function TaxiAdminRoutes() {
       <Route path="settings/business/bid-ride" element={<AdminBidRideSettings />} />
 
       <Route path="settings/app/wallet" element={<AdminWalletSettings />} />
-      <Route path="settings/app/tip" element={<AdminTipSettings />} />
-      <Route path="settings/app/ride-voice" element={<AdminRideVoiceSettings />} />
       <Route path="settings/app/country" element={<AdminCountryManagement />} />
       <Route path="settings/app/onboard" element={<AdminOnboardingScreens />} />
 

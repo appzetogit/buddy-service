@@ -4320,7 +4320,14 @@ const tripPaymentFields = (ride) => {
 };
 
 const toAdminRideRow = (ride) => {
-  const requestCode = `REQ_${String(ride._id).slice(-12).toUpperCase()}`;
+  const isIntercity = ride.serviceType === 'intercity' || ride.serviceType === 'outstation' || ride.trip_category?.category === 'outstation';
+  const isParcel = ride.serviceType === 'parcel';
+
+  let prefix = 'REQ_';
+  if (isParcel) prefix = 'DEL_';
+  else if (isIntercity) prefix = 'INT_';
+  const requestCode = `${prefix}${String(ride._id).slice(-12).toUpperCase()}`;
+
   const status = String(ride.status || '').toLowerCase();
   const liveStatus = String(ride.liveStatus || '').toLowerCase();
 
@@ -4331,39 +4338,128 @@ const toAdminRideRow = (ride) => {
     tripStatus = 'CANCELLED';
   } else if (status === RIDE_STATUS.ONGOING || liveStatus === RIDE_LIVE_STATUS.STARTED) {
     tripStatus = 'ONGOING';
-  } else if (status === RIDE_STATUS.ACCEPTED || liveStatus === RIDE_LIVE_STATUS.ACCEPTED || liveStatus === RIDE_LIVE_STATUS.ARRIVING) {
+  } else if (
+    status === RIDE_STATUS.ACCEPTED ||
+    liveStatus === RIDE_LIVE_STATUS.ACCEPTED ||
+    liveStatus === RIDE_LIVE_STATUS.ARRIVING ||
+    liveStatus === RIDE_LIVE_STATUS.ARRIVED
+  ) {
     tripStatus = 'ACCEPTED';
+  } else if (status === RIDE_STATUS.SEARCHING) {
+    tripStatus = 'UPCOMING';
   }
+
+  const serviceCategory = isParcel ? 'parcel' : (isIntercity ? 'outstation' : 'ride');
+  const serviceLabel = isParcel ? 'Parcel Delivery' : (isIntercity ? 'Outstation Trip' : 'City Ride');
+
+  const intercity = ride.intercity || {};
+  const parcel = ride.parcel || (ride.deliveryId?.parcel || {});
+
+  let transportType = ride.driverId?.vehicleType || ride.vehicleIconType || 'Taxi';
+  if (isParcel) {
+    transportType = parcel.category || 'Parcel';
+  } else if (isIntercity && intercity.vehicleName) {
+    transportType = intercity.vehicleName;
+  }
+
+  const fromCity = String(intercity.fromCity || '').trim();
+  const toCity = String(intercity.toCity || '').trim();
+  const routeLabel = [fromCity, toCity].filter(Boolean).join(' → ');
 
   return {
     id: String(ride._id),
     requestId: requestCode,
     date: ride.createdAt,
-    userName: ride.userId?.name || 'Unknown User',
+    serviceType: ride.serviceType || 'ride',
+    serviceCategory,
+    serviceLabel,
+    userName: ride.userId?.name || parcel.senderName || 'Unknown User',
+    userPhone: ride.userId?.phone || parcel.senderMobile || '',
+    userEmail: ride.userId?.email || '',
     driverName: ride.driverId?.name || 'Unassigned',
-    transportType: ride.driverId?.vehicleType || ride.vehicleIconType || 'Taxi',
+    driverPhone: ride.driverId?.phone || '',
+    driverAssigned: !!ride.driverId,
+    transportType,
+    vehicleNumber: ride.driverId?.vehicleNumber || '',
     tripStatus,
     rideStatus: ride.status,
     liveStatus: ride.liveStatus,
     ...tripPaymentFields(ride),
     fare: Number(ride.fare || 0),
-    // Prefer the human address the customer actually gave. Falling straight to
-    // coordinates showed "12.9716, 77.5946" for website bookings, which carry a
-    // placeholder point because the form has no map — useless to whoever is
-    // calling the customer back.
+    baseFare: Number(ride.baseFare || 0),
+    waitingCharge: Number(ride.waitingCharge || 0),
+    waitingMinutes: Number(ride.waitingMinutes || 0),
+    commissionAmount: Number(ride.commissionAmount || 0),
+    driverEarnings: Number(ride.driverEarnings || 0),
+    estimatedDistanceMeters: Number(ride.estimatedDistanceMeters || ride.route?.distanceMeters || (intercity.distance ? intercity.distance * 1000 : 0)),
+    estimatedDurationMinutes: Number(ride.estimatedDurationMinutes || ride.route?.durationMinutes || 0),
     pickupLabel: ride.pickupAddress || formatRidePointLabel(ride.pickupLocation, 'Pickup'),
     dropLabel: ride.dropAddress || formatRidePointLabel(ride.dropLocation, 'Drop'),
     pickupAddress: ride.pickupAddress || '',
     dropAddress: ride.dropAddress || '',
-    scheduledAt: ride.scheduledAt || null,
-    bookingSource: ride.bookingSource || 'app',
     pickupLocation: ride.pickupLocation,
     dropLocation: ride.dropLocation,
     lastDriverLocation: ride.lastDriverLocation || null,
+    scheduledAt: ride.scheduledAt || null,
+    bookingSource: ride.bookingSource || 'app',
+    bookingMode: ride.bookingMode || 'normal',
+    otp: ride.otp || '',
+    routeLabel,
+    intercity: isIntercity ? {
+      bookingId: intercity.bookingId || '',
+      fromCity,
+      toCity,
+      tripType: intercity.tripType || 'one_way',
+      travelDate: intercity.travelDate || '',
+      returnDate: intercity.returnDate || '',
+      passengers: Number(intercity.passengers || 1),
+      distance: Number(intercity.distance || 0),
+      vehicleName: intercity.vehicleName || '',
+      pricing: intercity.pricing || null,
+    } : null,
+    parcel: isParcel ? {
+      category: parcel.category || '',
+      weight: parcel.weight || '',
+      description: parcel.description || '',
+      instructions: parcel.instructions || '',
+      senderName: parcel.senderName || '',
+      senderMobile: parcel.senderMobile || '',
+      receiverName: parcel.receiverName || '',
+      receiverMobile: parcel.receiverMobile || '',
+      deliveryScope: parcel.deliveryScope || 'city',
+      isOutstation: !!parcel.isOutstation,
+      photos: Array.isArray(parcel.photos) ? parcel.photos : [],
+      pickupProof: parcel.pickupProof?.url || '',
+      deliveryProof: parcel.deliveryProof?.url || '',
+      pickupProofAt: parcel.pickupProof?.at || null,
+      deliveryProofAt: parcel.deliveryProof?.at || null,
+    } : null,
+    promo: ride.promo && ride.promo.code ? {
+      code: ride.promo.code,
+      discount_amount: Number(ride.promo.discount_amount || 0),
+      fare_before_discount: Number(ride.promo.fare_before_discount || 0),
+      fare_after_discount: Number(ride.promo.fare_after_discount || 0),
+    } : null,
+    surge: ride.surge || null,
+    pricingSnapshot: ride.pricingSnapshot || null,
+    createdAt: ride.createdAt,
+    acceptedAt: ride.acceptedAt || null,
+    arrivedAt: ride.arrivedAt || null,
+    startedAt: ride.startedAt || null,
+    completedAt: ride.completedAt || null,
+    cancelledAt: ride.cancelledAt || null,
+    cancelledBy: ride.cancelledBy || '',
+    cancelReason: ride.cancelReason || '',
+    feedback: ride.feedback ? {
+      rating: ride.feedback.rating || null,
+      comment: ride.feedback.comment || '',
+      tipAmount: Number(ride.feedback.tipAmount || 0),
+    } : null,
     user: ride.userId ? {
       id: String(ride.userId._id),
       name: ride.userId.name || '',
       phone: ride.userId.phone || '',
+      email: ride.userId.email || '',
     } : null,
     driver: ride.driverId ? {
       id: String(ride.driverId._id),
@@ -4379,7 +4475,7 @@ const toAdminDeliveryRow = (ride) => {
   const requestCode = `DEL_${String(ride._id).slice(-12).toUpperCase()}`;
   const status = String(ride.status || '').toLowerCase();
   const liveStatus = String(ride.liveStatus || '').toLowerCase();
-  const parcel = ride.deliveryId?.parcel || {};
+  const parcel = ride.parcel || (ride.deliveryId?.parcel || {});
 
   let tripStatus = 'UPCOMING';
   if (status === RIDE_STATUS.COMPLETED) {
@@ -4392,98 +4488,92 @@ const toAdminDeliveryRow = (ride) => {
     liveStatus === RIDE_LIVE_STATUS.ARRIVED
   ) {
     tripStatus = 'ON_TRIP';
+  } else if (status === RIDE_STATUS.ACCEPTED || liveStatus === RIDE_LIVE_STATUS.ACCEPTED || liveStatus === RIDE_LIVE_STATUS.ARRIVING) {
+    tripStatus = 'ACCEPTED';
   }
 
   return {
     id: String(ride._id),
     requestId: requestCode,
     date: ride.createdAt,
+    serviceType: 'parcel',
+    serviceCategory: 'parcel',
+    serviceLabel: 'Parcel Delivery',
     userName: ride.userId?.name || parcel.senderName || 'Unknown User',
+    userPhone: ride.userId?.phone || parcel.senderMobile || '',
+    userEmail: ride.userId?.email || '',
     driverName: ride.driverId?.name || 'Unassigned',
-    transportType: ride.driverId?.vehicleType || ride.vehicleIconType || 'Parcel',
+    driverPhone: ride.driverId?.phone || '',
+    driverAssigned: !!ride.driverId,
+    transportType: ride.driverId?.vehicleType || ride.vehicleIconType || parcel.category || 'Parcel',
+    vehicleNumber: ride.driverId?.vehicleNumber || '',
     tripStatus,
     rideStatus: ride.status,
     liveStatus: ride.liveStatus,
     ...tripPaymentFields(ride),
     fare: Number(ride.fare || 0),
+    baseFare: Number(ride.baseFare || 0),
+    waitingCharge: Number(ride.waitingCharge || 0),
+    waitingMinutes: Number(ride.waitingMinutes || 0),
+    commissionAmount: Number(ride.commissionAmount || 0),
+    driverEarnings: Number(ride.driverEarnings || 0),
+    estimatedDistanceMeters: Number(ride.estimatedDistanceMeters || ride.route?.distanceMeters || 0),
+    estimatedDurationMinutes: Number(ride.estimatedDurationMinutes || ride.route?.durationMinutes || 0),
+    distance: ride.estimatedDistanceMeters ? `${(ride.estimatedDistanceMeters / 1000).toFixed(1)} km` : '-',
     pickupLabel: ride.pickupAddress || formatRidePointLabel(ride.pickupLocation, 'Pickup'),
     dropLabel: ride.dropAddress || formatRidePointLabel(ride.dropLocation, 'Drop'),
+    pickupAddress: ride.pickupAddress || '',
+    dropAddress: ride.dropAddress || '',
     pickupLocation: ride.pickupLocation,
     dropLocation: ride.dropLocation,
     parcel: {
       category: parcel.category || '',
+      weight: parcel.weight || '',
+      description: parcel.description || '',
+      instructions: parcel.instructions || '',
       senderName: parcel.senderName || '',
+      senderMobile: parcel.senderMobile || '',
       receiverName: parcel.receiverName || '',
-      // Sender's photos + the driver's pickup/delivery proof, so the admin can
-      // see exactly what was sent and handed over. Read the delivery mirror
-      // first, falling back to the ride's own parcel so photos show even before
-      // the delivery doc has synced.
+      receiverMobile: parcel.receiverMobile || '',
+      deliveryScope: parcel.deliveryScope || 'city',
+      isOutstation: !!parcel.isOutstation,
       photos: Array.isArray(parcel.photos) && parcel.photos.length
         ? parcel.photos
         : (Array.isArray(ride.parcel?.photos) ? ride.parcel.photos : []),
-      // The driver's proof lands on the ride first and is then copied to the
-      // delivery, so read the ride's and fall back to the delivery's.
       pickupProof: ride.parcel?.pickupProof?.url || parcel.pickupProof?.url || '',
       deliveryProof: ride.parcel?.deliveryProof?.url || parcel.deliveryProof?.url || '',
-      // When each proof photo was taken, for the Delivery Proof Photos panel.
       pickupProofAt: ride.parcel?.pickupProof?.at || parcel.pickupProof?.at || null,
       deliveryProofAt: ride.parcel?.deliveryProof?.at || parcel.deliveryProof?.at || null,
     },
-    // For the row's Customer / Driver details actions.
     userId: ride.userId?._id ? String(ride.userId._id) : (ride.userId ? String(ride.userId) : ''),
     driverId: ride.driverId?._id ? String(ride.driverId._id) : (ride.driverId ? String(ride.driverId) : ''),
-    userPhone: ride.userId?.phone || '',
-    driverPhone: ride.driverId?.phone || '',
+    user: ride.userId ? {
+      id: String(ride.userId._id),
+      name: ride.userId.name || '',
+      phone: ride.userId.phone || '',
+      email: ride.userId.email || '',
+    } : null,
+    driver: ride.driverId ? {
+      id: String(ride.driverId._id),
+      name: ride.driverId.name || '',
+      phone: ride.driverId.phone || '',
+      vehicleType: ride.driverId.vehicleType || '',
+      vehicleNumber: ride.driverId.vehicleNumber || '',
+    } : null,
+    createdAt: ride.createdAt,
+    acceptedAt: ride.acceptedAt || null,
+    arrivedAt: ride.arrivedAt || null,
+    startedAt: ride.startedAt || null,
     completedAt: ride.completedAt || null,
     cancelledAt: ride.cancelledAt || null,
+    cancelledBy: ride.cancelledBy || '',
+    cancelReason: ride.cancelReason || '',
   };
 };
 
 const toAdminIntercityTripRow = (ride) => {
-  const requestCode = `INT_${String(ride._id).slice(-12).toUpperCase()}`;
-  const status = String(ride.status || '').toLowerCase();
-  const liveStatus = String(ride.liveStatus || '').toLowerCase();
-  const intercity = ride.intercity || {};
-
-  let tripStatus = 'UPCOMING';
-  if (status === RIDE_STATUS.COMPLETED) {
-    tripStatus = 'COMPLETED';
-  } else if (status === RIDE_STATUS.CANCELLED) {
-    tripStatus = 'CANCELLED';
-  } else if (
-    status === RIDE_STATUS.ONGOING ||
-    liveStatus === RIDE_LIVE_STATUS.STARTED ||
-    liveStatus === RIDE_LIVE_STATUS.ARRIVED
-  ) {
-    tripStatus = 'ON_TRIP';
-  }
-
-  const fromCity = String(intercity.fromCity || '').trim();
-  const toCity = String(intercity.toCity || '').trim();
-
-  return {
-    id: String(ride._id),
-    requestId: requestCode,
-    date: ride.createdAt,
-    userName: ride.userId?.name || 'Unknown User',
-    driverName: ride.driverId?.name || 'Unassigned',
-    transportType: intercity.vehicleName || ride.driverId?.vehicleType || ride.vehicleIconType || 'Intercity',
-    tripStatus,
-    rideStatus: ride.status,
-    liveStatus: ride.liveStatus,
-    ...tripPaymentFields(ride),
-    fare: Number(ride.fare || 0),
-    pickupLabel: ride.pickupAddress || formatRidePointLabel(ride.pickupLocation, 'Pickup'),
-    dropLabel: ride.dropAddress || formatRidePointLabel(ride.dropLocation, 'Drop'),
-    routeLabel: [fromCity, toCity].filter(Boolean).join(' -> '),
-    tripType: intercity.tripType || '',
-    travelDate: intercity.travelDate || '',
-  };
+  return toAdminRideRow(ride);
 };
-
-
-
-
 
 const clampAdminRideListPageSize = (value, fallback = 10) => {
   const parsed = Number(value);
@@ -4493,8 +4583,12 @@ const clampAdminRideListPageSize = (value, fallback = 10) => {
   return Math.min(parsed, 100);
 };
 
-const buildRideStatusFilter = (tab = 'all', variant = 'ride_requests') => {
-  const normalizedTab = String(tab || 'all').trim().toLowerCase();
+const buildRideStatusFilter = (tabOrStatus = 'all', variant = 'ride_requests') => {
+  const normalizedTab = String(tabOrStatus || 'all').trim().toLowerCase();
+
+  if (!normalizedTab || normalizedTab === 'all') {
+    return {};
+  }
 
   if (variant === 'ongoing_rides') {
     if (normalizedTab === 'accepted') {
@@ -4515,7 +4609,7 @@ const buildRideStatusFilter = (tab = 'all', variant = 'ride_requests') => {
       };
     }
 
-    if (normalizedTab === 'upcoming') {
+    if (normalizedTab === 'upcoming' || normalizedTab === 'searching') {
       return {
         status: RIDE_STATUS.SEARCHING,
       };
@@ -4532,8 +4626,17 @@ const buildRideStatusFilter = (tab = 'all', variant = 'ride_requests') => {
     return { status: RIDE_STATUS.CANCELLED };
   }
 
-  if (normalizedTab === 'upcoming') {
+  if (normalizedTab === 'upcoming' || normalizedTab === 'searching') {
     return { status: RIDE_STATUS.SEARCHING };
+  }
+
+  if (normalizedTab === 'accepted') {
+    return {
+      $or: [
+        { status: RIDE_STATUS.ACCEPTED },
+        { liveStatus: { $in: [RIDE_LIVE_STATUS.ACCEPTED, RIDE_LIVE_STATUS.ARRIVING] } },
+      ],
+    };
   }
 
   if (normalizedTab === 'on trip' || normalizedTab === 'on_trip' || normalizedTab === 'ongoing') {
@@ -4545,7 +4648,7 @@ const buildRideStatusFilter = (tab = 'all', variant = 'ride_requests') => {
     };
   }
 
-  return {};
+  return { status: normalizedTab };
 };
 
 const buildAdminRideSearchClauses = async (
@@ -4555,6 +4658,24 @@ const buildAdminRideSearchClauses = async (
   const normalizedSearch = String(search || '').trim();
   if (!normalizedSearch) {
     return [];
+  }
+
+  const cleanHex = normalizedSearch.replace(/^(REQ_|DEL_|INT_)/i, '');
+  const clauses = [];
+
+  if (/^[a-f0-9]{24}$/i.test(cleanHex)) {
+    clauses.push({ _id: new mongoose.Types.ObjectId(cleanHex) });
+  }
+  if (/^[a-f0-9]{4,24}$/i.test(cleanHex)) {
+    clauses.push({
+      $expr: {
+        $regexMatch: {
+          input: { $toString: '$_id' },
+          regex: cleanHex,
+          options: 'i',
+        },
+      },
+    });
   }
 
   const regex = new RegExp(escapeRegex(normalizedSearch), 'i');
@@ -4573,15 +4694,11 @@ const buildAdminRideSearchClauses = async (
       .lean(),
   ]);
 
-  const clauses = [
+  clauses.push(
     { pickupAddress: regex },
     { dropAddress: regex },
     { vehicleIconType: regex },
-  ];
-
-  if (/^[a-f0-9]{24}$/i.test(normalizedSearch)) {
-    clauses.push({ _id: new mongoose.Types.ObjectId(normalizedSearch) });
-  }
+  );
 
   if (matchedUsers.length > 0) {
     clauses.push({ userId: { $in: matchedUsers.map((item) => item._id) } });
@@ -4596,6 +4713,8 @@ const buildAdminRideSearchClauses = async (
       { 'parcel.category': regex },
       { 'parcel.senderName': regex },
       { 'parcel.receiverName': regex },
+      { 'parcel.senderMobile': regex },
+      { 'parcel.receiverMobile': regex },
     );
   }
 
@@ -4624,38 +4743,128 @@ const listAdminRides = async ({
   const tab = String(query.tab || 'all').toLowerCase();
   const search = String(query.search || '').trim();
 
+  // Status can come either from query.status or query.tab
+  const statusFilter = query.status && query.status !== 'all'
+    ? buildRideStatusFilter(query.status, variant)
+    : buildRideStatusFilter(tab, variant);
+
   const mongoFilter = {
     ...baseFilter,
-    ...buildRideStatusFilter(tab, variant),
-    // Trips an admin deleted stay in the database, out of these lists.
+    ...statusFilter,
     adminDeletedAt: null,
   };
 
+  // Service Type filter (All, Ride, Outstation, Parcel)
+  const serviceTypeParam = String(query.serviceType || query.serviceCategory || '').toLowerCase();
+  if (serviceTypeParam && serviceTypeParam !== 'all') {
+    if (serviceTypeParam === 'ride') {
+      mongoFilter.serviceType = 'ride';
+    } else if (serviceTypeParam === 'outstation' || serviceTypeParam === 'intercity') {
+      const outstationClause = {
+        $or: [
+          { serviceType: { $in: ['outstation', 'intercity'] } },
+          { 'trip_category.category': 'outstation' },
+          { 'parcel.isOutstation': true },
+        ],
+      };
+      if (mongoFilter.$or) {
+        mongoFilter.$and = mongoFilter.$and || [];
+        mongoFilter.$and.push(outstationClause);
+      } else {
+        mongoFilter.$or = outstationClause.$or;
+      }
+    } else if (serviceTypeParam === 'parcel') {
+      mongoFilter.serviceType = 'parcel';
+    }
+  }
+
+  // Payment Option / Method filter (All, Cash, Online, Wallet, UPI)
+  const paymentParam = String(query.paymentOption || query.paymentType || query.paymentMethod || '').toLowerCase();
+  if (paymentParam && paymentParam !== 'all') {
+    if (paymentParam === 'cash') {
+      mongoFilter.paymentMethod = 'cash';
+    } else if (paymentParam === 'online') {
+      mongoFilter.paymentMethod = 'online';
+    } else if (paymentParam === 'wallet') {
+      mongoFilter.paymentMethod = 'wallet';
+    } else if (paymentParam === 'upi') {
+      mongoFilter.collectedVia = 'upi';
+    }
+  }
+
+  // Driver Assignment filter (All, Assigned, Unassigned)
+  const driverParam = String(query.driverAssigned || '').toLowerCase();
+  if (driverParam === 'assigned') {
+    mongoFilter.driverId = { $ne: null };
+  } else if (driverParam === 'unassigned') {
+    mongoFilter.driverId = null;
+  }
+
+  // Transport Type / Vehicle Type filter
+  const transportParam = String(query.transportType || query.vehicleType || '').trim();
+  if (transportParam && transportParam.toLowerCase() !== 'all') {
+    const tRegex = new RegExp(escapeRegex(transportParam), 'i');
+    mongoFilter.$and = mongoFilter.$and || [];
+    mongoFilter.$and.push({
+      $or: [
+        { vehicleIconType: tRegex },
+        { 'intercity.vehicleName': tRegex },
+        { 'parcel.category': tRegex },
+      ],
+    });
+  }
+
+  // Date range filter
+  if (query.dateFrom || query.dateTo) {
+    const dateClause = {};
+    if (query.dateFrom) {
+      dateClause.$gte = new Date(`${query.dateFrom}T00:00:00+05:30`);
+    }
+    if (query.dateTo) {
+      dateClause.$lte = new Date(`${query.dateTo}T23:59:59.999+05:30`);
+    }
+    mongoFilter.createdAt = dateClause;
+  }
+
+  // City filter (for outstation or address)
+  const cityParam = String(query.city || '').trim();
+  if (cityParam && cityParam.toLowerCase() !== 'all') {
+    const cityRegex = new RegExp(escapeRegex(cityParam), 'i');
+    mongoFilter.$and = mongoFilter.$and || [];
+    mongoFilter.$and.push({
+      $or: [
+        { 'intercity.fromCity': cityRegex },
+        { 'intercity.toCity': cityRegex },
+        { pickupAddress: cityRegex },
+        { dropAddress: cityRegex },
+      ],
+    });
+  }
+
   const searchClauses = await buildAdminRideSearchClauses(search, {
-    includeParcel,
-    includeIntercity,
+    includeParcel: true,
+    includeIntercity: true,
   });
 
   if (searchClauses.length > 0) {
-    mongoFilter.$or = searchClauses;
+    if (mongoFilter.$or) {
+      mongoFilter.$and = mongoFilter.$and || [];
+      mongoFilter.$and.push({ $or: searchClauses });
+    } else {
+      mongoFilter.$or = searchClauses;
+    }
   }
 
   const [total, rides] = await Promise.all([
     Ride.countDocuments(mongoFilter),
-    (() => {
-      let rideQuery = Ride.find(mongoFilter)
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .populate('userId', 'name phone')
-        .populate('driverId', 'name phone vehicleType vehicleNumber');
-
-      if (includeParcel) {
-        rideQuery = rideQuery.populate('deliveryId');
-      }
-
-      return rideQuery.lean();
-    })(),
+    Ride.find(mongoFilter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .populate('userId', 'name phone email')
+      .populate('driverId', 'name phone vehicleType vehicleNumber')
+      .populate('deliveryId')
+      .lean(),
   ]);
 
   return buildDatabasePaginator(rides.map(serializer), page, limit, total);
@@ -4669,17 +4878,19 @@ export const listOngoingRides = async (query = {}) => {
     },
     variant: 'ongoing_rides',
     serializer: toAdminRideRow,
+    includeParcel: true,
+    includeIntercity: true,
   });
 };
 
 export const listRideRequests = async (query = {}) => {
   return listAdminRides({
     query,
-    baseFilter: {
-      serviceType: { $nin: ['parcel', 'intercity'] },
-    },
+    baseFilter: {},
     variant: 'ride_requests',
     serializer: toAdminRideRow,
+    includeParcel: true,
+    includeIntercity: true,
   });
 };
 
@@ -8501,8 +8712,6 @@ const businessSettingsCategoryMap = {
 
 const appSettingsCategoryMap = {
   wallet: 'wallet_setting',
-  tip: 'tip_setting',
-  'ride-voice': 'ride_voice',
 };
 
 /// Voice config is read by the rider app on every trip, so it must answer with
@@ -8687,16 +8896,6 @@ export const updateGeneralSettings = async (category, payload) => {
   const appSettings = await ensureAppSettings();
 
   const newValues = payload.settings || payload;
-
-  if (appSettingsCategoryMap[category] === 'ride_voice') {
-    // Replaced wholesale rather than shallow-merged: the panel always posts the
-    // complete config, and a merge would make a deleted language impossible to
-    // remove.
-    appSettings.ride_voice = sanitizeRideVoiceSettings(newValues);
-    appSettings.markModified('ride_voice');
-    await appSettings.save();
-    return { settings: appSettings.ride_voice };
-  }
 
   if (appSettingsCategoryMap[category]) {
     const key = appSettingsCategoryMap[category];

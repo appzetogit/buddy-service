@@ -93,71 +93,129 @@ const handlePrintInvoice = (delivery) => {
 
 const DeliveryDetailsDrawer = ({ delivery, onClose }) => {
   if (!delivery) return null;
+  const parcel = delivery.parcel || {};
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-md shadow-2xl flex flex-col rounded-xl overflow-hidden max-h-[90vh] animate-in slide-in-from-bottom-4">
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
-          <h2 className="text-xl font-bold text-gray-900 tracking-tight">Delivery Details</h2>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors">
-            <X size={20} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-8">
-          
-          {/* Status & ID */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-1">Request ID</p>
-              <p className="text-[14px] font-bold text-gray-900 font-mono">{delivery.requestId || 'N/A'}</p>
-            </div>
-            <span className={`inline-flex items-center px-3 py-1 text-[11px] font-bold rounded-full capitalize tracking-wide ${STATUS_STYLES[delivery.tripStatus] || 'bg-gray-100 text-gray-600'}`}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white w-full max-w-lg shadow-2xl flex flex-col rounded-2xl overflow-hidden max-h-[92vh] animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 bg-gray-50/70">
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-black text-gray-900 font-mono tracking-tight">{delivery.requestId || 'N/A'}</h2>
+            <span className={`inline-flex items-center px-2.5 py-0.5 text-[11px] font-bold rounded-full capitalize tracking-wide border ${STATUS_STYLES[delivery.tripStatus] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
               {String(delivery.tripStatus || '').toLowerCase()}
             </span>
           </div>
-
-          {/* Core Info */}
-          <div className="grid grid-cols-2 gap-y-6 gap-x-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
-            <div>
-              <p className="text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-1">Date & Time</p>
-              <p className="text-[13px] font-bold text-gray-900">{formatDate(delivery.date)}</p>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-1">Transport</p>
-              <p className="text-[13px] font-bold text-gray-900 capitalize flex items-center gap-1">
-                <Truck size={14} className="text-gray-400"/>
-                {String(delivery.transportType || '').toLowerCase()}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-1">Customer</p>
-              <p className="text-[13px] font-bold text-gray-900 flex items-center gap-1">
-                <User size={14} className="text-gray-400"/>
-                {delivery.userName || 'N/A'}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-1">Driver</p>
-              <p className="text-[13px] font-bold text-gray-900 flex items-center gap-1">
-                <User size={14} className="text-gray-400"/>
-                {delivery.driverName || 'N/A'}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-1">Payment Option</p>
-              <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded capitalize tracking-wide ${PAYMENT_STYLES[delivery.paymentOption] || 'bg-gray-100 text-gray-600'}`}>
-                {String(delivery.paymentOption || '').toLowerCase()}
-              </span>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-1">Distance / Fare</p>
-              <p className="text-[13px] font-bold text-gray-900">{delivery.distance || '-'} / {delivery.fare || '-'}</p>
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-200/60 rounded-full transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          
+          {/* Pickup & Drop Addresses */}
+          <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Pickup & Drop Route</p>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500 mt-1 shrink-0 ring-4 ring-green-100" />
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold text-green-700 uppercase">Pickup Location</p>
+                  <p className="text-xs font-bold text-gray-900 mt-0.5">{delivery.pickupAddress || delivery.pickupLabel || '--'}</p>
+                </div>
+              </div>
+              <div className="ml-1 w-0.5 h-3 bg-gray-200 border-l border-dashed border-gray-300" />
+              <div className="flex items-start gap-3">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500 mt-1 shrink-0 ring-4 ring-red-100" />
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold text-red-700 uppercase">Drop Location</p>
+                  <p className="text-xs font-bold text-gray-900 mt-0.5">{delivery.dropAddress || delivery.dropLabel || '--'}</p>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Parcel photos: the sender's own photos + the driver's pickup /
-              delivery proof, so the admin can see what was sent and handed over. */}
+          {/* Core Info */}
+          <div className="grid grid-cols-2 gap-y-4 gap-x-4 p-4 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-0.5">Date & Time</p>
+              <p className="font-bold text-gray-900">{formatDate(delivery.date)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-0.5">Transport</p>
+              <p className="font-bold text-gray-900 capitalize flex items-center gap-1">
+                <Truck size={13} className="text-gray-400"/>
+                {String(delivery.transportType || 'Parcel').toLowerCase()}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-0.5">Sender</p>
+              <p className="font-bold text-gray-900">{parcel.senderName || delivery.userName || 'N/A'}</p>
+              <p className="text-gray-500 text-[11px]">{parcel.senderMobile || delivery.userPhone || '--'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-0.5">Receiver</p>
+              <p className="font-bold text-gray-900">{parcel.receiverName || 'N/A'}</p>
+              <p className="text-gray-500 text-[11px]">{parcel.receiverMobile || '--'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-0.5">Driver</p>
+              <p className="font-bold text-gray-900">{delivery.driverName || 'Unassigned'}</p>
+              <p className="text-gray-500 text-[11px]">{delivery.driverPhone || '--'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-0.5">Payment</p>
+              <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded capitalize tracking-wide border ${PAYMENT_STYLES[delivery.paymentOption] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                {String(delivery.paymentOption || '').toLowerCase()}
+              </span>
+              <p className="font-black text-gray-900 mt-1">₹{delivery.fare || 0}</p>
+            </div>
+          </div>
+
+          {/* Parcel Description & Details */}
+          {(parcel.category || parcel.description || parcel.instructions) ? (
+            <div className="bg-amber-50/60 rounded-xl p-3.5 border border-amber-100 text-xs space-y-1.5">
+              <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Package Info</p>
+              {parcel.category ? <p className="text-gray-700"><span className="font-bold">Category:</span> {parcel.category}</p> : null}
+              {parcel.description ? <p className="text-gray-700"><span className="font-bold">Contents:</span> {parcel.description}</p> : null}
+              {parcel.instructions ? <p className="text-gray-700"><span className="font-bold">Instructions:</span> {parcel.instructions}</p> : null}
+            </div>
+          ) : null}
+
+          {/* Lifecycle Status Timeline */}
+          <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Delivery Status Timeline</p>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-gray-200/50">
+                <span className="text-gray-500">Order Placed</span>
+                <span className="font-bold text-gray-800">{formatDate(delivery.createdAt || delivery.date)}</span>
+              </div>
+              {delivery.acceptedAt ? (
+                <div className="flex justify-between py-1 border-b border-gray-200/50">
+                  <span className="text-gray-500">Driver Accepted</span>
+                  <span className="font-bold text-gray-800">{formatDate(delivery.acceptedAt)}</span>
+                </div>
+              ) : null}
+              {delivery.startedAt ? (
+                <div className="flex justify-between py-1 border-b border-gray-200/50">
+                  <span className="text-gray-500">Parcel Picked Up</span>
+                  <span className="font-bold text-gray-800">{formatDate(delivery.startedAt)}</span>
+                </div>
+              ) : null}
+              {delivery.completedAt ? (
+                <div className="flex justify-between py-1 border-b border-gray-200/50 text-green-700">
+                  <span className="font-bold">Delivered</span>
+                  <span className="font-black">{formatDate(delivery.completedAt)}</span>
+                </div>
+              ) : null}
+              {delivery.cancelledAt ? (
+                <div className="flex justify-between py-1 border-b border-gray-200/50 text-red-600">
+                  <span className="font-bold">Cancelled ({delivery.cancelledBy || 'system'})</span>
+                  <span className="font-black">{formatDate(delivery.cancelledAt)}</span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Parcel photos: sender photos + handover proofs */}
           {(() => {
-            const parcel = delivery.parcel || {};
             const resolveUrl = (u) =>
               !u ? '' : (String(u).startsWith('http') ? u : `${BACKEND_ORIGIN}${u}`);
             const senderPhotos = Array.isArray(parcel.photos) ? parcel.photos.filter(Boolean) : [];
@@ -170,11 +228,11 @@ const DeliveryDetailsDrawer = ({ delivery, onClose }) => {
               <div className="space-y-4">
                 {senderPhotos.length > 0 && (
                   <div>
-                    <p className="text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-2">Sender's parcel photos</p>
-                    <div className="flex flex-wrap gap-3">
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2">Sender's parcel photos</p>
+                    <div className="flex flex-wrap gap-2.5">
                       {senderPhotos.map((u, i) => (
                         <a key={i} href={resolveUrl(u)} target="_blank" rel="noreferrer">
-                          <img src={resolveUrl(u)} alt="Parcel" className="h-24 w-24 rounded-lg border border-gray-200 object-cover" />
+                          <img src={resolveUrl(u)} alt="Parcel" className="h-20 w-20 rounded-lg border border-gray-200 object-cover hover:opacity-90 transition-opacity" />
                         </a>
                       ))}
                     </div>
@@ -182,14 +240,14 @@ const DeliveryDetailsDrawer = ({ delivery, onClose }) => {
                 )}
                 {proofs.length > 0 && (
                   <div>
-                    <p className="text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-2">Handover proof</p>
-                    <div className="flex flex-wrap gap-3">
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2">Handover proof</p>
+                    <div className="flex flex-wrap gap-2.5">
                       {proofs.map((p, i) => (
                         <div key={i} className="text-center">
                           <a href={resolveUrl(p.url)} target="_blank" rel="noreferrer">
-                            <img src={resolveUrl(p.url)} alt={p.label} className="h-24 w-24 rounded-lg border border-gray-200 object-cover" />
+                            <img src={resolveUrl(p.url)} alt={p.label} className="h-20 w-20 rounded-lg border border-gray-200 object-cover hover:opacity-90 transition-opacity" />
                           </a>
-                          <p className="text-[11px] font-semibold text-gray-500 mt-1">{p.label}</p>
+                          <p className="text-[10px] font-semibold text-gray-500 mt-1">{p.label}</p>
                         </div>
                       ))}
                     </div>
@@ -200,11 +258,11 @@ const DeliveryDetailsDrawer = ({ delivery, onClose }) => {
           })()}
 
         </div>
-        <div className="border-t border-gray-100 p-5 bg-white flex justify-end gap-3">
-          <button onClick={() => handlePrintInvoice(delivery)} className="px-5 py-2 text-sm font-bold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2">
-            <FileText size={16} /> Print
+        <div className="border-t border-gray-100 p-4 bg-gray-50/50 flex justify-end gap-2.5">
+          <button onClick={() => handlePrintInvoice(delivery)} className="px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5 shadow-sm">
+            <FileText size={14} /> Print
           </button>
-          <button onClick={onClose} className="px-5 py-2 text-sm font-bold text-white bg-black rounded-lg shadow-sm hover:bg-gray-900 transition-colors">
+          <button onClick={onClose} className="px-5 py-2 text-xs font-black text-white bg-black rounded-lg shadow-sm hover:bg-gray-900 transition-colors">
             Close
           </button>
         </div>

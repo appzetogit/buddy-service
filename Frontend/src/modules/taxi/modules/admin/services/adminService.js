@@ -144,14 +144,30 @@ export const adminService = {
   resolveSafetyAlert: (id, note = '') => api.patch(`/admin/safety/alerts/${id}/resolve`, { note }),
   getOngoingRides: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
     api.get(`/admin/ongoing-rides?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
-  getRideRequests: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
-    api.get(`/admin/ride-requests?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
-  listRideRequests: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
-    api.get(`/admin/ride-requests?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
-  getDeliveries: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
-    api.get(`/admin/deliveries?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
-  getTrips: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
-    api.get(`/admin/trips?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
+  getRideRequests: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+    ).toString();
+    return api.get(`/admin/ride-requests${qs ? `?${qs}` : ''}`);
+  },
+  listRideRequests: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+    ).toString();
+    return api.get(`/admin/ride-requests${qs ? `?${qs}` : ''}`);
+  },
+  getDeliveries: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+    ).toString();
+    return api.get(`/admin/deliveries${qs ? `?${qs}` : ''}`);
+  },
+  getTrips: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+    ).toString();
+    return api.get(`/admin/trips${qs ? `?${qs}` : ''}`);
+  },
   deleteOngoingRide: (id) => api.delete(`/admin/ongoing-rides/${id}`),
 
   /**

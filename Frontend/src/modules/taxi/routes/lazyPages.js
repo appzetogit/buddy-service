@@ -47,7 +47,6 @@ export const AdminEarningsDetail = lazy(() => import('../modules/admin/pages/das
 export const AdminTrips = lazy(() => import('../modules/admin/pages/operations/Trips'));
 export const AdminDeliveries = lazy(() => import('../modules/admin/pages/operations/Deliveries'));
 export const AdminOngoing = lazy(() => import('../modules/admin/pages/operations/Ongoing'));
-export const AdminWalletPayment = lazy(() => import('../modules/admin/pages/wallet/WalletPayment'));
 export const AdminUserList = lazy(() => import('../modules/admin/pages/users/UserList'));
 export const AdminUserDetails = lazy(() => import('../modules/admin/pages/users/UserDetails'));
 export const AdminDriverList = lazy(() => import('../modules/admin/pages/drivers/DriverList'));
@@ -95,8 +94,6 @@ export const AdminGeneralSettings = lazy(() => import('../modules/admin/pages/se
 export const AdminTransportRideSettings = lazy(() => import('../modules/admin/pages/settings/TransportRideSettings'));
 export const AdminBidRideSettings = lazy(() => import('../modules/admin/pages/settings/BidRideSettings'));
 export const AdminWalletSettings = lazy(() => import('../modules/admin/pages/settings/WalletSettings'));
-export const AdminTipSettings = lazy(() => import('../modules/admin/pages/settings/TipSettings'));
-export const AdminRideVoiceSettings = lazy(() => import('../modules/admin/pages/settings/RideVoiceSettings'));
 export const AdminAppModules = lazy(() => import('../modules/admin/pages/settings/AppModules'));
 export const AdminOnboardingScreens = lazy(() => import('../modules/admin/pages/settings/OnboardingScreens'));
 export const AdminCountryManagement = lazy(() => import('../modules/admin/pages/masters/CountryManagement'));
