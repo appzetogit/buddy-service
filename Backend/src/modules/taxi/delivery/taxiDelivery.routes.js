@@ -15,6 +15,7 @@ import {
   reachedPickupController,
   rejectRideController,
   startRideController,
+  submitBidController,
   updateRideLocationController,
 } from './taxiDelivery.controller.js';
 
@@ -31,6 +32,9 @@ taxiDeliveryRouter.get('/rides/current', ...riderOnly, listCurrentRides);
 taxiDeliveryRouter.get('/rides/scheduled', ...riderOnly, listScheduledRides);
 taxiDeliveryRouter.get('/rides/:rideId', ...riderOnly, getRideJob);
 taxiDeliveryRouter.patch('/rides/:rideId/accept', ...riderOnly, acceptRideController);
+taxiDeliveryRouter.post('/rides/:rideId/accept', ...riderOnly, acceptRideController);
+taxiDeliveryRouter.post('/bids', ...riderOnly, submitBidController);
+taxiDeliveryRouter.post('/rides/:rideId/bid', ...riderOnly, submitBidController);
 taxiDeliveryRouter.patch('/rides/:rideId/give-back', ...riderOnly, giveBackRideController);
 taxiDeliveryRouter.patch('/rides/:rideId/reject', ...riderOnly, rejectRideController);
 taxiDeliveryRouter.patch('/rides/:rideId/reached-pickup', ...riderOnly, reachedPickupController);

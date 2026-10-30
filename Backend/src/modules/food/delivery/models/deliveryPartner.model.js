@@ -42,7 +42,7 @@ const deliveryPartnerSchema = new mongoose.Schema(
             type: String
         },
         vehicleType: {
-            type: String
+            type: mongoose.Schema.Types.Mixed
         },
         vehicleName: {
             type: String
@@ -62,7 +62,7 @@ const deliveryPartnerSchema = new mongoose.Schema(
             type: Boolean
         },
         taxiVehicleType: {
-            type: String
+            type: mongoose.Schema.Types.Mixed
         },
         taxiVehicleName: {
             type: String
