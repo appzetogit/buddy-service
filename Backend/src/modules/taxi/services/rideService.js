@@ -836,6 +836,18 @@ export const resolveZoneForPickup = async (pickupCoords) => {
 export const resolveServiceLocationIdForPickup = async (pickupCoords) =>
   (await resolveZoneForPickup(pickupCoords)).serviceLocationId;
 
+const haversineFallbackMeters = (c1, c2) => {
+  if (!Array.isArray(c1) || !Array.isArray(c2) || c1.length < 2 || c2.length < 2) return 0;
+  const [lng1, lat1] = c1.map(Number);
+  const [lng2, lat2] = c2.map(Number);
+  if (!Number.isFinite(lng1) || !Number.isFinite(lat1) || !Number.isFinite(lng2) || !Number.isFinite(lat2)) return 0;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+};
+
 export const createRideRecord = async ({
   userId,
   pickupCoords,
@@ -961,12 +973,14 @@ export const createRideRecord = async ({
 
   // Deliveries send neither figure, and a rider's estimate is only ever a
   // guess, so the routed values win where we have them.
+  const fallbackDirectMeters = Math.round(haversineFallbackMeters(pickupCoords, dropCoords) * 1.3);
   const routedDistanceMeters = resolvedRoute?.distanceMeters > 0
     ? resolvedRoute.distanceMeters
-    : safeEstimatedDistanceMeters;
+    : (safeEstimatedDistanceMeters > 0 ? safeEstimatedDistanceMeters : fallbackDirectMeters);
+  const fallbackDurationMinutes = Math.round((routedDistanceMeters / 1000) * 2.4);
   const routedDurationMinutes = resolvedRoute?.durationMinutes > 0
     ? resolvedRoute.durationMinutes
-    : safeEstimatedDurationMinutes;
+    : (safeEstimatedDurationMinutes > 0 ? safeEstimatedDurationMinutes : fallbackDurationMinutes);
   const routeDocument = resolvedRoute
     ? {
         polyline: resolvedRoute.polyline,
@@ -1902,7 +1916,7 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymen
 
   if (paidOnlineByRider) {
     ride.collectedVia = 'online';
-    ride.paymentMethod = 'cash';
+    ride.paymentMethod = 'online';
   } else if (['cash', 'upi'].includes(normalizedCollectedVia)) {
     // Driver collected the fare directly — cash in hand, or into their own UPI
     // via their personal QR. Either way the money never reached the platform,

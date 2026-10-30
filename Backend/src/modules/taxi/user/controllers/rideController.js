@@ -820,9 +820,6 @@ const loadRideForFarePayment = async (rideId, userId, session = null) => {
   if (ride.status === RIDE_STATUS.CANCELLED || ride.liveStatus === RIDE_LIVE_STATUS.CANCELLED) {
     throw new ApiError(409, 'This ride was cancelled');
   }
-  if (String(ride.paymentMethod || 'cash').trim().toLowerCase() !== 'cash') {
-    throw new ApiError(409, 'This ride is already paid online');
-  }
   return ride;
 };
 
@@ -940,6 +937,7 @@ export const verifyRazorpayRideFare = async (req, res) => {
       {
         $set: {
           collectedVia: 'online',
+          paymentMethod: 'online',
           driverPaymentCollection: {
             provider: 'razorpay',
             providerId: paymentId,

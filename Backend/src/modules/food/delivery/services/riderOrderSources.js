@@ -41,9 +41,46 @@ const TAXI_AS_ORDER = {
     },
     'deliveryState.deliveredAt': '$completedAt',
     riderEarning: { $ifNull: ['$driverEarnings', 0] },
-    amountToCollect: { $cond: [{ $eq: ['$paymentMethod', 'cash'] }, { $ifNull: ['$fare', 0] }, 0] },
-    'payment.method': { $ifNull: ['$paymentMethod', 'online'] },
-    'payment.amountDue': { $cond: [{ $eq: ['$paymentMethod', 'cash'] }, { $ifNull: ['$fare', 0] }, 0] },
+    amountToCollect: {
+      $cond: [
+        {
+          $and: [
+            { $eq: ['$paymentMethod', 'cash'] },
+            { $ne: ['$collectedVia', 'online'] },
+            { $not: { $in: ['$driverPaymentCollection.status', ['paid', 'captured', 'completed']] } },
+          ],
+        },
+        { $ifNull: ['$fare', 0] },
+        0,
+      ],
+    },
+    'payment.method': {
+      $cond: [
+        {
+          $or: [
+            { $eq: ['$collectedVia', 'online'] },
+            { $in: ['$driverPaymentCollection.status', ['paid', 'captured', 'completed']] },
+            { $eq: ['$paymentMethod', 'online'] },
+            { $eq: ['$paymentMethod', 'wallet'] },
+          ],
+        },
+        'online',
+        'cash',
+      ],
+    },
+    'payment.amountDue': {
+      $cond: [
+        {
+          $and: [
+            { $eq: ['$paymentMethod', 'cash'] },
+            { $ne: ['$collectedVia', 'online'] },
+            { $not: { $in: ['$driverPaymentCollection.status', ['paid', 'captured', 'completed']] } },
+          ],
+        },
+        { $ifNull: ['$fare', 0] },
+        0,
+      ],
+    },
     'pricing.total': { $ifNull: ['$fare', 0] },
     orderKind: 'taxi',
     serviceType: { $ifNull: ['$serviceType', 'ride'] },
