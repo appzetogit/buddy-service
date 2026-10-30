@@ -22,6 +22,21 @@ const driverSchema = new mongoose.Schema(
     phone: { type: String, trim: true },
     profilePhoto: { type: String, default: '' },
     isOnRide: { type: Boolean, default: false },
+    zoneId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiZone',
+      default: null,
+    },
+    zone: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiZone',
+      default: null,
+    },
+    service_location_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiServiceLocation',
+      default: null,
+    },
   },
   {
     strict: false,

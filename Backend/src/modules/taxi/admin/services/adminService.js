@@ -3946,7 +3946,7 @@ export const deleteDriver = async (id) => {
 
 export const getDriverById = async (id, currentAdmin = null) => {
   const driver = await Driver.findById(id)
-    .populate('zoneId', 'name service_location_id')
+    .populate({ path: 'zoneId', select: 'name service_location_id', strictPopulate: false })
     .lean();
   if (!driver) {
     throw new ApiError(404, 'Driver not found');
@@ -6254,12 +6254,17 @@ export const getAdminEarnings = async (query = {}) => {
   }
 
   const rides = await Ride.find({ status: RIDE_STATUS.COMPLETED })
+    .setOptions({ strictPopulate: false })
     .sort({ completedAt: -1, updatedAt: -1, createdAt: -1 })
     .populate('userId', 'name phone')
     .populate({
       path: 'driverId',
-      select: 'name phone vehicleType vehicleNumber zoneId',
-      populate: { path: 'zoneId', select: 'name' },
+      select: 'name phone vehicleType vehicleNumber zoneId zone service_location_id',
+      populate: [
+        { path: 'zoneId', select: 'name', strictPopulate: false },
+        { path: 'zone', select: 'name', strictPopulate: false },
+      ],
+      strictPopulate: false,
     })
     .populate('vehicleTypeId', 'name type_name transport_type icon_types')
     .lean();
@@ -6275,7 +6280,11 @@ export const getAdminEarnings = async (query = {}) => {
     .map((ride) => {
       const vehicleDoc = ride.vehicleTypeId || {};
       const driver = ride.driverId || {};
-      const zoneDoc = driver.zoneId || {};
+      const zoneDoc = (driver.zoneId && typeof driver.zoneId === 'object' && driver.zoneId.name)
+        ? driver.zoneId
+        : (driver.zone && typeof driver.zone === 'object' && driver.zone.name)
+        ? driver.zone
+        : (driver.zoneId || driver.zone || {});
       const requestId = `REQ_${String(ride._id).slice(-12).toUpperCase()}`;
       const grossFare = Number(ride.fare || 0);
       const adminCommission = Number(ride.commissionAmount || 0);
