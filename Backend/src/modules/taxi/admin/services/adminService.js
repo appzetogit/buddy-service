@@ -1842,6 +1842,7 @@ const DRIVER_LIST_SELECT = [
   'onlineSelfie',
   'location',
   'wallet',
+  'deletionRequest',
   'approve',
   'status',
   'createdAt',
@@ -1873,11 +1874,9 @@ const serializeDriverListItem = (driver) => ({
   vehicle_icon_type: driver.vehicleIconType || driver.vehicleType || '',
   vehicle_number: driver.vehicleNumber || '',
   vehicle_color: driver.vehicleColor || '',
-  rating:
-    Number(driver.ratingCount || 0) > 0
-      ? Number(driver.rating || 0)
-      : 0,
+  rating: Number(driver.rating || 0),
   rating_count: Number(driver.ratingCount || 0),
+  deletionRequest: driver.deletionRequest || { status: 'none', reason: '', requestedAt: null },
   isOnline: Boolean(driver.isOnline),
   isOnRide: Boolean(driver.isOnRide),
   online_selfie_image: driver.onlineSelfie?.imageUrl || '',
@@ -3144,17 +3143,44 @@ export const listDriverRatings = async ({ page = 1, limit = 50, search = '' }) =
     Driver.countDocuments(query),
   ]);
 
+  const driverIds = drivers.map((d) => d._id);
+  const rides = await Ride.find({ driverId: { $in: driverIds }, 'feedback.rating': { $gt: 0 } })
+    .select('driverId feedback.rating')
+    .lean();
+
+  const ratingsByDriver = new Map();
+  for (const r of rides) {
+    const key = String(r.driverId);
+    if (!ratingsByDriver.has(key)) {
+      ratingsByDriver.set(key, []);
+    }
+    ratingsByDriver.get(key).push(Number(r.feedback.rating));
+  }
+
   return {
-    results: drivers.map((driver) => ({
-      _id: driver._id,
-      name: driver.name || '',
-      mobile: driver.phone || '',
-      phone: driver.phone || '',
-      email: driver.email || '',
-      rating: Number(driver.ratingCount || 0) > 0 ? Number(driver.rating || 0) : 0,
-      rating_count: Number(driver.ratingCount || 0),
-      transport_type: driver.registerFor || driver.vehicleType || '',
-    })),
+    results: drivers.map((driver) => {
+      const rideRatings = ratingsByDriver.get(String(driver._id)) || [];
+      let rating = 0;
+      let ratingCount = 0;
+      if (rideRatings.length > 0) {
+        rating = Number((rideRatings.reduce((sum, val) => sum + val, 0) / rideRatings.length).toFixed(1));
+        ratingCount = rideRatings.length;
+      } else if (Number(driver.rating || 0) > 0) {
+        rating = Number(driver.rating);
+        ratingCount = Number(driver.ratingCount || 1);
+      }
+
+      return {
+        _id: driver._id,
+        name: driver.name || '',
+        mobile: driver.phone || '',
+        phone: driver.phone || '',
+        email: driver.email || '',
+        rating,
+        rating_count: ratingCount,
+        transport_type: driver.registerFor || driver.vehicleType || 'Taxi',
+      };
+    }),
     paginator: {
       current_page: safePage,
       per_page: safeLimit,
@@ -3171,6 +3197,11 @@ export const getDriverRatingDetail = async (id) => {
   }
 
   const rides = await Ride.find({ driverId: driver._id }).sort({ createdAt: -1 }).lean();
+  const ratedRides = rides.filter((r) => Number(r.feedback?.rating || 0) > 0);
+  const computedRating = ratedRides.length
+    ? Number((ratedRides.reduce((acc, r) => acc + Number(r.feedback.rating), 0) / ratedRides.length).toFixed(1))
+    : Number(driver.rating || 5);
+  const computedRatingCount = ratedRides.length || Number(driver.ratingCount || (driver.rating ? 1 : 0));
 
   return {
     driver: {
@@ -3178,23 +3209,22 @@ export const getDriverRatingDetail = async (id) => {
       name: driver.name || '',
       phone: driver.phone || '',
       email: driver.email || '',
-      rating: Number(driver.ratingCount || 0) > 0 ? Number(driver.rating || 0) : 0,
-      rating_count: Number(driver.ratingCount || 0),
-      transport_type: driver.registerFor || driver.vehicleType || '',
+      rating: computedRating,
+      rating_count: computedRatingCount,
+      transport_type: driver.registerFor || driver.vehicleType || 'Taxi',
       vehicle_make: driver.vehicleMake || '',
       vehicle_model: driver.vehicleModel || '',
       vehicle_number: driver.vehicleNumber || '',
       image: driver.profile_image || driver.avatar || '',
-      vehicle_image: 'https://img.freepik.com/free-vector/yellow-passenger-transport-taxi-car_1017-4886.jpg',
+      vehicle_image: driver.vehicleImage || 'https://img.freepik.com/free-vector/yellow-passenger-transport-taxi-car_1017-4886.jpg',
     },
     reviews: rides.map((ride) => ({
       _id: ride._id,
       request_id: String(ride._id),
-      date: ride.createdAt,
-      pickup_location: ride.pickupLocation?.coordinates
-        ? `${ride.pickupLocation.coordinates[1]}, ${ride.pickupLocation.coordinates[0]}`
-        : 'N/A',
-      rating: Number(driver.ratingCount || 0) > 0 ? Number(driver.rating || 0) : 0,
+      date: ride.completedAt || ride.createdAt,
+      pickup_location: ride.pickupAddress || (ride.pickupLocation?.coordinates ? `${ride.pickupLocation.coordinates[1]}, ${ride.pickupLocation.coordinates[0]}` : 'N/A'),
+      rating: Number(ride.feedback?.rating || computedRating || 5),
+      comment: ride.feedback?.comment || '',
     })),
   };
 };
@@ -3333,6 +3363,8 @@ export const listDriverWithdrawalSummaries = async ({ page = 1, limit = 50, sear
             name: driver.name || '',
             mobile: driver.phone || '',
             email: driver.email || '',
+            driver_code: driver.referralCode || (driver.phone ? `DRV${String(driver.phone).slice(-4)}${String(driver._id || '').slice(-6).toUpperCase()}`.replace(/\W/g, '') : ''),
+            referralCode: driver.referralCode || '',
             bankDetails: {
               accountHolderName:
                 latestRequest?.bank_details_snapshot?.accountHolderName || driver.bankDetails?.accountHolderName || '',
@@ -3659,7 +3691,9 @@ export const listDriverDeletionRequests = async ({ page = 1, limit = 50, status 
   const start = (safePage - 1) * safeLimit;
   const statusQuery =
     requestedStatus === 'all'
-      ? { $in: ['pending', 'approved', 'rejected'] }
+      ? { $in: ['pending', 'requested', 'approved', 'rejected'] }
+      : requestedStatus === 'pending'
+      ? { $in: ['pending', 'requested'] }
       : requestedStatus;
 
   const query = {

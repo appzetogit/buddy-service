@@ -432,16 +432,22 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
     };
     await ride.save({ session });
 
-    if (!amount) {
-      await session.commitTransaction();
-      return null;
+    let walletResult = null;
+    if (amount) {
+      walletResult = await applyDriverWalletAdjustment({
+        driverId: ride.driverId,
+        amount,
+        type,
+        rideId: ride._id,
+        description: paymentMethod === 'cash'
+          ? `Admin commission for trip #${String(ride._id).slice(-8).toUpperCase()}`
+          : `Earnings for trip #${String(ride._id).slice(-8).toUpperCase()}`,
+        session,
+      });
     }
 
-    // The ride now carries `commissionAmount` and `driverEarnings`; those are what the delivery
-    // wallet / pocket read for this rider (see riderOrderSources), so there is no taxi-side wallet
-    // entry to write.
     await session.commitTransaction();
-    return { ride, wallet: null, transaction: null };
+    return { ride, wallet: walletResult?.wallet || null, transaction: walletResult?.transaction || null };
   } catch (error) {
     await session.abortTransaction();
     throw error;
