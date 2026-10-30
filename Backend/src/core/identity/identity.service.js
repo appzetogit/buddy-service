@@ -32,7 +32,7 @@ const buildTokenPayload = (identity, role, ids) => ({
 const issueTokens = async (payload) => {
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);
-  const ttlMs = ms(config.jwtRefreshExpiresIn || '7d');
+  const ttlMs = ms(config.jwtRefreshExpiresIn || '30d');
   const expiresAt = new Date(Date.now() + ttlMs);
   await FoodRefreshToken.create({
     userId: payload.userId,
