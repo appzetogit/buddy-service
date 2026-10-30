@@ -226,7 +226,7 @@ export const verifyUserOtpAndLogin = async (
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);
 
-  const ttlMs = ms(config.jwtRefreshExpiresIn || "7d");
+  const ttlMs = ms(config.jwtRefreshExpiresIn || "30d");
   const expiresAt = new Date(Date.now() + ttlMs);
 
   await FoodRefreshToken.create({
@@ -278,7 +278,7 @@ export const adminLogin = async (email, password) => {
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);
 
-  const ttlMs = ms(config.jwtRefreshExpiresIn || "7d");
+  const ttlMs = ms(config.jwtRefreshExpiresIn || "30d");
   const expiresAt = new Date(Date.now() + ttlMs);
 
   await FoodRefreshToken.create({
@@ -333,7 +333,7 @@ export const verifyRestaurantOtpAndLogin = async (phone, otp, fcmToken, platform
     };
     const accessToken = signAccessToken(payload);
     const refreshToken = signRefreshToken(payload);
-    const ttlMs = ms(config.jwtRefreshExpiresIn || "7d");
+    const ttlMs = ms(config.jwtRefreshExpiresIn || "30d");
     const expiresAt = new Date(Date.now() + ttlMs);
 
     await FoodRefreshToken.create({
@@ -546,7 +546,7 @@ export const verifyDeliveryOtpAndLogin = async (phone, otp, fcmToken, platform) 
   };
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);
-  const ttlMs = ms(config.jwtRefreshExpiresIn || "7d");
+  const ttlMs = ms(config.jwtRefreshExpiresIn || "30d");
   const expiresAt = new Date(Date.now() + ttlMs);
 
   await FoodRefreshToken.create({
@@ -979,10 +979,59 @@ export const refreshAccessToken = async (token) => {
     }
   }
 
-  const newAccessToken = signAccessToken({
-    userId: payload.userId,
-    role: payload.role,
-  });
+  if (payload?.role === "RESTAURANT") {
+    const r = await FoodRestaurant.findById(payload.userId)
+      .select("status isActive rejectionReason bannedAt")
+      .lean();
+    if (!r || isRestaurantBanned(r)) {
+      throw new AuthError("Restaurant account has been deactivated or banned");
+    }
+  }
 
-  return { accessToken: newAccessToken, refreshToken: token };
+  if (payload?.role === "DELIVERY_PARTNER" || payload?.role === "DRIVER") {
+    if (payload.identityId) {
+      const idDoc = await BuddyIdentity.findById(payload.identityId).select("isActive").lean();
+      if (!idDoc || idDoc.isActive === false) {
+        throw new AuthError("Driver account is deactivated");
+      }
+    }
+  }
+
+  const tokenPayload = {
+    userId: String(payload.userId || payload.sub || payload.identityId),
+    role: payload.role,
+    ...(payload.identityId ? { identityId: String(payload.identityId) } : {}),
+    ...(payload.sub ? { sub: String(payload.sub) } : {}),
+    ...(payload.capabilities ? { capabilities: payload.capabilities } : {}),
+    ...(payload.phone ? { phone: payload.phone } : {}),
+    ...(payload.familyId ? { familyId: payload.familyId } : {}),
+  };
+
+  const newAccessToken = signAccessToken(tokenPayload);
+  const newRefreshToken = signRefreshToken(tokenPayload);
+
+  // Extend expiration in MongoDB (sliding window)
+  const ttlMs = ms(config.jwtRefreshExpiresIn || "30d");
+  const expiresAt = new Date(Date.now() + ttlMs);
+
+  await FoodRefreshToken.updateOne(
+    { _id: stored._id },
+    { $set: { expiresAt } }
+  ).catch(() => {});
+
+  if (newRefreshToken !== token) {
+    try {
+      await FoodRefreshToken.create({
+        userId: stored.userId,
+        token: newRefreshToken,
+        expiresAt,
+        device: stored.device || null,
+        ipAddress: stored.ipAddress || null,
+      });
+    } catch (_) {
+      // Ignore if already created
+    }
+  }
+
+  return { accessToken: newAccessToken, refreshToken: newRefreshToken };
 };

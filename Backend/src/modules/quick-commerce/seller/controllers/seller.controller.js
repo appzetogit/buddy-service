@@ -1219,7 +1219,7 @@ const createAuthTokens = async (sellerId) => {
   const accessToken = signAccessToken(payload);
   const familyId = crypto.randomUUID();
   const refreshToken = signRefreshToken({ ...payload, familyId });
-  const ttlMs = ms(config.jwtRefreshExpiresIn || "7d");
+  const ttlMs = ms(config.jwtRefreshExpiresIn || "30d");
   const expiresAt = new Date(Date.now() + ttlMs);
 
   await FoodRefreshToken.create({
