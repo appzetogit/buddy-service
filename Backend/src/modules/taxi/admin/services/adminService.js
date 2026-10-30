@@ -6455,6 +6455,9 @@ const getLiveDashboardStats = async () => {
     onlineDrivers,
     driversOnTrip,
     ongoingTrips,
+    ongoingCityRides,
+    ongoingParcels,
+    ongoingOutstations,
     pendingApprovals,
     systemHealth,
     sosActive,
@@ -6464,20 +6467,15 @@ const getLiveDashboardStats = async () => {
     countConnectedRiders().catch(() => 0),
     Driver.countDocuments({ isOnline: true }),
     Driver.countDocuments({ isOnRide: true }),
-    // A trip someone is sitting in right now: a driver is assigned and it has
-    // neither finished nor been called off. 'searching' is not one - nobody
-    // has accepted it yet.
-    Ride.countDocuments({ status: { $in: [RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] } }),
-    // There is no 'rejected' state for a driver: approve is false until an
-    // admin approves them, so these are the ones still waiting.
+    // Live ongoing trips across all services
+    Ride.countDocuments({ status: { $in: [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] } }),
+    Ride.countDocuments({ serviceType: 'ride', status: { $in: [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] } }),
+    Ride.countDocuments({ serviceType: 'parcel', status: { $in: [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] } }),
+    Ride.countDocuments({ serviceType: { $in: ['outstation', 'intercity'] }, status: { $in: [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] } }),
     Driver.countDocuments({ approve: false }),
     checkSystemHealth().catch(() => ({})),
-    // The real SOS button, from the safety module. The panel used to show
-    // support-ticket counts under an "SOS Response Center" heading.
     SafetyAlert.countDocuments({ status: 'active' }),
     SafetyAlert.countDocuments({ status: 'resolved' }),
-    // Where the online drivers actually are, for the map that claimed to show
-    // "live fleet positions" while dropping a single pin on the middle of India.
     Driver.find(
       { isOnline: true, 'location.coordinates.0': { $exists: true } },
       { name: 1, isOnRide: 1, vehicleType: 1, location: 1 },
@@ -6489,6 +6487,9 @@ const getLiveDashboardStats = async () => {
     onlineDrivers,
     driversOnTrip,
     ongoingTrips,
+    ongoingCityRides,
+    ongoingParcels,
+    ongoingOutstations,
     pendingApprovals,
     systemHealth,
     sos: { active: sosActive, resolved: sosResolved },
@@ -6510,13 +6511,19 @@ export const getDashboardData = async () => {
     return { ...dashboardCache.value, live };
   }
 
-  const [totalUsers, totalDrivers, approvedDrivers, rides, supportTicketStats] = await Promise.all([
+  const [totalUsers, totalDrivers, approvedDrivers, rides, recentRides, supportTicketStats] = await Promise.all([
     User.countDocuments(),
     Driver.countDocuments(),
     Driver.countDocuments({ approve: true }),
     Ride.find()
-      .select('status liveStatus fare paymentMethod commissionAmount driverEarnings driverId createdAt updatedAt completedAt')
+      .select('status liveStatus fare paymentMethod commissionAmount driverEarnings driverId serviceType intercity parcel pickupAddress dropAddress createdAt updatedAt completedAt')
       .sort({ createdAt: -1 })
+      .lean(),
+    Ride.find()
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .populate('userId', 'name phone')
+      .populate('driverId', 'name phone vehicleType vehicleNumber')
       .lean(),
     SupportTicket.aggregate([
       {
@@ -6677,6 +6684,112 @@ export const getDashboardData = async () => {
     { pending: 0, assigned: 0, closed: 0 },
   );
 
+  const normalizeServiceCategory = (ride) => {
+    const s = String(ride?.serviceType || '').toLowerCase().trim();
+    if (s === 'parcel') return 'parcel';
+    if (s === 'outstation' || s === 'intercity' || (ride?.intercity && (ride.intercity.toCity || ride.intercity.fromCity))) {
+      return 'outstation';
+    }
+    return 'ride';
+  };
+
+  const createServiceStatTracker = () => ({
+    total: 0,
+    completed: 0,
+    cancelled: 0,
+    ongoing: 0,
+    grossFare: 0,
+    adminCommission: 0,
+    driverEarnings: 0,
+    averageFare: 0,
+    todayTotal: 0,
+    todayCompleted: 0,
+    todayGrossFare: 0,
+    todayCommission: 0,
+  });
+
+  const servicesBreakdown = {
+    ride: createServiceStatTracker(),
+    parcel: createServiceStatTracker(),
+    outstation: createServiceStatTracker(),
+  };
+
+  rides.forEach((ride) => {
+    const cat = normalizeServiceCategory(ride);
+    const target = servicesBreakdown[cat] || servicesBreakdown.ride;
+    const isComp = isCompletedRide(ride);
+    const isCanc = isCancelledRide(ride);
+    const isOng = !isComp && !isCanc;
+    const eventDate = getRideEventDate(ride);
+    const isToday = isWithinRange(eventDate, startOfToday, endOfToday);
+    const fare = Number(ride.fare || 0);
+    const comm = Number.isFinite(Number(ride.commissionAmount))
+      ? Number(ride.commissionAmount)
+      : Math.max(fare - Number(ride.driverEarnings || 0), 0);
+    const driverEarn = Number.isFinite(Number(ride.driverEarnings))
+      ? Number(ride.driverEarnings)
+      : Math.max(fare - comm, 0);
+
+    target.total += 1;
+    if (isComp) {
+      target.completed += 1;
+      target.grossFare += fare;
+      target.adminCommission += comm;
+      target.driverEarnings += driverEarn;
+    } else if (isCanc) {
+      target.cancelled += 1;
+    } else if (isOng) {
+      target.ongoing += 1;
+    }
+
+    if (isToday) {
+      target.todayTotal += 1;
+      if (isComp) {
+        target.todayCompleted += 1;
+        target.todayGrossFare += fare;
+        target.todayCommission += comm;
+      }
+    }
+  });
+
+  Object.keys(servicesBreakdown).forEach((k) => {
+    const s = servicesBreakdown[k];
+    s.grossFare = Number(s.grossFare.toFixed(2));
+    s.adminCommission = Number(s.adminCommission.toFixed(2));
+    s.driverEarnings = Number(s.driverEarnings.toFixed(2));
+    s.averageFare = s.completed > 0 ? Number((s.grossFare / s.completed).toFixed(2)) : 0;
+    s.todayGrossFare = Number(s.todayGrossFare.toFixed(2));
+    s.todayCommission = Number(s.todayCommission.toFixed(2));
+  });
+
+  const recentBookings = (recentRides || []).map((r) => {
+    const cat = normalizeServiceCategory(r);
+    let routeSummary = '';
+    if (cat === 'outstation') {
+      routeSummary = `${r.intercity?.fromCity || r.pickupAddress || 'Origin'} ➔ ${r.intercity?.toCity || r.dropAddress || 'Destination'}`;
+    } else {
+      routeSummary = `${r.pickupAddress || 'Pickup'} ➔ ${r.dropAddress || 'Drop'}`;
+    }
+
+    return {
+      id: String(r._id),
+      requestId: `REQ_${String(r._id).slice(-8).toUpperCase()}`,
+      serviceType: cat,
+      serviceLabel: cat === 'parcel' ? 'Parcel Delivery' : cat === 'outstation' ? 'Outstation Trip' : 'City Ride',
+      customerName: r.userId?.name || 'Customer',
+      customerPhone: r.userId?.phone || '',
+      driverName: r.driverId?.name || (r.status === RIDE_STATUS.SEARCHING ? 'Finding Driver...' : 'Unassigned'),
+      driverPhone: r.driverId?.phone || '',
+      fare: Number(Number(r.fare || 0).toFixed(2)),
+      commissionAmount: Number(Number(r.commissionAmount || 0).toFixed(2)),
+      paymentMethod: describeRidePayment(r).method,
+      status: r.status,
+      liveStatus: r.liveStatus || r.status,
+      route: routeSummary,
+      createdAt: r.createdAt,
+    };
+  });
+
   const snapshot = {
     totalUsers,
     totalDrivers: {
@@ -6684,6 +6797,8 @@ export const getDashboardData = async () => {
       approved: approvedDrivers,
       declined: totalDrivers - approvedDrivers
     },
+    servicesBreakdown,
+    recentBookings,
     total_earnings: Number(totalOverallFare.toFixed(2)),
     payment_success_rate: 99.4,
     notifiedSos: {

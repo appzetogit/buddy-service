@@ -40,7 +40,14 @@ import {
   Eye,
   Info,
   Building2,
-  Loader2
+  Loader2,
+  Package,
+  Compass,
+  Layers,
+  CheckCircle2,
+  XCircle,
+  Navigation,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleMap, MarkerF } from '@react-google-maps/api';
@@ -61,6 +68,7 @@ const MainDashboard = () => {
 
   // Timeframe filter state
   const [timeframe, setTimeframe] = useState('Today'); // Today, Week, Month, Year
+  const [selectedServiceTab, setSelectedServiceTab] = useState('all'); // all, ride, parcel, outstation
 
   // Interactive Chart states
   const [hoveredRevenueIndex, setHoveredRevenueIndex] = useState(null);
@@ -95,8 +103,7 @@ const MainDashboard = () => {
   const totalDrivers = dashboard?.totalDrivers?.total || 0;
   const approvedDrivers = dashboard?.totalDrivers?.approved || 0;
 
-  // Counts for right now, sent uncached by the backend. Older builds of the
-  // API do not send them, hence the empty object rather than a guess.
+  // Counts for right now, sent uncached by the backend
   const live = dashboard?.live || {};
 
   const todayEarnings = dashboard?.todayEarnings || {};
@@ -105,17 +112,28 @@ const MainDashboard = () => {
   const todayTrips = dashboard?.todayTrips || {};
   const overallTrips = dashboard?.overallTrips || {};
 
-  // How much of the fleet that is actually working is carrying someone. The
-  // old version divided approved drivers by all drivers, which is an approval
-  // rate: it read 50% at 4am with nobody online.
+  // Real Service Breakdown from Backend
+  const servicesBreakdown = useMemo(() => {
+    return dashboard?.servicesBreakdown || {
+      ride: { total: 0, completed: 0, cancelled: 0, ongoing: 0, grossFare: 0, adminCommission: 0, driverEarnings: 0, averageFare: 0, todayTotal: 0, todayCompleted: 0, todayGrossFare: 0, todayCommission: 0 },
+      parcel: { total: 0, completed: 0, cancelled: 0, ongoing: 0, grossFare: 0, adminCommission: 0, driverEarnings: 0, averageFare: 0, todayTotal: 0, todayCompleted: 0, todayGrossFare: 0, todayCommission: 0 },
+      outstation: { total: 0, completed: 0, cancelled: 0, ongoing: 0, grossFare: 0, adminCommission: 0, driverEarnings: 0, averageFare: 0, todayTotal: 0, todayCompleted: 0, todayGrossFare: 0, todayCommission: 0 },
+    };
+  }, [dashboard]);
+
+  // Real Recent Bookings
+  const recentBookings = useMemo(() => {
+    return dashboard?.recentBookings || [];
+  }, [dashboard]);
+
+  // Fleet Utilization Calculation
   const fleetUtilization = useMemo(() => {
     const online = Number(live.onlineDrivers || 0);
     if (online === 0) return 0;
     return Math.round((Number(live.driversOnTrip || 0) / online) * 100);
   }, [live.onlineDrivers, live.driversOnTrip]);
 
-  // Each dependency as the backend just found it. The API itself is listed as
-  // answering because this data arrived from it.
+  // System Diagnostics
   const systemChecks = useMemo(() => {
     const health = live.systemHealth || {};
     const label = (value, fallback) => (value ? String(value) : fallback);
@@ -133,6 +151,14 @@ const MainDashboard = () => {
   const topDrivers = dashboard?.topDrivers || [];
   const driverPositions = live.driverPositions || [];
   const sos = live.sos || {};
+
+  // Selected Service Metrics Helper
+  const currentServiceStats = useMemo(() => {
+    if (selectedServiceTab === 'ride') return servicesBreakdown.ride;
+    if (selectedServiceTab === 'parcel') return servicesBreakdown.parcel;
+    if (selectedServiceTab === 'outstation') return servicesBreakdown.outstation;
+    return null; // 'all'
+  }, [selectedServiceTab, servicesBreakdown]);
 
   // SVG Area Chart Points mapping for Revenue Trajectory
   const chartWidth = 500;
@@ -167,19 +193,25 @@ const MainDashboard = () => {
 
   // Donut chart segments for Booking Distribution
   const bookingDonutData = useMemo(() => {
-    const completed = todayTrips.completed || 0;
-    const cancelled = todayTrips.cancelled || 0;
-    const pending = todayTrips.scheduled || 0;
+    let completed = todayTrips.completed || 0;
+    let cancelled = todayTrips.cancelled || 0;
+    let pending = todayTrips.scheduled || 0;
+
+    if (currentServiceStats) {
+      completed = currentServiceStats.completed || 0;
+      cancelled = currentServiceStats.cancelled || 0;
+      pending = currentServiceStats.ongoing || 0;
+    }
+
     const total = completed + cancelled + pending;
-    
     if (total === 0) return [];
-    
+
     return [
       { label: 'Completed', value: completed, color: '#22C55E', percent: Math.round((completed / total) * 100) },
       { label: 'Cancelled', value: cancelled, color: '#EF4444', percent: Math.round((cancelled / total) * 100) },
-      { label: 'Pending', value: pending, color: '#16A34A', percent: Math.round((pending / total) * 100) }
+      { label: 'Pending / Active', value: pending, color: '#3B82F6', percent: Math.round((pending / total) * 100) }
     ];
-  }, [todayTrips]);
+  }, [todayTrips, currentServiceStats]);
 
   const donutRadius = 30;
   const donutCircumference = 2 * Math.PI * donutRadius;
@@ -197,11 +229,14 @@ const MainDashboard = () => {
     });
   }, [bookingDonutData, donutCircumference]);
 
+  // Service Volume Share
+  const totalServiceBookings = (servicesBreakdown.ride.total + servicesBreakdown.parcel.total + servicesBreakdown.outstation.total) || 1;
+  const rideSharePercent = Math.round((servicesBreakdown.ride.total / totalServiceBookings) * 100);
+  const parcelSharePercent = Math.round((servicesBreakdown.parcel.total / totalServiceBookings) * 100);
+  const outstationSharePercent = Math.round((servicesBreakdown.outstation.total / totalServiceBookings) * 100);
+
   return (
     <div className="min-h-screen bg-[#F6F8FC] p-6 lg:p-8 font-sans redigo-admin-root animate-in fade-in duration-300">
-      
-
-
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* EXECUTIVE HEADER */}
@@ -209,25 +244,52 @@ const MainDashboard = () => {
           <div>
             <div className="flex items-center gap-2.5 mb-1.5">
               <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#64748B]">Terminal Operations Hub</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#64748B]">Taxi Operations Hub</span>
             </div>
-            <h1>Executive Control Center</h1>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Executive Operations Center</h1>
+            <p className="text-xs text-slate-500 mt-0.5">Real-time command center for City Rides, Parcel Deliveries, and Outstation Trips.</p>
           </div>
-          <div className="flex items-center gap-3 text-xs">
-            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-[#E5E7EB] shadow-sm">
-              <Clock size={14} className="text-[#64748B]" />
+
+          <div className="flex flex-wrap items-center gap-2.5 text-xs">
+            <div className="flex items-center gap-2 px-3.5 py-2 bg-white rounded-xl border border-slate-200/80 shadow-sm">
+              <Clock size={14} className="text-slate-400" />
               <span className="font-semibold text-slate-700">
-                Sync: {lastUpdatedAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                Sync: {lastUpdatedAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) || 'Connecting...'}
               </span>
             </div>
             <button
               onClick={() => fetchData(true)}
-              className="flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 transition-colors h-9 w-9 rounded-lg"
+              className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200/80 hover:bg-slate-50 rounded-xl transition-all shadow-sm font-semibold text-slate-700 active:scale-95"
               title="Sync Cloud Data"
             >
-              <RefreshCw size={15} className={isRefreshing ? 'animate-spin text-slate-900' : 'text-slate-600'} />
+              <RefreshCw size={14} className={isRefreshing ? 'animate-spin text-emerald-600' : 'text-slate-600'} />
+              <span>Refresh</span>
             </button>
           </div>
+        </div>
+
+        {/* QUICK NAVIGATION ACTION PILLS */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          {[
+            { label: 'Trip Requests', path: '/admin/trips', icon: Car, count: overallTrips.total || 0, color: 'text-sky-600 bg-sky-50 border-sky-200 hover:bg-sky-100' },
+            { label: 'Delivery Requests', path: '/admin/deliveries', icon: Package, count: servicesBreakdown.parcel.total || 0, color: 'text-purple-600 bg-purple-50 border-purple-200 hover:bg-purple-100' },
+            { label: 'Outstation Trips', path: '/admin/trips?serviceType=outstation', icon: Compass, count: servicesBreakdown.outstation.total || 0, color: 'text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100' },
+            { label: 'Ongoing Requests', path: '/admin/ongoing', icon: Activity, count: live.ongoingTrips || 0, color: 'text-blue-600 bg-blue-50 border-blue-200 hover:bg-blue-100' },
+            { label: 'Admin Earnings', path: '/admin/earnings', icon: IndianRupee, count: `₹${currency(overallEarnings.total)}`, color: 'text-emerald-700 bg-emerald-50/70 border-emerald-200 hover:bg-emerald-100' },
+            { label: 'SOS Center', path: '/admin/safety', icon: Shield, count: sos.active || 0, color: 'text-rose-600 bg-rose-50 border-rose-200 hover:bg-rose-100' }
+          ].map((pill, idx) => (
+            <button
+              key={idx}
+              onClick={() => navigate(pill.path)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all shrink-0 shadow-2xs ${pill.color}`}
+            >
+              <pill.icon size={13} strokeWidth={2.2} />
+              <span>{pill.label}</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-white/80 text-[10px] font-black border border-black/5">
+                {pill.count}
+              </span>
+            </button>
+          ))}
         </div>
 
         {dashboardError && (
@@ -242,89 +304,321 @@ const MainDashboard = () => {
           </div>
         )}
 
-        {/* 1. LIVE PLATFORM OVERVIEW (10 KPI Cards) */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        {/* 1. HIGH-LEVEL PLATFORM KPI CARDS */}
+        <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-6">
           {[
-            { label: "Total Customers", value: totalUsers, icon: Users, cardBg: "!bg-violet-500" },
-            { label: "Total Drivers", value: totalDrivers, icon: Car, cardBg: "!bg-sky-500" },
-            { label: "Approved Drivers", value: approvedDrivers, icon: UserCheck, cardBg: "!bg-emerald-500" },
-            { label: "Online Customers", value: live.onlineCustomers ?? 0, icon: Sparkles, cardBg: "!bg-green-500" },
-            { label: "Ongoing Trips", value: live.ongoingTrips ?? 0, icon: Activity, cardBg: "!bg-blue-500" },
-            { label: "Today's Revenue", value: `₹${currency(todayEarnings.total)}`, icon: IndianRupee, cardBg: "!bg-emerald-500" },
-            { label: "Online Drivers", value: live.onlineDrivers ?? 0, icon: Server, cardBg: "!bg-violet-500" },
-            { label: "Fleet Utilization", value: `${fleetUtilization}%`, icon: TrendingUp, cardBg: "!bg-teal-500" },
-            { label: "Pending Approvals", value: live.pendingApprovals ?? 0, icon: Clock, cardBg: "!bg-red-500" }
+            { label: "Gross Platform Fare", value: `₹${currency(overallEarnings.total)}`, sub: `Today: ₹${currency(todayEarnings.total)}`, icon: IndianRupee, cardBg: "bg-gradient-to-br from-emerald-600 to-emerald-700" },
+            { label: "Admin Commission", value: `₹${currency(overallEarnings.admin_commission)}`, sub: `Today: ₹${currency(todayEarnings.admin_commission)}`, icon: Wallet, cardBg: "bg-gradient-to-br from-teal-600 to-teal-700" },
+            { label: "Completed Bookings", value: overallTrips.completed || 0, sub: `Today: ${todayTrips.completed || 0} completed`, icon: CheckCircle2, cardBg: "bg-gradient-to-br from-sky-600 to-sky-700" },
+            { label: "Total Customers", value: totalUsers, sub: `${live.onlineCustomers ?? 0} online now`, icon: Users, cardBg: "bg-gradient-to-br from-indigo-600 to-indigo-700" },
+            { label: "Verified Drivers", value: approvedDrivers, sub: `${live.onlineDrivers ?? 0} active & online`, icon: UserCheck, cardBg: "bg-gradient-to-br from-violet-600 to-violet-700" },
+            { label: "Fleet Capacity", value: `${fleetUtilization}%`, sub: `${live.driversOnTrip ?? 0} on a trip`, icon: TrendingUp, cardBg: "bg-gradient-to-br from-slate-800 to-slate-900" }
           ].map((kpi, idx) => (
-            <div key={idx} className={`admin-card !p-4 border-none !text-white hover:scale-[1.02] transition-transform shadow-lg ${kpi.cardBg}`}>
+            <div key={idx} className={`p-4 rounded-2xl text-white shadow-md hover:scale-[1.02] transition-all ${kpi.cardBg}`}>
               <div className="flex items-center justify-between mb-2">
-                <span className="card-label text-[10px] font-bold opacity-80 uppercase tracking-wider">{kpi.label}</span>
-                <div className="p-2 rounded-full bg-white/20 backdrop-blur-sm">
-                  <kpi.icon size={16} strokeWidth={2.5} />
+                <span className="text-[10px] font-bold opacity-80 uppercase tracking-wider">{kpi.label}</span>
+                <div className="p-1.5 rounded-lg bg-white/20 backdrop-blur-xs">
+                  <kpi.icon size={15} strokeWidth={2.4} />
                 </div>
               </div>
-              <h4 className="text-xl font-black tracking-tight mt-1">{isLoading ? '...' : kpi.value}</h4>
+              <h3 className="text-xl font-black tracking-tight">{isLoading ? '...' : kpi.value}</h3>
+              <p className="text-[10px] opacity-80 font-medium mt-1 truncate">{kpi.sub}</p>
             </div>
           ))}
         </div>
 
-        {/* REVENUE & BOOKING ANALYTICS ROW */}
+        {/* 2. MULTI-SERVICE FLOW OPERATIONS HUB (CITY RIDES, PARCEL, OUTSTATION) */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Layers size={16} className="text-emerald-600" />
+              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Taxi Multi-Service Operations Hub</h2>
+            </div>
+            <span className="text-xs text-slate-500 font-medium">Real data grouped by core transport flows</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            
+            {/* CITY RIDES FLOW */}
+            <div className="bg-white rounded-2xl border border-sky-100 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden group">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-sky-500" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
+                      <Car size={18} strokeWidth={2.2} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">City Rides</h3>
+                      <span className="text-[10px] text-sky-600 font-bold uppercase tracking-wider">Intra-City & Local</span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 text-[10px] font-bold border border-sky-200">
+                    {servicesBreakdown.ride.total} Total
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 bg-slate-50/80 rounded-xl p-3 border border-slate-100 mb-4 text-center">
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-semibold block">Completed</span>
+                    <span className="text-xs font-black text-emerald-600 block mt-0.5">{servicesBreakdown.ride.completed}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-semibold block">Active</span>
+                    <span className="text-xs font-black text-blue-600 block mt-0.5">{live.ongoingCityRides ?? servicesBreakdown.ride.ongoing}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-semibold block">Cancelled</span>
+                    <span className="text-xs font-black text-rose-500 block mt-0.5">{servicesBreakdown.ride.cancelled}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Gross Volume:</span>
+                    <span className="font-bold text-slate-900">₹{currency(servicesBreakdown.ride.grossFare)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Platform Commission:</span>
+                    <span className="font-bold text-emerald-600">₹{currency(servicesBreakdown.ride.adminCommission)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Avg Fare:</span>
+                    <span className="font-semibold text-slate-700">₹{currency(servicesBreakdown.ride.averageFare)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600 pt-1 border-t border-slate-100">
+                    <span>Today's Bookings:</span>
+                    <span className="font-semibold text-slate-900">{servicesBreakdown.ride.todayTotal} rides</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => navigate('/admin/trips?serviceType=ride')}
+                className="mt-4 w-full py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold rounded-xl border border-sky-200 flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <span>View City Rides</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+
+            {/* PARCEL DELIVERIES FLOW */}
+            <div className="bg-white rounded-2xl border border-purple-100 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden group">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-purple-500" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-100">
+                      <Package size={18} strokeWidth={2.2} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Parcel Deliveries</h3>
+                      <span className="text-[10px] text-purple-600 font-bold uppercase tracking-wider">Courier & Packages</span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 text-[10px] font-bold border border-purple-200">
+                    {servicesBreakdown.parcel.total} Total
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 bg-slate-50/80 rounded-xl p-3 border border-slate-100 mb-4 text-center">
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-semibold block">Completed</span>
+                    <span className="text-xs font-black text-emerald-600 block mt-0.5">{servicesBreakdown.parcel.completed}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-semibold block">Active</span>
+                    <span className="text-xs font-black text-blue-600 block mt-0.5">{live.ongoingParcels ?? servicesBreakdown.parcel.ongoing}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-semibold block">Cancelled</span>
+                    <span className="text-xs font-black text-rose-500 block mt-0.5">{servicesBreakdown.parcel.cancelled}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Gross Volume:</span>
+                    <span className="font-bold text-slate-900">₹{currency(servicesBreakdown.parcel.grossFare)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Platform Commission:</span>
+                    <span className="font-bold text-emerald-600">₹{currency(servicesBreakdown.parcel.adminCommission)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Avg Delivery:</span>
+                    <span className="font-semibold text-slate-700">₹{currency(servicesBreakdown.parcel.averageFare)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600 pt-1 border-t border-slate-100">
+                    <span>Today's Deliveries:</span>
+                    <span className="font-semibold text-slate-900">{servicesBreakdown.parcel.todayTotal} orders</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => navigate('/admin/deliveries')}
+                className="mt-4 w-full py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold rounded-xl border border-purple-200 flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <span>View Deliveries</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+
+            {/* OUTSTATION / INTERCITY TRIPS FLOW */}
+            <div className="bg-white rounded-2xl border border-emerald-100 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden group">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-500" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                      <Compass size={18} strokeWidth={2.2} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Outstation Trips</h3>
+                      <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Intercity & Long-Distance</span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                    {servicesBreakdown.outstation.total} Total
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 bg-slate-50/80 rounded-xl p-3 border border-slate-100 mb-4 text-center">
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-semibold block">Completed</span>
+                    <span className="text-xs font-black text-emerald-600 block mt-0.5">{servicesBreakdown.outstation.completed}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-semibold block">Active</span>
+                    <span className="text-xs font-black text-blue-600 block mt-0.5">{live.ongoingOutstations ?? servicesBreakdown.outstation.ongoing}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 uppercase font-semibold block">Cancelled</span>
+                    <span className="text-xs font-black text-rose-500 block mt-0.5">{servicesBreakdown.outstation.cancelled}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Gross Volume:</span>
+                    <span className="font-bold text-slate-900">₹{currency(servicesBreakdown.outstation.grossFare)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Platform Commission:</span>
+                    <span className="font-bold text-emerald-600">₹{currency(servicesBreakdown.outstation.adminCommission)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Avg Outstation:</span>
+                    <span className="font-semibold text-slate-700">₹{currency(servicesBreakdown.outstation.averageFare)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600 pt-1 border-t border-slate-100">
+                    <span>Today's Trips:</span>
+                    <span className="font-semibold text-slate-900">{servicesBreakdown.outstation.todayTotal} trips</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => navigate('/admin/trips?serviceType=outstation')}
+                className="mt-4 w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-200 flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <span>View Outstation</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        {/* 3. REVENUE & BOOKING ANALYTICS ROW */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
           
-          {/* 2. Interactive Revenue Analytics */}
-          <div className="admin-card lg:col-span-2 flex flex-col justify-between hover:shadow-md transition-shadow">
+          {/* Interactive Revenue Analytics */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs lg:col-span-2 flex flex-col justify-between hover:shadow-md transition-shadow">
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-xs text-[#0B1220] uppercase tracking-wider font-bold">Revenue Analytics</h3>
-                  <div className="h-1.5 w-1.5 rounded-full bg-[#16A34A]" />
+                  <h3 className="text-xs text-slate-900 uppercase tracking-wider font-bold">Revenue & Financial Analytics</h3>
+                  <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 </div>
-                <div className="flex gap-1">
+                
+                {/* Timeframe selector */}
+                <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200/80">
                   {['Today', 'Week', 'Month', 'Year'].map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setTimeframe(tab)}
-                      className={`text-[9px] font-bold px-2 py-0.5 rounded border transition-all ${timeframe === tab ? 'bg-[#16A34A] text-[#0B1220] border-[#16A34A]' : 'bg-transparent text-[#64748B] border-[#E5E7EB]'}`}
+                      className={`text-[10px] font-bold px-2.5 py-1 rounded-md transition-all ${timeframe === tab ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'}`}
                     >
                       {tab}
                     </button>
                   ))}
                 </div>
               </div>
-              <p className="text-[11px] text-[#64748B]">Platform commission vs overall driver disbursements.</p>
+
+              {/* Service Tab selector */}
+              <div className="flex items-center gap-1.5 my-2">
+                {[
+                  { key: 'all', label: 'All Services' },
+                  { key: 'ride', label: 'City Rides' },
+                  { key: 'parcel', label: 'Parcel' },
+                  { key: 'outstation', label: 'Outstation' }
+                ].map((sTab) => (
+                  <button
+                    key={sTab.key}
+                    onClick={() => setSelectedServiceTab(sTab.key)}
+                    className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all ${selectedServiceTab === sTab.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                  >
+                    {sTab.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-500">Platform earnings and financial transaction metrics.</p>
             </div>
 
             <div className="grid grid-cols-3 gap-2 my-3">
-              <div className="bg-slate-50 border border-slate-100 rounded-lg p-2 text-center">
-                <span className="text-[8px] text-[#64748B] block uppercase">Revenue</span>
-                <span className="text-xs font-bold text-[#0B1220] block mt-0.5">
-                  ₹{currency(timeframe === 'Today' ? todayEarnings.total : overallEarnings.total)}
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-center">
+                <span className="text-[9px] text-slate-400 block uppercase font-semibold">Total Revenue</span>
+                <span className="text-sm font-black text-slate-900 block mt-0.5">
+                  ₹{currency(
+                    currentServiceStats
+                      ? (timeframe === 'Today' ? currentServiceStats.todayGrossFare : currentServiceStats.grossFare)
+                      : (timeframe === 'Today' ? todayEarnings.total : overallEarnings.total)
+                  )}
                 </span>
               </div>
-              <div className="bg-slate-50 border border-slate-100 rounded-lg p-2 text-center">
-                <span className="text-[8px] text-[#64748B] block uppercase font-bold text-[#16A34A]">Commission</span>
-                <span className="text-xs font-bold text-[#0B1220] block mt-0.5">
-                  ₹{currency(timeframe === 'Today' ? todayEarnings.admin_commission : overallEarnings.admin_commission)}
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-center">
+                <span className="text-[9px] text-emerald-600 block uppercase font-bold">Commission</span>
+                <span className="text-sm font-black text-emerald-600 block mt-0.5">
+                  ₹{currency(
+                    currentServiceStats
+                      ? (timeframe === 'Today' ? currentServiceStats.todayCommission : currentServiceStats.adminCommission)
+                      : (timeframe === 'Today' ? todayEarnings.admin_commission : overallEarnings.admin_commission)
+                  )}
                 </span>
               </div>
-              <div className="bg-slate-50 border border-slate-100 rounded-lg p-2 text-center">
-                <span className="text-[8px] text-[#64748B] block uppercase">Trips</span>
-                <span className="text-xs font-bold text-[#0B1220] block mt-0.5">
-                  {timeframe === 'Today' ? todayTrips.total : overallTrips.total}
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-center">
+                <span className="text-[9px] text-slate-400 block uppercase font-semibold">Trips</span>
+                <span className="text-sm font-black text-slate-900 block mt-0.5">
+                  {currentServiceStats
+                    ? (timeframe === 'Today' ? currentServiceStats.todayTotal : currentServiceStats.total)
+                    : (timeframe === 'Today' ? todayTrips.total : overallTrips.total)}
                 </span>
               </div>
             </div>
 
             {/* Interactive SVG Area Chart */}
             {revenueChartData.length === 0 ? (
-              <div className="h-[150px] flex flex-col items-center justify-center border border-dashed border-[#E5E7EB] rounded-2xl bg-slate-50/50 p-4 my-2 text-center">
-                <p className="text-sm font-semibold text-[#0B1220] whitespace-normal">No historical data available</p>
-                <p className="text-[10px] text-[#64748B] mt-1 whitespace-normal">Transaction growth telemetry will automatically sync here.</p>
+              <div className="h-[150px] flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50 p-4 my-2 text-center">
+                <p className="text-xs font-semibold text-slate-700">No historical data available</p>
+                <p className="text-[10px] text-slate-400 mt-1">Transaction growth telemetry will automatically sync here.</p>
               </div>
             ) : (
               <>
                 <div className="relative pt-2">
                   <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full overflow-visible">
-                    <path d={areaPath} fill="rgba(28, 227, 101, 0.05)" />
+                    <path d={areaPath} fill="rgba(34, 197, 94, 0.08)" />
                     <path d={linePath} fill="none" stroke="#16A34A" strokeWidth="2.5" />
                     {revenuePoints.map((pt, idx) => (
                       <circle
@@ -344,7 +638,7 @@ const MainDashboard = () => {
 
                   {hoveredRevenueIndex !== null && revenuePoints[hoveredRevenueIndex] && (
                     <div
-                      className="absolute bg-slate-900 !text-white rounded p-2 text-[10px] pointer-events-none shadow-xl border border-slate-800"
+                      className="absolute bg-slate-900 text-white rounded-lg px-2.5 py-1.5 text-[10px] pointer-events-none shadow-xl border border-slate-800"
                       style={{
                         left: `${(revenuePoints[hoveredRevenueIndex].x / chartWidth) * 100}%`,
                         top: `${(revenuePoints[hoveredRevenueIndex].y / chartHeight) * 100 - 35}%`,
@@ -352,31 +646,31 @@ const MainDashboard = () => {
                       }}
                     >
                       <span className="font-semibold block">{revenuePoints[hoveredRevenueIndex].label}</span>
-                      <span className="block mt-0.5">Revenue: ₹{currency(revenuePoints[hoveredRevenueIndex].value)}</span>
+                      <span className="block mt-0.5 text-emerald-400 font-bold">Revenue: ₹{currency(revenuePoints[hoveredRevenueIndex].value)}</span>
                     </div>
                   )}
                 </div>
 
-                <div className="flex justify-between text-[9px] text-[#64748B] pt-2 border-t border-[#E5E7EB] mt-2">
+                <div className="flex justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-100 mt-2">
                   {revenueChartData.map((d, i) => (
-                    <span key={i}>{d.label}</span>
+                    <span key={i} className="font-medium">{d.label}</span>
                   ))}
                 </div>
               </>
             )}
           </div>
 
-          {/* 3. Booking Analytics & Distribution */}
-          <div className="admin-card flex flex-col justify-between hover:shadow-md transition-shadow">
+          {/* Booking Analytics & Volume Distribution */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
             <div>
-              <h3 className="text-xs text-[#0B1220] uppercase tracking-wider mb-1 font-bold">Booking Analytics</h3>
-              <p className="text-[11px] text-[#64748B] mb-3">Trips distribution today.</p>
+              <h3 className="text-xs text-slate-900 uppercase tracking-wider mb-1 font-bold">Booking Distribution</h3>
+              <p className="text-[11px] text-slate-500 mb-3">Status split for {selectedServiceTab === 'all' ? 'all services' : selectedServiceTab}.</p>
             </div>
 
             {bookingDonutData.length === 0 ? (
-              <div className="h-[150px] flex flex-col items-center justify-center border border-dashed border-[#E5E7EB] rounded-2xl bg-slate-50/50 p-4 my-2 text-center">
-                <p className="text-sm font-semibold text-[#0B1220] whitespace-normal">No historical data available</p>
-                <p className="text-[10px] text-[#64748B] mt-1 whitespace-normal">Daily booking records and trip statistics will populate here.</p>
+              <div className="h-[140px] flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50 p-4 my-2 text-center">
+                <p className="text-xs font-semibold text-slate-700">No booking records</p>
+                <p className="text-[10px] text-slate-400 mt-1">Daily booking records will populate here.</p>
               </div>
             ) : (
               <>
@@ -401,87 +695,269 @@ const MainDashboard = () => {
                   </svg>
 
                   <div className="absolute text-center">
-                    <span className="text-[8px] text-[#64748B] uppercase block">
-                      {hoveredDonutSegment ? hoveredDonutSegment.label : 'Trips'}
+                    <span className="text-[8px] text-slate-400 uppercase font-bold block">
+                      {hoveredDonutSegment ? hoveredDonutSegment.label : 'Completed'}
                     </span>
-                    <span className="text-sm font-bold text-[#0B1220] block mt-0.5">
-                      {hoveredDonutSegment ? `${hoveredDonutSegment.percent}%` : todayTrips.total || 0}
+                    <span className="text-sm font-black text-slate-900 block mt-0.5">
+                      {hoveredDonutSegment ? `${hoveredDonutSegment.percent}%` : `${bookingDonutData[0]?.percent || 0}%`}
                     </span>
                   </div>
                 </div>
 
-                <div className="space-y-1.5 pt-2.5 border-t border-[#E5E7EB] mt-2">
+                <div className="space-y-1.5 pt-2 border-t border-slate-100 mt-2">
                   {bookingDonutData.map((seg, i) => (
                     <div key={i} className="flex items-center justify-between text-[10px] text-slate-600">
                       <div className="flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: seg.color }} />
-                        <span>{seg.label}</span>
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: seg.color }} />
+                        <span className="font-medium">{seg.label}</span>
                       </div>
-                      <span className="font-semibold text-[#0B1220]">{seg.value} ({seg.percent}%)</span>
+                      <span className="font-bold text-slate-900">{seg.value} ({seg.percent}%)</span>
                     </div>
                   ))}
                 </div>
               </>
             )}
+
+            {/* Service Volume Share comparison bar */}
+            <div className="pt-3 border-t border-slate-100 mt-2">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Service Volume Share</span>
+              <div className="w-full h-2 rounded-full bg-slate-100 flex overflow-hidden">
+                <div style={{ width: `${rideSharePercent}%` }} className="bg-sky-500 h-full" title={`City Rides: ${rideSharePercent}%`} />
+                <div style={{ width: `${parcelSharePercent}%` }} className="bg-purple-500 h-full" title={`Parcel: ${parcelSharePercent}%`} />
+                <div style={{ width: `${outstationSharePercent}%` }} className="bg-emerald-500 h-full" title={`Outstation: ${outstationSharePercent}%`} />
+              </div>
+              <div className="flex justify-between items-center text-[9px] text-slate-500 font-semibold mt-1">
+                <span className="text-sky-600">🚕 {rideSharePercent}%</span>
+                <span className="text-purple-600">📦 {parcelSharePercent}%</span>
+                <span className="text-emerald-600">🛣️ {outstationSharePercent}%</span>
+              </div>
+            </div>
           </div>
 
-          {/* 16. Platform Health Diagnostics */}
-          <div className="admin-card flex flex-col justify-between hover:shadow-md transition-shadow">
+          {/* Platform Health Diagnostics */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
             <div>
-              <h3 className="text-xs text-[#0B1220] uppercase tracking-wider mb-1 font-bold">Platform Diagnostic Health</h3>
-              <p className="text-[11px] text-[#64748B] mb-3">Real-time gateway status checks.</p>
+              <h3 className="text-xs text-slate-900 uppercase tracking-wider mb-1 font-bold">Platform Diagnostic Health</h3>
+              <p className="text-[11px] text-slate-500 mb-3">Real-time system services telemetry.</p>
             </div>
 
-            <div className="space-y-2 text-[10px] text-slate-600">
+            <div className="space-y-2.5 text-[10px] text-slate-600">
               {systemChecks.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between border-b border-[#F1F5F9] pb-1.5">
-                  <span className="flex items-center gap-1.5">
-                    <item.icon size={11} className="text-[#64748B]" />
-                    <span>{item.name}</span>
+                <div key={idx} className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <span className="flex items-center gap-2">
+                    <item.icon size={13} className="text-slate-400" />
+                    <span className="font-medium text-slate-700">{item.name}</span>
                   </span>
-                  <span className={`font-bold ${item.color}`}>{item.status}</span>
+                  <span className={`font-bold px-2 py-0.5 rounded-full text-[9px] ${item.healthy ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'}`}>
+                    {item.status}
+                  </span>
                 </div>
               ))}
             </div>
 
-            <div className="bg-[#F8FAFC] border border-[#E5E7EB] rounded-lg p-2 text-center text-[9px] text-[#64748B] mt-2.5">
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 text-center text-[10px] text-slate-500 mt-2.5 font-medium">
               {systemChecks.every((check) => check.healthy)
-                ? 'All checks answering normally.'
-                : `Needs attention: ${systemChecks.filter((check) => !check.healthy).map((check) => check.name).join(', ')}`}
+                ? '✅ All platform services answering normally.'
+                : `⚠️ Check: ${systemChecks.filter((check) => !check.healthy).map((check) => check.name).join(', ')}`}
             </div>
           </div>
+
         </div>
 
-        {/* SECONDARY ROW (Leaderboards, Activity Feed, MAP, SOS) */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* 4. RECENT LIVE BOOKINGS FEED & OPERATIONAL PULSE */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Driver & Vendor Performance Leaderboard */}
-          <div className="admin-card flex flex-col justify-between hover:shadow-md transition-shadow">
+          {/* Recent Live Bookings Across Rides, Parcel & Outstation */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs lg:col-span-2 flex flex-col justify-between hover:shadow-md transition-shadow">
             <div>
-              <h3 className="text-xs text-[#0B1220] uppercase tracking-wider mb-3 flex items-center gap-1 font-bold">
-                <Award size={14} className="text-[#16A34A]" />
-                <span>Performance Leaderboard</span>
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Activity size={16} className="text-emerald-600" />
+                  <h3 className="text-xs text-slate-900 uppercase tracking-wider font-bold">Recent Dispatch & Booking Stream</h3>
+                </div>
+                <button
+                  onClick={() => navigate('/admin/trips')}
+                  className="text-[11px] text-emerald-600 hover:text-emerald-700 font-bold flex items-center gap-1"
+                >
+                  <span>All Bookings</span>
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500 mb-4">Latest live customer bookings across City Rides, Parcels, and Outstation trips.</p>
+
+              {recentBookings.length === 0 ? (
+                <div className="py-10 text-center text-slate-400 text-xs">
+                  No booking records found.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        <th className="pb-2.5">Request / Service</th>
+                        <th className="pb-2.5">Customer & Driver</th>
+                        <th className="pb-2.5">Route</th>
+                        <th className="pb-2.5">Fare</th>
+                        <th className="pb-2.5">Status</th>
+                        <th className="pb-2.5 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {recentBookings.map((b) => {
+                        const serviceBadgeClass =
+                          b.serviceType === 'parcel'
+                            ? 'bg-purple-50 text-purple-700 border-purple-200'
+                            : b.serviceType === 'outstation'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-sky-50 text-sky-700 border-sky-200';
+                        
+                        const statusBadgeClass =
+                          b.status === 'completed'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : b.status === 'cancelled'
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : b.status === 'ongoing' || b.status === 'accepted'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200';
+
+                        return (
+                          <tr key={b.id} className="hover:bg-slate-50/60 transition-colors">
+                            <td className="py-2.5 pr-2">
+                              <span className="font-bold text-slate-900 block text-[11px]">{b.requestId}</span>
+                              <span className={`inline-block mt-0.5 px-1.5 py-0.2 rounded-md text-[9px] font-bold border ${serviceBadgeClass}`}>
+                                {b.serviceLabel}
+                              </span>
+                            </td>
+                            <td className="py-2.5 pr-2">
+                              <span className="font-semibold text-slate-800 block text-[11px] truncate max-w-[130px]">{b.customerName}</span>
+                              <span className="text-[10px] text-slate-400 block truncate max-w-[130px]">
+                                👤 {b.driverName}
+                              </span>
+                            </td>
+                            <td className="py-2.5 pr-2 max-w-[200px]">
+                              <span className="text-[10px] text-slate-600 line-clamp-2" title={b.route}>
+                                {b.route}
+                              </span>
+                            </td>
+                            <td className="py-2.5 pr-2 whitespace-nowrap">
+                              <span className="font-bold text-slate-900 block">₹{currency(b.fare)}</span>
+                              <span className="text-[9px] text-slate-400 uppercase font-semibold block">{b.paymentMethod}</span>
+                            </td>
+                            <td className="py-2.5 pr-2 whitespace-nowrap">
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border capitalize ${statusBadgeClass}`}>
+                                {b.status}
+                              </span>
+                            </td>
+                            <td className="py-2.5 text-right whitespace-nowrap">
+                              <button
+                                onClick={() => navigate(b.serviceType === 'parcel' ? '/admin/deliveries' : '/admin/trips')}
+                                className="p-1 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-slate-100 transition-colors"
+                                title="View Details"
+                              >
+                                <Eye size={15} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT NOW LIVE PULSE CARD (BUTTON REMOVED AS REQUESTED) */}
+          <div className="bg-slate-900 rounded-2xl p-5 text-white shadow-lg flex flex-col justify-between border border-slate-800">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={16} className="text-emerald-400" />
+                  <h3 className="text-xs text-white uppercase tracking-wider font-bold">Right Now — Live Fleet Pulse</h3>
+                </div>
+                <span className="text-[9px] bg-emerald-500/20 text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  Live
+                </span>
+              </div>
+
+              <div className="space-y-3 text-xs text-slate-300">
+                {[
+                  { label: 'Drivers Online', value: live.onlineDrivers ?? 0, color: 'text-emerald-400 font-bold' },
+                  { label: 'Drivers on a Trip', value: live.driversOnTrip ?? 0, color: 'text-sky-400 font-bold' },
+                  { label: 'Active City Rides', value: live.ongoingCityRides ?? 0, color: 'text-white font-bold' },
+                  { label: 'Active Parcel Deliveries', value: live.ongoingParcels ?? 0, color: 'text-white font-bold' },
+                  { label: 'Active Outstation Trips', value: live.ongoingOutstations ?? 0, color: 'text-white font-bold' },
+                  { label: 'Total Trips in Progress', value: live.ongoingTrips ?? 0, color: 'text-amber-400 font-black' },
+                  { label: 'Customers Connected', value: live.onlineCustomers ?? 0, color: 'text-white font-bold' },
+                  { label: 'Pending Driver Approvals', value: live.pendingApprovals ?? 0, color: 'text-rose-400 font-bold' }
+                ].map((row, i) => (
+                  <div key={i} className="flex items-center justify-between border-b border-slate-800 pb-2 last:border-0 last:pb-0">
+                    <span className="text-slate-400 font-medium">{row.label}</span>
+                    <span className={row.color}>{isLoading ? '...' : row.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Fleet Utilization Progress */}
+              <div className="mt-5 pt-4 border-t border-slate-800">
+                <div className="flex justify-between items-center text-xs mb-1.5">
+                  <span className="text-slate-400">Live Fleet Utilization:</span>
+                  <span className="font-black text-emerald-400">{fleetUtilization}%</span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(fleetUtilization, 100)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Note replacing the removed button */}
+            <div className="mt-4 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-[10px] text-slate-400 flex items-center justify-between">
+              <span>Fleet telemetry updates automatically every 60s.</span>
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            </div>
+          </div>
+
+        </div>
+
+        {/* 5. LEADERBOARD & SOS RESPONSE ROW */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          
+          {/* Driver Performance Leaderboard */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs text-slate-900 uppercase tracking-wider flex items-center gap-1.5 font-bold">
+                  <Award size={15} className="text-emerald-600" />
+                  <span>Top Performing Drivers</span>
+                </h3>
+                <span className="text-[10px] text-slate-400 font-semibold">Ranked by completed trips</span>
+              </div>
               
-              <div className="space-y-3.5">
+              <div className="space-y-3">
                 {topDrivers.length === 0 && !isLoading && (
-                  <p className="text-[11px] text-[#64748B] py-4 text-center">No completed trips yet.</p>
+                  <p className="text-xs text-slate-400 py-6 text-center">No completed trips records yet.</p>
                 )}
                 {topDrivers.map((lead, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs pb-2 border-b border-[#F1F5F9] last:border-0 last:pb-0">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center font-bold text-[10px] text-[#0B1220] border">
+                  <div key={i} className="flex items-center justify-between text-xs pb-2.5 border-b border-slate-100 last:border-0 last:pb-0">
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs text-slate-900 border border-slate-200">
                         {i + 1}
                       </div>
                       <div>
-                        <span className="font-semibold block text-[#0B1220]">{lead.name}</span>
-                        <span className="text-[9px] text-slate-400 block mt-0.5">
-                          {Number(lead.rating) > 0 ? `Rating: ${Number(lead.rating).toFixed(2)} ⭐` : 'Not rated yet'}
-                          {lead.online ? ' · online' : ''}
+                        <span className="font-bold text-slate-900 block">{lead.name}</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          {Number(lead.rating) > 0 ? `Rating: ${Number(lead.rating).toFixed(1)} ⭐` : 'New Driver'}
+                          {lead.online ? ' · 🟢 online' : ''}
                         </span>
                       </div>
                     </div>
-                    <span className="font-bold text-[#0B1220]">{lead.trips} trips</span>
+                    <span className="font-black text-emerald-600 text-xs px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200">
+                      {lead.trips} trips
+                    </span>
                   </div>
                 ))}
               </div>
@@ -489,104 +965,71 @@ const MainDashboard = () => {
           </div>
 
           {/* SOS Safety Monitoring & Uptime */}
-          <div className="admin-card flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden">
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden">
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs text-[#0B1220] uppercase tracking-wider flex items-center gap-1.5 font-bold">
-                  <Shield size={14} className="text-rose-500" />
-                  <span>SOS Response Center</span>
+                <h3 className="text-xs text-slate-900 uppercase tracking-wider flex items-center gap-1.5 font-bold">
+                  <Shield size={15} className="text-rose-500" />
+                  <span>SOS Response & Safety Terminal</span>
                 </h3>
                 {Number(sos.active || 0) > 0 && (
-                  <span className="bg-rose-100 text-rose-800 text-[8px] font-bold px-1.5 py-0.5 rounded border border-rose-200 animate-pulse">
+                  <span className="bg-rose-100 text-rose-800 text-[9px] font-bold px-2 py-0.5 rounded-full border border-rose-200 animate-pulse">
                     ACTIVE DISTRESS
                   </span>
                 )}
               </div>
 
-              <div className="flex items-center justify-around py-4">
+              <div className="flex items-center justify-around py-3 bg-rose-50/50 rounded-2xl border border-rose-100 mb-3">
                 <div className="text-center">
-                  <span className="text-3xl font-bold text-rose-500 block leading-none">{sos.active || 0}</span>
-                  <span className="text-[9px] text-[#64748B] block mt-1.5 uppercase font-medium">Pending SOS</span>
+                  <span className="text-3xl font-black text-rose-500 block leading-none">{sos.active || 0}</span>
+                  <span className="text-[9px] text-slate-500 block mt-1.5 uppercase font-bold">Pending SOS</span>
                 </div>
-                <div className="w-[1px] h-10 bg-[#E5E7EB]" />
+                <div className="w-[1px] h-10 bg-rose-200" />
                 <div className="text-center">
-                  <span className="text-3xl font-bold text-[#0B1220] block leading-none">{sos.resolved || 0}</span>
-                  <span className="text-[9px] text-[#64748B] block mt-1.5 uppercase font-medium">Resolved Signals</span>
+                  <span className="text-3xl font-black text-slate-900 block leading-none">{sos.resolved || 0}</span>
+                  <span className="text-[9px] text-slate-500 block mt-1.5 uppercase font-bold">Resolved Signals</span>
                 </div>
               </div>
 
-              <div className="bg-slate-50 border border-slate-100 rounded-lg p-2.5 space-y-2 text-[10px] text-slate-600 mt-2">
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 space-y-2 text-xs text-slate-600">
                 <div className="flex justify-between">
-                  <span>Support tickets open:</span>
-                  <span className="font-bold text-[#0B1220]">{notifiedSos.total || 0}</span>
+                  <span>Safety Support Tickets Open:</span>
+                  <span className="font-bold text-slate-900">{notifiedSos.total || 0}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Of those, assigned:</span>
-                  <span className="font-bold text-[#0B1220]">{notifiedSos.assigned || 0}</span>
+                  <span>Tickets Assigned to Officers:</span>
+                  <span className="font-bold text-slate-900">{notifiedSos.assigned || 0}</span>
                 </div>
               </div>
             </div>
 
             <button
               onClick={() => navigate('/admin/safety')}
-              className="admin-btn-primary h-9 text-xs justify-center gap-1.5 mt-3 !bg-rose-600 !!text-white hover:bg-rose-700"
+              className="w-full h-9 text-xs font-bold justify-center gap-2 mt-3 rounded-xl bg-rose-600 text-white hover:bg-rose-700 flex items-center transition-colors shadow-xs"
             >
-              <AlertTriangle size={13} />
+              <AlertTriangle size={14} />
               <span>Enter Emergency Terminal</span>
             </button>
           </div>
 
-          {/* Right now, from the live counts */}
-          <div className="admin-card flex flex-col justify-between hover:shadow-md transition-shadow bg-slate-900 !text-white border-0">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs !text-white uppercase tracking-wider flex items-center gap-1.5 font-bold">
-                  <Sparkles size={14} className="text-[#16A34A]" />
-                  <span>Right Now</span>
-                </h3>
-                <span className="text-[8px] bg-slate-800 text-slate-300 font-bold px-1.5 py-0.5 rounded border border-slate-700">
-                  Live
-                </span>
-              </div>
-
-              <div className="space-y-2.5 text-xs text-slate-300">
-                {[
-                  { label: 'Drivers online', value: live.onlineDrivers ?? 0 },
-                  { label: 'Drivers on a trip', value: live.driversOnTrip ?? 0 },
-                  { label: 'Customers connected', value: live.onlineCustomers ?? 0 },
-                  { label: 'Trips in progress', value: live.ongoingTrips ?? 0 },
-                  { label: 'Drivers awaiting approval', value: live.pendingApprovals ?? 0 },
-                ].map((row) => (
-                  <div key={row.label} className="flex items-center justify-between border-b border-slate-800 pb-2 last:border-0">
-                    <span>{row.label}</span>
-                    <span className="font-bold !text-white">{isLoading ? '...' : row.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <button
-              onClick={() => navigate('/admin/driver-management/drivers')}
-              className="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-750 !text-white text-[10px] font-bold uppercase tracking-wider transition-all mt-4 border border-slate-700"
-            >
-              Open Driver Management
-            </button>
-          </div>
         </div>
 
-        {/* GOOGLE MAPS DISTRIBUTION & DEMAND */}
-        <div className="admin-card">
-          <h3 className="text-xs text-[#0B1220] uppercase tracking-wider mb-2 flex items-center gap-1.5 font-bold">
-            <MapPin size={14} className="text-[#16A34A]" />
-            <span>Operational Demand Distribution</span>
-          </h3>
-          <p className="text-[11px] text-[#64748B] mb-4">
+        {/* 6. GOOGLE MAPS DISTRIBUTION & DEMAND */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs text-slate-900 uppercase tracking-wider flex items-center gap-1.5 font-bold">
+              <MapPin size={15} className="text-emerald-600" />
+              <span>Operational Demand & Fleet Geo-Distribution</span>
+            </h3>
+            <span className="text-xs text-slate-500 font-medium">Live driver locations & tracking</span>
+          </div>
+          <p className="text-[11px] text-slate-500 mb-4">
             {driverPositions.length > 0
               ? `${driverPositions.length} driver${driverPositions.length === 1 ? '' : 's'} online right now. Green is free, amber is on a trip.`
-              : 'No drivers are online right now.'}
+              : 'No drivers with active GPS coordinates online right now.'}
           </p>
 
-          <div className="w-full h-80 rounded-xl overflow-hidden border border-[#E5E7EB] bg-slate-50 flex items-center justify-center relative shadow-sm">
+          <div className="w-full h-80 rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center relative shadow-inner">
             {isLoaded ? (
               <GoogleMap
                 mapContainerClassName="w-full h-full"
@@ -629,8 +1072,8 @@ const MainDashboard = () => {
                   ))}
               </GoogleMap>
             ) : (
-              <div className="text-center text-xs text-[#64748B] flex flex-col items-center gap-2">
-                <Loader2 size={24} className="animate-spin text-[#0B1220]" />
+              <div className="text-center text-xs text-slate-500 flex flex-col items-center gap-2">
+                <Loader2 size={24} className="animate-spin text-slate-900" />
                 <span>Loading Google Maps Services...</span>
               </div>
             )}
