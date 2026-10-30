@@ -38,6 +38,13 @@ import {
 } from '../controllers/userCart.controller.js';
 import { saveUserCurrentLocationController } from '../../../../core/location/location.controller.js';
 import { getOrderedRestaurantsController } from '../controllers/userOrderHistory.controller.js';
+import {
+    getFavoritesController,
+    addFavoriteRestaurantController,
+    removeFavoriteRestaurantController,
+    addFavoriteFoodController,
+    removeFavoriteFoodController
+} from '../controllers/userFavorites.controller.js';
 
 const router = express.Router();
 
@@ -78,6 +85,13 @@ router.patch('/addresses/:addressId/default', setDefaultAddressController);
 
 // Restaurants this user has ordered from before, excluding cancelled orders (Bearer USER)
 router.get('/ordered-restaurants', getOrderedRestaurantsController);
+
+// Favorites (Bearer USER)
+router.get('/favorites', getFavoritesController);
+router.post('/favorites/restaurants/:restaurantId', addFavoriteRestaurantController);
+router.delete('/favorites/restaurants/:restaurantId', removeFavoriteRestaurantController);
+router.post('/favorites/foods/:foodId', addFavoriteFoodController);
+router.delete('/favorites/foods/:foodId', removeFavoriteFoodController);
 
 // Delete account (Bearer USER)
 router.delete('/account', deleteUserAccountController);
