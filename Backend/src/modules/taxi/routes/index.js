@@ -17,6 +17,7 @@ export const taxiRouter = Router();
 
 // Riders (delivery partners) taking rides - same login as the rest of the delivery app.
 taxiRouter.use('/delivery', taxiDeliveryRouter);
+taxiRouter.use('/driver', taxiDeliveryRouter);
 taxiRouter.use(adminModuleRouter);
 taxiRouter.use(userModuleRouter);
 taxiRouter.use(supportModuleRouter);

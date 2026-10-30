@@ -25,6 +25,7 @@ import {
   getRideRoom,
   saveParcelProof,
   serializeRideRealtime,
+  submitRideBid,
   updateRideDriverLocation,
   updateRideLifecycle,
 } from '../services/rideService.js';
@@ -33,6 +34,7 @@ import {
   getSocketServer,
   markDriverRejectedFromDispatch,
   notifyRideAccepted,
+  notifyRideBidUpdated,
 } from '../services/dispatchService.js';
 import { mirrorRideDriverLocation, mirrorRideRealtimeState } from '../services/rideRealtimeSyncService.js';
 import { resolveTransportDispatchConfig } from '../services/transportSettingsService.js';
@@ -299,6 +301,26 @@ export const rejectRideController = async (req, res) => {
     return sendResponse(res, 200, 'Ride declined', { rideId: String(req.params.rideId) });
   } catch (error) {
     return fail(res, error, 'Failed to decline ride');
+  }
+};
+
+export const submitBidController = async (req, res) => {
+  try {
+    const partnerId = await resolveRider(req);
+    if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
+
+    const rideId = req.params.rideId || req.body.rideId;
+    const bidAmount = req.body.bidAmount ?? req.body.bidFare ?? req.body.amount;
+
+    if (!rideId) return sendError(res, 400, 'rideId is required');
+    if (bidAmount === undefined || bidAmount === null) return sendError(res, 400, 'bidAmount is required');
+
+    const result = await submitRideBid({ rideId, driverId: partnerId, bidFare: Number(bidAmount) });
+    await notifyRideBidUpdated({ ride: result.ride, bid: result.bid }).catch(() => {});
+
+    return sendResponse(res, 200, 'Bid submitted successfully', result);
+  } catch (error) {
+    return fail(res, error, 'Failed to submit bid');
   }
 };
 
