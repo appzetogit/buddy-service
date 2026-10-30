@@ -2917,22 +2917,35 @@ export const getUserById = async (id) => {
     throw new ApiError(404, 'User not found');
   }
 
-  const [rides, wallet] = await Promise.all([
+  const [reviewsRides, wallet, allUserRides] = await Promise.all([
     Ride.find({
       userId: id,
       'feedback.rating': { $gte: 1 },
     })
       .sort({ completedAt: -1, createdAt: -1 })
-      .populate('driverId', 'name')
+      .populate('driverId', 'name mobile')
       .lean(),
     // wallet_balance never lived on the User doc — the real figure is UserWallet.balance.
-    UserWallet.findOne({ userId: id }).select('balance').lean(),
+    UserWallet.findOne({ userId: id }).select('balance transactions refundWallet').lean(),
+    Ride.find({ userId: id }).select('status createdAt').lean(),
   ]);
+
+  const completed = allUserRides.filter((r) => String(r.status).toLowerCase() === 'completed').length;
+  const cancelled = allUserRides.filter((r) => String(r.status).toLowerCase() === 'cancelled').length;
+  const upcoming = allUserRides.filter((r) =>
+    ['ongoing', 'searching', 'accepted', 'started', 'arriving', 'arrived'].includes(String(r.status).toLowerCase()),
+  ).length;
 
   return {
     ...serializeUser(user),
     wallet_balance: Number(wallet?.balance || 0),
-    reviews: rides.map((ride) => ({
+    stats: {
+      completed,
+      cancelled,
+      upcoming,
+      total: allUserRides.length,
+    },
+    reviews: reviewsRides.map((ride) => ({
       _id: ride._id,
       request_id: String(ride._id),
       rating: Number(ride.feedback?.rating || 0),
@@ -2957,57 +2970,85 @@ const ensureDefaultDriverVehicleFields = async () => {
   await DriverNeededDocument.insertMany(buildDefaultDriverVehicleFieldConfigs(), { ordered: false });
 };
 
-export const listUserRequests = async (id) => {
-  const user = await User.findById(id).lean();
+export const listUserRequests = async (idOrOptions) => {
+  const userId = typeof idOrOptions === 'object' && idOrOptions !== null ? idOrOptions.userId || idOrOptions.id : idOrOptions;
+  const user = await User.findById(userId).lean();
 
   if (!user) {
     throw new ApiError(404, 'User not found');
   }
 
-  const rides = await Ride.find({ userId: id }).sort({ createdAt: -1 }).populate('driverId', 'name').lean();
+  const rides = await Ride.find({ userId }).sort({ createdAt: -1 }).populate('driverId', 'name mobile').lean();
 
   return {
-    results: rides.map((ride) => ({
-      request_id: String(ride._id),
-      trip_start_time: ride.createdAt,
-      user_id: {
-        _id: String(id),
-        name: user.name || '',
-      },
-      driver_id: ride.driverId
-        ? {
-          _id: ride.driverId._id || ride.driverId,
-          name: ride.driverId.name || 'Pending',
-        }
-        : null,
-      is_completed: String(ride.status).toLowerCase() === 'completed',
-      is_cancelled: String(ride.status).toLowerCase() === 'cancelled',
-      is_paid: String(ride.status).toLowerCase() === 'completed',
-      payment_type: String(ride.paymentMethod || 'cash').toLowerCase(),
-      status: ride.status,
-    })),
+    results: rides.map((ride) => {
+      const rawStatus = String(ride.status || '').toLowerCase();
+      const isCompleted = rawStatus === 'completed';
+      const isCancelled = rawStatus === 'cancelled';
+      const status = isCompleted ? 'Completed' : isCancelled ? 'Cancelled' : 'Ongoing';
+      return {
+        _id: String(ride._id),
+        request_id: String(ride._id),
+        trip_start_time: ride.createdAt,
+        user_id: {
+          _id: String(userId),
+          name: user.name || '',
+          phone: user.phone || user.mobile || '',
+        },
+        driver_id: ride.driverId
+          ? {
+            _id: ride.driverId._id || ride.driverId,
+            name: ride.driverId.name || 'Pending',
+            phone: ride.driverId.phone || ride.driverId.mobile || '',
+          }
+          : null,
+        pickup_address: ride.pickupAddress || '',
+        drop_address: ride.dropAddress || '',
+        fare: Number(ride.fare || 0),
+        service_type: ride.serviceType || ride.serviceCategory || 'ride',
+        is_completed: isCompleted,
+        is_cancelled: isCancelled,
+        is_paid: isCompleted || String(ride.paymentStatus || '').toLowerCase() === 'paid',
+        payment_type: String(ride.paymentMethod || 'cash').toUpperCase(),
+        status,
+      };
+    }),
   };
 };
 
-export const listUserWalletHistory = async (id) => {
-  const user = await User.findById(id).lean();
+export const listUserWalletHistory = async (idOrOptions) => {
+  const userId = typeof idOrOptions === 'object' && idOrOptions !== null ? idOrOptions.userId || idOrOptions.id : idOrOptions;
+  const user = await User.findById(userId).lean();
 
   if (!user) {
     throw new ApiError(404, 'User not found');
   }
 
-  const wallet = await UserWallet.findOne({ userId: id }).lean();
+  const wallet = await UserWallet.findOne({ userId }).lean();
+  const transactions = (wallet?.transactions || []).slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const totalCredits = transactions
+    .filter((t) => t.kind === 'credit' || t.type === 'addition' || t.type === 'refund')
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const totalDebits = transactions
+    .filter((t) => t.kind === 'debit' || t.type === 'deduction')
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
   return {
-    balance: wallet?.balance || 0,
-    refundWallet: wallet?.refundWallet || 0,
-    results: (wallet?.transactions || []).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(t => ({
-      _id: String(t._id),
-      amount: t.amount,
-      type: t.kind || (t.type === 'deduction' ? 'debit' : 'credit'),
-      description: t.title || t.description,
-      createdAt: t.createdAt,
-    })),
+    balance: Number(wallet?.balance || 0),
+    total_credits: totalCredits,
+    total_debits: totalDebits,
+    refundWallet: Number(wallet?.refundWallet || 0),
+    results: transactions.map((t) => {
+      const isCredit = t.kind === 'credit' || t.type === 'addition' || t.type === 'refund';
+      return {
+        _id: String(t._id),
+        amount: Number(t.amount || 0),
+        type: isCredit ? 'credit' : 'debit',
+        remarks: t.title || t.description || (isCredit ? 'Credit' : 'Debit'),
+        description: t.title || t.description || (isCredit ? 'Credit' : 'Debit'),
+        createdAt: t.createdAt,
+      };
+    }),
   };
 };
 

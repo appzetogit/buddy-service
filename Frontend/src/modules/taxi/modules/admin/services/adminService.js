@@ -27,6 +27,9 @@ export const adminService = {
     return api.get(`/admin/users?${params.toString()}`);
   },
   
+  getUser: (id) => api.get(`/admin/users/${id}`),
+  getUserRequests: (id) => api.get(`/admin/users/${id}/requests`),
+  getUserWalletHistory: (id) => api.get(`/admin/users/${id}/wallet-history`),
   updateUser: (id, userData) => api.patch(`/admin/users/${id}`, userData),
 
   deleteUser: (id) => api.delete(`/admin/users/${id}`),
