@@ -4759,11 +4759,14 @@ const listAdminRides = async ({
   if (serviceTypeParam && serviceTypeParam !== 'all') {
     if (serviceTypeParam === 'ride') {
       mongoFilter.serviceType = 'ride';
+      mongoFilter['trip_category.category'] = { $ne: 'outstation' };
+      mongoFilter['intercity.toCity'] = { $in: [null, ''] };
     } else if (serviceTypeParam === 'outstation' || serviceTypeParam === 'intercity') {
       const outstationClause = {
         $or: [
           { serviceType: { $in: ['outstation', 'intercity'] } },
           { 'trip_category.category': 'outstation' },
+          { 'intercity.toCity': { $exists: true, $ne: '' } },
           { 'parcel.isOutstation': true },
         ],
       };
@@ -4782,9 +4785,26 @@ const listAdminRides = async ({
   const paymentParam = String(query.paymentOption || query.paymentType || query.paymentMethod || '').toLowerCase();
   if (paymentParam && paymentParam !== 'all') {
     if (paymentParam === 'cash') {
-      mongoFilter.paymentMethod = 'cash';
+      mongoFilter.$and = mongoFilter.$and || [];
+      mongoFilter.$and.push({
+        paymentMethod: 'cash',
+        collectedVia: { $ne: 'online' },
+        'driverPaymentCollection.status': { $nin: ['paid', 'captured', 'completed'] },
+      });
     } else if (paymentParam === 'online') {
-      mongoFilter.paymentMethod = 'online';
+      const onlineClause = {
+        $or: [
+          { paymentMethod: 'online' },
+          { collectedVia: 'online' },
+          { 'driverPaymentCollection.status': { $in: ['paid', 'captured', 'completed'] } },
+        ],
+      };
+      if (mongoFilter.$or) {
+        mongoFilter.$and = mongoFilter.$and || [];
+        mongoFilter.$and.push(onlineClause);
+      } else {
+        mongoFilter.$or = onlineClause.$or;
+      }
     } else if (paymentParam === 'wallet') {
       mongoFilter.paymentMethod = 'wallet';
     } else if (paymentParam === 'upi') {
@@ -4934,12 +4954,11 @@ const getDeliveryStats = async () => {
 export const listIntercityTrips = async (query = {}) => {
   return listAdminRides({
     query,
-    baseFilter: {
-      serviceType: 'intercity',
-    },
-    variant: 'intercity',
+    baseFilter: {},
+    variant: 'trips',
     serializer: toAdminIntercityTripRow,
     includeIntercity: true,
+    includeParcel: true,
   });
 };
 
