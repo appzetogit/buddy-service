@@ -18,6 +18,10 @@ import { getRideRoom, isReservation, resolveSetPriceForRide } from './rideServic
 import { SOCKET_EVENTS } from '../socket/events.js';
 import { resolveTransportDispatchConfig } from './transportSettingsService.js';
 import { sendPushNotificationToEntities } from './pushNotificationService.js';
+import { initiateRazorpayRefund, isRazorpayConfigured } from '../../food/orders/helpers/razorpay.helper.js';
+
+export const OUTSTATION_AUTO_EXPIRE_HOURS = 3.5;
+export const OUTSTATION_AUTO_EXPIRE_MS = OUTSTATION_AUTO_EXPIRE_HOURS * 60 * 60 * 1000;
 
 const activeDispatches = new Map();
 let ioInstance = null;
@@ -575,6 +579,7 @@ const persistDispatchTrackingProgress = async ({
   notifiedDriverIds = [],
   rejectedDriverIds = [],
   reset = false,
+  resetNotified = false,
 } = {}) => {
   if (!rideId) {
     return;
@@ -596,11 +601,18 @@ const persistDispatchTrackingProgress = async ({
         },
       };
 
-  if (!reset && safeNotifiedDriverIds.length) {
-    update.$addToSet = {
-      ...(update.$addToSet || {}),
-      'dispatchTracking.notifiedDriverIds': { $each: safeNotifiedDriverIds },
-    };
+  if (!reset) {
+    if (resetNotified) {
+      update.$set = {
+        ...(update.$set || {}),
+        'dispatchTracking.notifiedDriverIds': safeNotifiedDriverIds,
+      };
+    } else if (safeNotifiedDriverIds.length) {
+      update.$addToSet = {
+        ...(update.$addToSet || {}),
+        'dispatchTracking.notifiedDriverIds': { $each: safeNotifiedDriverIds },
+      };
+    }
   }
 
   if (!reset && safeRejectedDriverIds.length) {
@@ -926,6 +938,193 @@ export const markDriverRejectedFromDispatch = async (rideId, driverId) => {
   await persistDispatchTrackingProgress({ rideId, rejectedDriverIds: [String(driverId)] });
 };
 
+export const processRideCancellationRefund = async (ride, { feeDeducted = 0 } = {}) => {
+  if (!ride || !ride.userId) {
+    return { refunded: false, reason: 'no_ride_or_user' };
+  }
+
+  // Already refunded check
+  if (ride.driverPaymentCollection?.status === 'refunded') {
+    return { refunded: true, status: 'already_refunded' };
+  }
+
+  const isOnlinePayment = ride.paymentMethod === 'online'
+    || ride.collectedVia === 'online'
+    || ['paid', 'captured', 'completed'].includes(ride.driverPaymentCollection?.status);
+
+  const rawPaidAmount = Number(
+    ride.driverPaymentCollection?.amount || ride.fare || 0,
+  );
+
+  const refundableAmount = roundMoney(Math.max(0, rawPaidAmount - Number(feeDeducted || 0)));
+
+  if (!isOnlinePayment || refundableAmount <= 0) {
+    return { refunded: false, reason: 'not_paid_online_or_zero' };
+  }
+
+  const hasPaymentId = Boolean(ride.driverPaymentCollection?.providerPaymentId);
+  const isPaidStatus = ['paid', 'captured', 'completed'].includes(ride.driverPaymentCollection?.status);
+
+  // If status is still 'pending' with no payment ID, money was never captured
+  if (!hasPaymentId && !isPaidStatus) {
+    return { refunded: false, reason: 'payment_was_pending' };
+  }
+
+  const refundReference = `refund:ride:${String(ride._id)}`;
+  let refundMethod = 'wallet';
+  let gatewayRefundResult = null;
+
+  // 1. Attempt Gateway Refund (Razorpay) if paid via Razorpay
+  if (hasPaymentId && isRazorpayConfigured()) {
+    try {
+      const rzResult = await initiateRazorpayRefund(
+        ride.driverPaymentCollection.providerPaymentId,
+        refundableAmount,
+      );
+      if (rzResult?.success) {
+        refundMethod = 'gateway';
+        gatewayRefundResult = rzResult;
+      }
+    } catch (gatewayErr) {
+      console.warn('Razorpay gateway refund failed, falling back to wallet refund:', gatewayErr?.message);
+    }
+  }
+
+  // 2. If gateway refund didn't happen (or failed), credit directly to User's Buddy Wallet
+  let walletAdjustment = null;
+  if (refundMethod === 'wallet') {
+    walletAdjustment = await applyUserWalletAdjustment({
+      userId: ride.userId,
+      amount: refundableAmount,
+      kind: 'credit',
+      title: `Refund for cancelled booking ${String(ride._id).slice(-6)}`,
+      referenceKey: refundReference,
+      walletField: 'balance',
+      provider: 'ride_cancellation_refund',
+    });
+  }
+
+  // 3. Update ride record
+  await Ride.updateOne(
+    { _id: ride._id },
+    {
+      $set: {
+        'driverPaymentCollection.status': 'refunded',
+        'driverPaymentCollection.refundedAt': new Date(),
+        'driverPaymentCollection.refundMethod': refundMethod,
+        'driverPaymentCollection.refundAmount': refundableAmount,
+      },
+    },
+  );
+
+  // 4. Real-time socket notification to rider
+  const refundMsg = refundMethod === 'gateway'
+    ? `Refund of ₹${refundableAmount.toFixed(0)} initiated to your original payment method.`
+    : `Refund of ₹${refundableAmount.toFixed(0)} credited to your Buddy Wallet.`;
+
+  emitToRoom(getUserRoom(ride.userId), 'rideRefundProcessed', {
+    rideId: String(ride._id),
+    amount: refundableAmount,
+    refundMethod,
+    message: refundMsg,
+  });
+
+  return {
+    refunded: true,
+    amount: refundableAmount,
+    refundMethod,
+    gatewayRefundResult,
+    walletAdjustment,
+  };
+};
+
+export const autoCancelExpiredOutstationRide = async (rideOrId) => {
+  const rideId = rideOrId?._id ? String(rideOrId._id) : String(rideOrId);
+  if (!rideId) return;
+
+  const dispatchState = getDispatchState(rideId);
+  stopDispatchFlow(rideId, { releaseLease: false });
+
+  const ride = await Ride.findOneAndUpdate(
+    {
+      _id: rideId,
+      status: RIDE_STATUS.SEARCHING,
+      driverId: null,
+    },
+    {
+      status: RIDE_STATUS.CANCELLED,
+      liveStatus: RIDE_LIVE_STATUS.CANCELLED,
+      cancelledBy: 'system',
+      cancelReason: 'auto_expired_no_driver_3_hours',
+      cancelledAt: new Date(),
+    },
+    { returnDocument: 'after' },
+  );
+
+  if (!ride) return;
+
+  await User.updateOne({ _id: ride.userId, currentRideId: ride._id }, { currentRideId: null });
+  await persistDispatchTrackingProgress({ rideId, reset: true }).catch(() => null);
+
+  if (dispatchState.driverIds?.length) {
+    closeDriverRequestWindow(rideId, dispatchState.driverIds);
+  }
+
+  emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
+    rideId: String(ride._id),
+    room: getRideRoom(ride._id),
+    reason: 'Outstation booking expired as no driver accepted within 3-4 hours.',
+  });
+
+  emitToRoom(getRideRoom(ride._id), 'rideRequestClosed', {
+    rideId: String(ride._id),
+    reason: 'outstation-expired-3-hours',
+  });
+
+  emitToRoom(getRideRoom(ride._id), SOCKET_EVENTS.RIDE_STATUS_UPDATED, {
+    rideId: String(ride._id),
+    status: ride.status,
+    liveStatus: ride.liveStatus,
+  });
+
+  // Automatically refund online payment
+  await processRideCancellationRefund(ride).catch((error) => {
+    console.error('Failed to process refund on expired outstation ride', error);
+  });
+};
+
+export const sweepExpiredOutstationRides = async () => {
+  try {
+    const cutoff = new Date(Date.now() - OUTSTATION_AUTO_EXPIRE_MS);
+    const leadPickupCutoff = new Date(Date.now() + 30 * 60 * 1000);
+
+    const expiredRides = await Ride.find({
+      status: RIDE_STATUS.SEARCHING,
+      driverId: null,
+      $and: [
+        {
+          $or: [
+            { serviceType: { $in: ['outstation', 'intercity'] } },
+            { intercity: { $exists: true, $ne: null } },
+          ],
+        },
+        {
+          $or: [
+            { createdAt: { $lte: cutoff } },
+            { scheduledAt: { $lte: leadPickupCutoff, $ne: null } },
+          ],
+        },
+      ],
+    }).select('_id userId fare paymentMethod collectedVia driverPaymentCollection createdAt scheduledAt');
+
+    for (const ride of expiredRides) {
+      await autoCancelExpiredOutstationRide(ride);
+    }
+  } catch (error) {
+    console.error('Failed to sweep expired outstation rides', error);
+  }
+};
+
 const closeRideAsUnmatched = async (rideId) => {
   const dispatchState = getDispatchState(rideId);
   const ride = await Ride.findOneAndUpdate(
@@ -934,6 +1133,7 @@ const closeRideAsUnmatched = async (rideId) => {
       status: RIDE_STATUS.CANCELLED,
       liveStatus: RIDE_LIVE_STATUS.CANCELLED,
       biddingStatus: 'expired',
+      cancelReason: 'unmatched',
     },
     { returnDocument: 'after' },
   );
@@ -941,6 +1141,11 @@ const closeRideAsUnmatched = async (rideId) => {
   if (!ride) {
     return;
   }
+
+  // Automatically refund any online payment
+  await processRideCancellationRefund(ride).catch((err) => {
+    console.error('Failed to process refund on unmatched ride', err);
+  });
 
   if (ride.deliveryId) {
     await Delivery.findByIdAndUpdate(ride.deliveryId, {
@@ -995,6 +1200,11 @@ export const cancelRideByAdmin = async (rideId) => {
     ride.biddingStatus = 'cancelled';
   }
   await ride.save();
+
+  // Automatically refund online payment
+  await processRideCancellationRefund(ride).catch((err) => {
+    console.error('Failed to process refund on admin cancelled ride', err);
+  });
 
   if (ride.deliveryId) {
     await Delivery.findByIdAndUpdate(ride.deliveryId, {
@@ -1104,6 +1314,14 @@ export const cancelRideByUser = async ({ rideId, userId }) => {
     // A fee that cannot be settled must not leave the rider stuck in a ride
     // they already cancelled.
     console.error('Could not settle the rider cancellation fee', error);
+  }
+
+  // Automatically refund any online payment (full fare if no driver, or minus cancellation fee)
+  try {
+    const feeDeducted = Number(cancellationSettlement?.feeAmount || 0);
+    await processRideCancellationRefund(ride, { feeDeducted });
+  } catch (err) {
+    console.error('Failed to process refund on user cancelled ride', err);
   }
 
   await Promise.all([
@@ -1376,13 +1594,22 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
     const isOutstationRide = String(ride?.serviceType || '').toLowerCase() === 'intercity'
       || String(ride?.serviceType || '').toLowerCase() === 'outstation'
       || Boolean(ride?.intercity);
+
+    // Allow at least 30 seconds for outstation trips so drivers have enough time to review distance & fare
+    if (isOutstationRide && !dispatchConfig.bidding) {
+      const outstationWindow = Math.max(30, dispatchConfig.retryWindowSeconds);
+      dispatchConfig.retryWindowSeconds = outstationWindow;
+      dispatchConfig.retryDelayMs = outstationWindow * 1000;
+      dispatchConfig.maxAttempts = Math.max(1, Math.ceil(dispatchConfig.maxSearchSeconds / outstationWindow));
+    }
+
     const baseRadius = getAttemptRadiusMeters(
       dispatchConfig.baseDistanceMeters || dispatchConfig.maxDistanceMeters,
       attemptIndex,
     );
     const radius = isOutstationRide ? Math.max(baseRadius, 25000) : baseRadius;
     const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
-    if (dispatchConfig.dispatchType === 'one_by_one' && attemptIndex > 0 && dispatchState.driverIds.length) {
+    if (attemptIndex > 0 && dispatchState.driverIds.length) {
       closeDriverRequestWindow(rideId, dispatchState.driverIds);
     }
 
@@ -1396,16 +1623,42 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
       : radius;
 
     const rejectedDriverIds = new Set(dispatchState.rejectedDriverIds);
-    const notifiedDriverIds = new Set(dispatchState.notifiedDriverIds);
-    const availableDrivers = drivers.filter((driver) => {
+    let notifiedDriverIds = new Set(dispatchState.notifiedDriverIds);
+
+    // Eligible drivers: matched online drivers who haven't explicitly rejected the ride
+    const eligibleDrivers = drivers.filter((driver) => {
       const driverId = String(driver._id);
-      return !rejectedDriverIds.has(driverId) && !notifiedDriverIds.has(driverId);
+      return !rejectedDriverIds.has(driverId);
     });
+
+    // Available drivers in the current wave: haven't been notified yet in this wave
+    let availableDrivers = eligibleDrivers.filter((driver) => {
+      const driverId = String(driver._id);
+      return !notifiedDriverIds.has(driverId);
+    });
+
+    let isNewCycle = false;
+    // If every eligible driver has been tried in the current wave without accepting or rejecting:
+    // start a new wave so the offer circulates / repeats back to them!
+    if (availableDrivers.length === 0 && eligibleDrivers.length > 0) {
+      isNewCycle = true;
+      notifiedDriverIds = new Set();
+      const lastDriverId = dispatchState.driverIds?.[0];
+      // In one-by-one, cycle by putting the driver who was just notified last at the end of the line
+      availableDrivers = eligibleDrivers.slice().sort((a, b) => {
+        if (lastDriverId) {
+          if (String(a._id) === String(lastDriverId)) return 1;
+          if (String(b._id) === String(lastDriverId)) return -1;
+        }
+        return 0;
+      });
+    }
+
     const targetDrivers = dispatchConfig.dispatchType === 'broadcast'
       ? availableDrivers
       : availableDrivers.slice(0, 1);
     const nextNotifiedDriverIds = [
-      ...dispatchState.notifiedDriverIds,
+      ...notifiedDriverIds,
       ...targetDrivers.map((driver) => String(driver._id)),
     ];
 
@@ -1415,6 +1668,15 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
       notifiedDriverIds: nextNotifiedDriverIds,
       timer: null,
     });
+
+    // If re-notifying a driver whose window was just closed in this same attempt,
+    // give the mobile app 1.5 seconds to finish its dismiss animation before presenting the fresh offer
+    if (
+      attemptIndex > 0 &&
+      targetDrivers.some((d) => dispatchState.driverIds.includes(String(d._id)))
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
 
     await emitRideRequestToDrivers({
       ride,
@@ -1428,6 +1690,7 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
     await persistDispatchTrackingProgress({
       rideId,
       notifiedDriverIds: targetDrivers.map((driver) => String(driver._id)),
+      resetNotified: isNewCycle,
     }).catch(() => null);
 
     emitToRoom(getUserRoom(ride.userId), 'rideSearchUpdate', {
@@ -1442,6 +1705,45 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
     });
 
     if (attemptIndex >= dispatchConfig.maxAttempts - 1) {
+      if (isOutstationRide) {
+        // FOR OUTSTATION: Do not cancel the ride after initial search waves!
+        // Stop active ringing on driver phones, but leave the ride open in SEARCHING status
+        // so drivers can accept it anytime from the Scheduled / Outstation rides tab.
+        // It will only auto-cancel after 3.5 - 4 hours if still unaccepted.
+        const timer = setTimeout(() => {
+          if (dispatchState.driverIds?.length) {
+            closeDriverRequestWindow(rideId, dispatchState.driverIds);
+          }
+          stopDispatchFlow(rideId, { releaseLease: true });
+
+          emitToRoom(getUserRoom(ride.userId), 'rideSearchUpdate', {
+            rideId: String(ride._id),
+            status: ride.status,
+            searchActive: false,
+            isOutstationPending: true,
+            message: 'Your outstation booking is active in the scheduled pool. Drivers can accept it from upcoming rides.',
+          });
+        }, dispatchConfig.retryDelayMs);
+
+        saveDispatchState(rideId, {
+          radiusIndex: attemptIndex,
+          driverIds: targetDrivers.map((driver) => String(driver._id)),
+          notifiedDriverIds: nextNotifiedDriverIds,
+          timer,
+        });
+
+        // Also schedule the 3.5 hour auto-cancellation timer
+        const autoCancelDelayMs = Math.min(
+          OUTSTATION_AUTO_EXPIRE_MS,
+          ride.scheduledAt ? Math.max(60000, new Date(ride.scheduledAt).getTime() - Date.now() - 30 * 60 * 1000) : OUTSTATION_AUTO_EXPIRE_MS,
+        );
+        setTimeout(() => {
+          autoCancelExpiredOutstationRide(rideId).catch(() => null);
+        }, autoCancelDelayMs);
+
+        return;
+      }
+
       // Final attempt waits one more cycle before the ride is closed as unmatched.
       const timer = setTimeout(() => {
         closeRideAsUnmatched(rideId)
@@ -1520,6 +1822,8 @@ export const startDispatchFlow = async (ride, { forceRestart = false } = {}) => 
 };
 
 export const restoreScheduledDispatches = async () => {
+  await sweepExpiredOutstationRides().catch(() => null);
+
   const rides = await Ride.find({
     status: RIDE_STATUS.SEARCHING,
     liveStatus: RIDE_LIVE_STATUS.SEARCHING,
@@ -1527,10 +1831,20 @@ export const restoreScheduledDispatches = async () => {
     // them searches an arbitrary location, finds nobody, and auto-cancels the
     // request before anyone in admin has seen it.
     bookingSource: { $ne: 'website' },
-  }).select('_id scheduledAt bookingMode dispatchTracking');
+  }).select('_id scheduledAt bookingMode dispatchTracking serviceType intercity');
 
   for (const ride of rides) {
     if (hasLocalDispatchFlow(ride._id)) {
+      continue;
+    }
+
+    const isOutstationRide = String(ride?.serviceType || '').toLowerCase() === 'intercity'
+      || String(ride?.serviceType || '').toLowerCase() === 'outstation'
+      || Boolean(ride?.intercity);
+
+    // If an outstation ride already finished its initial waves, keep it announced in Scheduled Rides
+    if (isOutstationRide && ride.dispatchTracking?.notifiedDriverIds?.length) {
+      announceScheduledRide(ride).catch(() => null);
       continue;
     }
 

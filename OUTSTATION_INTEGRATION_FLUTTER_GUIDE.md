@@ -2,246 +2,92 @@
 
 > **Target Audience:** Flutter App Developers (Rider App & Driver App)  
 > **Backend Module:** Taxi & Intercity Dispatch Engine  
-> **Version:** 1.0 (Updated: October 2026)
+> **Version:** 1.2 (Updated: October 2026 - 3-4 Hours Outstation Lifecycle & Automatic Online Refund)
 
 ---
 
-## 1. Overview & Problem Context
+## 1. Overview & Key Changes
 
-### The Previous Issue
-Jab Rider Flutter app se **Outstation ride** book hoti thi, Rider app 60 seconds tak "Finding Driver" search screen dikhata tha aur phir search timeout hokar ride cancel ho jati thi. Driver app me koi bhi popup, card ya notification receive nahi ho raha tha.
+### A. 3-4 Hours Auto-Cancel (No Immediate Cancellation)
+* **Pehle kya hota tha:** Outstation booking 5 minute ke initial search ke baad turant `CANCELLED` ho jati thi, jisse rider ko bar-bar re-book karna padta tha.
+* **Ab kya hota hai:** Outstation ride initial search ke baad **cancel NAHI hoti**. Initial buzzer stop ho jata hai lekin booking **`SEARCHING` (active) status** me rehti hai.
+  * Drivers is booking ko Driver App ke **"Scheduled / Outstation Rides"** tab me dekh kar kabhi bhi accept kar sakte hain.
+  * Booking **3 se 4 hours (3.5 hours)** tak active rehti hai. Agar 3.5 hours me koi driver accept nahi karta aur rider bhi cancel nahi karta, tab jakar system usko auto-cancel karta hai.
+  * Agar pickup time jaldi hai (e.g. 2 hours baad pickup hai), to booking pickup se 30 minute pehle auto-cancel hogi.
 
-### Root Causes (Pehle kyo nahi aa raha tha?)
-1. **Scheduled Ride Delay Bug (Main Issue):** Outstation bookings hamesha travel date/time (`scheduledAt`) ke sath book hoti hain. Backend me `startDispatchFlow` function future `scheduledAt` dekhkar `delayMs` calculate karke dispatch ko pickup se 15 minute pehle tak `setTimeout` me daal deta tha. Result: Backend wait kar raha tha aur Rider app 1 minute me timeout ho jata tha!
-2. **Service Type Mismatch:** App se `serviceType: 'outstation'` aata tha jabki database enum me sirf `['ride', 'parcel', 'intercity']` tha, jisse outstation normalize hokar regular `'ride'` me fallback ho jata tha aur category matching fail hoti thi.
-3. **Driver Vehicle Matching:** Outstation me mostly car/cab/SUV book hoti hai, jabki database me drivers ke paas single string `vehicleType: 'bike'` tha.
-4. **Driver Location Freshness:** Android background restrictions ke kaaran driver ka location timestamp agar 5 minute se purana ho jata tha to filter us driver ko ignore kar deta tha.
-5. **Driver Category Permissions:** Drivers ke profile me `taxiServiceCategories` me `'outstation'` opt-in nahi tha aur `taxiApproved` missing tha.
-
----
-
-## 2. Backend Fixes Implemented
-
-1. **Immediate Dispatch for Outstation:**
-   - `Backend/src/modules/taxi/services/dispatchService.js`:
-   - Outstation rides ab schedule delay (`delayMs`) ko bypass karke **immediately real-time** nearby drivers ko dispatch hoti hain (`isOutstationRide || bookingMode === 'bidding'`).
-   - Outstation ke liye search radius badha kar minimum **25 km** kar di gayi hai (city rides ka radius 5 km hota hai).
-2. **Service Type Normalization:**
-   - `Backend/src/modules/taxi/user/models/Ride.js`: Added `'outstation'` to `serviceType` enum.
-   - `Backend/src/modules/taxi/services/rideService.js`: `'outstation'` and `'intercity'` both map properly to outstation tariff & policies.
-3. **Multi-Vehicle Support for Drivers:**
-   - `Backend/src/modules/taxi/shared/driverRideFilters.js`: Driver `taxiVehicleType` ab arrays support karta hai (e.g. `['bike', 'car', 'auto', 'suv']`).
-4. **Relaxed Location Freshness & Fallback:**
-   - `Backend/src/modules/taxi/services/matchingService.js`: Freshness window badha kar 30 minutes kar di gayi hai, aur agar strict location age me koi driver na mile to online drivers ke liye auto-fallback enabled hai.
-5. **Database Configuration:**
-   - `taxiadminbusinesssettings`: `outstation_min_distance_km` = `'40'`, `enable_outstation_round_trip` = `'1'`.
-   - `buddy_deliveries`: Sabhi approved drivers ko `taxiApproved: true`, `taxiVehicleType: ['bike', 'car', 'auto', 'suv']`, aur `taxiServiceCategories: ['city', 'parcel', 'outstation']` set kiya gaya hai.
+### B. Automatic Online Payment Refund (Wallet / Gateway)
+* Agar rider ne booking ke waqt **Online payment** kiya hai (via Razorpay / UPI / Card / Wallet) aur ride cancel hoti hai (chahe 3.5 hours auto-timeout se, ya user ke manually cancel karne se, ya admin dwara):
+  1. **Source Refund (Razorpay):** Agar Razorpay payment ID available hai, to system direct customer ke original payment source (bank / card / UPI) me refund initiate karta hai.
+  2. **Wallet Refund:** Agar direct gateway refund na ho sake ya user ne wallet se pay kiya ho, to paisa **turant Customer ke Buddy Wallet (`balance`)** me 100% credit ho jata hai.
+  3. **Real-time Event:** Rider app ko instant socket event `'rideRefundProcessed'` receive hota hai taaki UI par confirmation banner show ho sake.
 
 ---
 
-## 3. Flutter Driver App Integration
+## 2. Dispatch, Repeat & Lifecycle Rules
 
-Driver app ko ride requests do tariko se receive hoti hain:
-1. **Real-time Socket Event:** Jab Driver app foreground me open ho.
-2. **FCM Push Notification (Data-only):** Jab Driver app background me ho ya screen locked ho.
+1. **Initial Search Waves:**
+   * Jab Outstation booking banti hai, real-time dispatch chalu hota hai (30 seconds per attempt).
+   * Agar driver response nahi deta, offer dismiss hokar **repeat/cycle** hokar wapas aata hai.
+   * Jab initial waves poori ho jati hain, booking active rehti hai (Scheduled pool me).
+2. **Auto-Cancellation Sweeper (3.5 Hours):**
+   * Backend background sweeper har 30 seconds me check karta hai.
+   * Agar koi Outstation booking 3.5 hours se unaccepted hai, to wo auto-cancel hoti hai aur online payment refund trigger hota hai.
 
-### A. Socket.IO Connection & Events
+---
 
-Driver ko backend socket server se connect hona zaroori hai.
+## 3. Flutter Rider App Integration
 
-#### Socket Connection:
-```dart
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+### A. Listening for Outstation Scheduled Pool Status
+Jab 5 minute ke initial buzzer attempts khatam hote hain, rider app ko `'rideSearchUpdate'` socket event milta hai:
 
-IO.Socket socket = IO.io('https://<BACKEND_URL>', <String, dynamic>{
-  'transports': ['websocket'],
-  'autoConnect': false,
-  'query': {
-    'token': driverAuthToken,
-    'role': 'driver',
-  },
-});
-socket.connect();
+```json
+{
+  "rideId": "6ae341484b4812a514045b2a",
+  "status": "searching",
+  "searchActive": false,
+  "isOutstationPending": true,
+  "message": "Your outstation booking is active in the scheduled pool. Drivers can accept it from upcoming rides."
+}
 ```
+> **Rider App UI Action:** Rider ko search loader band karke "Booking Placed - Waiting for Driver Acceptance" screen ya "Scheduled Rides" screen dikhayein. Rider ko ride cancel karne ki zaroorat nahi hai.
 
-#### Listen for Ride Offers:
-Jab outstation booking hoti hai, backend driver ko event bhejta hai:
+### B. Listening for Automatic Online Refund
+Jab booking auto-cancel ya cancel hoti hai aur online refund process hota hai:
 
-* **Event Name:** `'rideRequest'`
+* **Socket Event Name:** `'rideRefundProcessed'`
 * **Payload Structure:**
 ```json
 {
   "rideId": "6ae341484b4812a514045b2a",
-  "type": "outstation",
-  "serviceType": "outstation",
-  "orderKind": "taxi",
-  "riderEarning": 1250.00,
-  "fare": 1400.00,
-  "baseFare": 1400.00,
-  "pickupAddress": "Vijay Nagar, Indore",
-  "pickupLocation": {
-    "type": "Point",
-    "coordinates": [75.8842, 22.7281]
-  },
-  "dropAddress": "Bhopal Junction, Bhopal",
-  "dropLocation": {
-    "type": "Point",
-    "coordinates": [77.4126, 23.2599]
-  },
-  "scheduledAt": "2026-10-31T06:00:00.000Z",
-  "estimatedDistanceMeters": 195000,
-  "estimatedDurationMinutes": 210,
-  "vehicleLabel": "Cab Economy",
-  "vehicleIconType": "car",
-  "user": {
-    "id": "6aa79c8f9837cd7ad893bd1e",
-    "name": "Customer Name",
-    "phone": "9876543210"
-  },
-  "bookingMode": "normal",
-  "expiresInSeconds": 60
+  "amount": 1400.00,
+  "refundMethod": "gateway", // "gateway" (original bank/UPI) ya "wallet" (Buddy Wallet)
+  "message": "Refund of ₹1400 initiated to your original payment method."
 }
 ```
-
-#### Listen for Request Closed / Cancelled:
-Agar rider ne cancel kar diya ya kisi aur driver ne accept kar liya:
-* **Event Name:** `'rideRequestClosed'`
-* **Payload:** `{ "rideId": "...", "reason": "expired" | "accepted_by_other" | "cancelled" }`
-* **Action in Flutter:** Offer popup/bottom-sheet ko dismiss karein.
+> **Rider App UI Action:** Screen par Green/Success popup ya snackbar dikhayein:  
+> *"Booking cancelled. Refund of ₹1,400 has been credited to your Buddy Wallet / Original Payment Method."*
 
 ---
 
-### B. FCM Push Notification (Background Handling)
+## 4. Flutter Driver App Integration
 
-Jab app background me ho, backend ek **Data-only message** dispatch karta hai taaki native overlay/full-screen card show ho sake:
-
-```json
-{
-  "data": {
-    "type": "ride_request",
-    "rideId": "6ae341484b4812a514045b2a",
-    "serviceType": "outstation",
-    "fare": "₹1,400",
-    "riderEarning": "1250",
-    "pickupAddress": "Vijay Nagar, Indore",
-    "dropAddress": "Bhopal Junction, Bhopal",
-    "pickupDistanceKm": "1.2 km",
-    "tripDistanceKm": "195 km",
-    "vehicleLabel": "Cab Economy",
-    "expiresInSeconds": "60"
-  }
-}
-```
+### A. Scheduled / Outstation Rides Tab
+* Drivers ko Outstation booking initial real-time popup me to aati hi hai (30s countdown ke sath).
+* Agar initial wave me kisi ne accept nahi kiya, to wo booking driver app ke **Scheduled Rides** tab me **3.5 hours tak live dikhti rahegi**:
+  * **API Endpoint:** `GET /api/v1/taxi/driver/rides/scheduled`
+  * **Accept API:** `POST /api/v1/taxi/driver/rides/:rideId/accept`
+* Jab koi driver wahan se "Accept" dabata hai, ride turant confirm ho jati hai aur rider ko `'rideAccepted'` event chala jata hai.
 
 ---
 
-### C. Driver Ride Acceptance & Bidding API
+## 5. End-to-End Testing Checklist
 
-#### 1. Accept Ride (Normal / Fixed Fare):
-* **Endpoint:** `POST /api/v1/taxi/driver/rides/:rideId/accept`
-* **Headers:** `Authorization: Bearer <DRIVER_TOKEN>`
-* **Response (200 OK):**
-```json
-{
-  "status": "success",
-  "message": "Ride accepted successfully",
-  "data": {
-    "ride": { ... }
-  }
-}
-```
-
-#### 2. Submit Bid (Agar Bidding Mode ho):
-* **Endpoint:** `POST /api/v1/taxi/driver/bids`
-* **Headers:** `Authorization: Bearer <DRIVER_TOKEN>`
-* **Body:**
-```json
-{
-  "rideId": "6ae341484b4812a514045b2a",
-  "bidAmount": 1500
-}
-```
-
----
-
-### D. Driver App Pre-requisites (Must-Have Settings)
-
-Driver ko Outstation rides tabhi milengi jab ye criteria poore hon:
-
-1. **Online Status:**
-   - Driver ka status `availabilityStatus: 'online'` hona chahiye.
-   - API: `POST /api/v1/driver/status` ya toggle switch `{ "isOnline": true }`.
-2. **Service Selection ("Jobs You Want"):**
-   - Driver ke `deliveryServices` array me `'taxi'` hona chahiye.
-3. **Outstation Job Toggle:**
-   - Driver app ke settings me "Outstation" ka switch ON hona chahiye:
-   - `taxiServiceCategories`: Must contain `'outstation'` (e.g. `['city', 'parcel', 'outstation']`).
-4. **Live Location Updates:**
-   - Driver app background me periodic location ping karta rahe (minimum har 1-5 minute me):
-   - Socket event: `socket.emit('updateLocation', { 'latitude': 22.7281, 'longitude': 75.8842 })` ya REST API call.
-
----
-
-## 4. Flutter Rider App Integration
-
-### A. Booking Creation Request
-
-Jab rider Outstation cab select kare:
-* **Endpoint:** `POST /api/v1/taxi/user/rides`
-* **Headers:** `Authorization: Bearer <RIDER_TOKEN>`
-* **Body Example:**
-```json
-{
-  "serviceType": "outstation",
-  "vehicleTypeId": "6ad1d4a5b5af0505add5e5b8",
-  "pickupLocation": {
-    "latitude": 22.7281128,
-    "longitude": 75.8842648,
-    "address": "Vijay Nagar, Indore"
-  },
-  "dropLocation": {
-    "latitude": 23.2599333,
-    "longitude": 77.412615,
-    "address": "Bhopal Junction, Bhopal"
-  },
-  "scheduledAt": "2026-10-31T06:00:00.000Z",
-  "roundTrip": false,
-  "paymentMethod": "cash",
-  "bookingMode": "normal"
-}
-```
-
-### B. Socket Events to Listen in Rider App
-
-Connect Rider Socket and listen to:
-1. **`'rideAccepted'`**:
-   - Trigger hota hai jab driver ride accept kar leta hai.
-   - Screen automatically search dialog se "Driver Assigned / Tracking Screen" par redirect honi chahiye.
-2. **`'rideSearchTimeout'`**:
-   - Jab koi driver available na ho ya time expire ho jaye.
-3. **`'rideBidUpdated'` / `'rideBiddingUpdated'`**:
-   - Agar ride bidding mode me ho aur drivers apna rate offer karein.
-
----
-
-## 5. End-to-End Testing Checklist for Developer
-
-| # | Step | Expected Result | Verified |
-|---|------|-----------------|----------|
-| 1 | Driver Tanu (`9301988718`) app me login kare aur "Online" ho | Status 'online' show kare aur socket connect ho | [x] |
-| 2 | Rider app se Outstation cab book kare (e.g. Indore to Bhopal) | Ride create ho aur backend me `serviceType: 'intercity'` calculate ho | [x] |
-| 3 | Rider screen "Finding Drivers" dikhaye | Backend bina delay kiye immediately driver ko dispatch kare | [x] |
-| 4 | Driver phone par instant `'rideRequest'` socket event aur FCM push card pop up ho | Outstation details (Indore -> Bhopal, fare, km) display ho | [x] |
-| 5 | Driver "Accept" button press kare | Rider app me `'rideAccepted'` event aaye aur driver details dikhein | [x] |
-
----
-
-## 6. Summary of Changed Backend Files
-
-* `Backend/src/modules/taxi/user/models/Ride.js` — Added `'outstation'` enum.
-* `Backend/src/modules/taxi/services/rideService.js` — Normalizes outstation service type.
-* `Backend/src/modules/taxi/services/biddingPolicyService.js` — Resolves outstation bidding rules.
-* `Backend/src/modules/taxi/services/dispatchService.js` — Bypasses scheduled delay for outstation, 25km radius.
-* `Backend/src/modules/taxi/services/matchingService.js` — 30m location freshness & fallback.
-* `Backend/src/modules/taxi/shared/driverRideFilters.js` — Multi-vehicle array matching.
-
+| # | Test Case | Expected Behavior | Status |
+|---|-----------|-------------------|--------|
+| 1 | Rider Outstation ride book karta hai | Real-time dispatch waves start (30s window) | Verified |
+| 2 | Driver popup nahi dabata | Card dismiss hota hai aur 1.5s baad wapas repeat hota hai | Verified |
+| 3 | Initial attempts khatam hote hain | Ride cancel NAHI hoti, `searching` status me active rehti hai | Verified |
+| 4 | Driver "Scheduled Rides" tab open karta hai | Outstation booking list me available show hoti hai | Verified |
+| 5 | Driver "Scheduled Rides" se Accept karta hai | Ride confirm hoti hai aur tracking start hoti hai | Verified |
+| 6 | Rider ya System 3.5 hours baad cancel karta hai | Ride cancel hoti hai | Verified |
+| 7 | Online payment refund check | Razorpay ya Buddy Wallet me amount instant refund hota hai | Verified |
