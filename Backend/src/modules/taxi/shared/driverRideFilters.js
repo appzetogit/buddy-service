@@ -45,8 +45,13 @@ export const driverRideFilter = ({ regexes = [], serviceType } = {}) => {
 
 /** Does this rider (a lean partner doc) take rides like this one? Same rule as [driverRideFilter]. */
 export const driverTakesRide = (driver, { regexes = [], serviceType } = {}) => {
+  const driverVehicleTypes = [
+    ...(Array.isArray(driver?.vehicleType) ? driver.vehicleType : [driver?.vehicleType]),
+    ...(Array.isArray(driver?.taxiVehicleType) ? driver.taxiVehicleType : [driver?.taxiVehicleType]),
+  ].filter(Boolean).map((v) => String(v).trim().toLowerCase());
+
   const vehicleOk = !regexes.length
-    || regexes.some((m) => m.test(String(driver?.vehicleType || '')) || m.test(String(driver?.taxiVehicleType || '')));
+    || regexes.some((m) => driverVehicleTypes.some((type) => m.test(type)));
   const cats = Array.isArray(driver?.taxiServiceCategories) ? driver.taxiServiceCategories : [];
   const categoryOk = cats.length === 0 || cats.includes(rideCategoryOf(serviceType));
   return { vehicleOk, categoryOk, ok: vehicleOk && categoryOk };

@@ -36,11 +36,14 @@ const normalizeVehicleTypeIds = (vehicleTypeIds = [], vehicleTypeId = null) => {
 };
 
 /** A rider is only offered a ride when they are online, approved and have opted in to taxi jobs. */
-const FRESH_LOCATION_MS = 5 * 60 * 1000;
+const FRESH_LOCATION_MS = Math.max(
+  30 * 60 * 1000,
+  Number(process.env.TAXI_DRIVER_LOCATION_FRESH_MINUTES || 30) * 60 * 1000,
+);
 
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const buildDriverMatchFilters = ({ vehicleTypeKeys, serviceType }) => {
+const buildDriverMatchFilters = ({ vehicleTypeKeys, serviceType, allowAnyLocationAge = false }) => {
   const normalizedVehicleTypeKeys = Array.isArray(vehicleTypeKeys)
     ? expandRiderVehicleKeys([...new Set(vehicleTypeKeys.map(normalizeVehicleKey).filter(Boolean))])
     : [];
@@ -50,7 +53,7 @@ const buildDriverMatchFilters = ({ vehicleTypeKeys, serviceType }) => {
     // Taxi is an opt-in job type (the "Jobs you want" choice in the rider app).
     deliveryServices: 'taxi',
     isOnRide: { $ne: true },
-    lastLocationAt: { $gte: new Date(Date.now() - FRESH_LOCATION_MS) },
+    ...(!allowAnyLocationAge ? { lastLocationAt: { $gte: new Date(Date.now() - FRESH_LOCATION_MS) } } : {}),
     // The rider's own vehicle (bike, auto, car...) has to be the class the passenger asked for, and
     // they must take this kind of work (city / outstation / parcel).
     ...driverRideFilter({
@@ -346,12 +349,22 @@ const findDriversForZone = async ({
   const selectedFields =
     'name phone vehicleType vehicleName vehicleNumber rating profilePhoto lastLocation currentLocation lastLat lastLng lastLocationAt isOnRide deliveryServices';
 
-  const nearby = await Driver.find({
+  let nearby = await Driver.find({
     ...commonFilters,
     ...(strictZoneOnly ? {} : buildGeoNearFilter('lastLocation', coordinates, effectiveMaxDistance)),
   })
     .limit(limit * 3)
     .select(selectedFields);
+
+  if (!nearby.length && !strictZoneOnly) {
+    const fallbackFilters = buildDriverMatchFilters({ vehicleTypeKeys, serviceType, allowAnyLocationAge: true });
+    nearby = await Driver.find({
+      ...fallbackFilters,
+      ...buildGeoNearFilter('lastLocation', coordinates, effectiveMaxDistance),
+    })
+      .limit(limit * 3)
+      .select(selectedFields);
+  }
 
   // A rider already carrying Food / Quick Commerce work is not free for a passenger.
   const loadMap = await getRiderActiveLoadMap(nearby.map((driver) => driver._id)).catch(() => new Map());

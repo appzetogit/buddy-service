@@ -93,7 +93,9 @@ const normalizeRidePaymentMethod = (paymentMethod) => (
 
 const normalizeServiceType = (serviceType) => {
   const normalized = String(serviceType || 'ride').trim().toLowerCase();
-  return ['parcel', 'intercity'].includes(normalized) ? normalized : 'ride';
+  if (normalized === 'outstation' || normalized === 'intercity') return 'intercity';
+  if (normalized === 'parcel') return 'parcel';
+  return 'ride';
 };
 
 const ensureUserWallet = async (userId) => {

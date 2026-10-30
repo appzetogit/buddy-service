@@ -214,7 +214,7 @@ const normalizeRideTransportType = (ride) => {
     return transportType === 'both' ? 'delivery' : (transportType || 'delivery');
   }
 
-  if (serviceType === 'intercity') {
+  if (serviceType === 'intercity' || serviceType === 'outstation') {
     return 'intercity';
   }
 
@@ -1373,10 +1373,14 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
     const dispatchConfig = await resolveTransportDispatchConfig({
       bidding: ride.pricingNegotiationMode === 'driver_bid',
     });
-    const radius = getAttemptRadiusMeters(
+    const isOutstationRide = String(ride?.serviceType || '').toLowerCase() === 'intercity'
+      || String(ride?.serviceType || '').toLowerCase() === 'outstation'
+      || Boolean(ride?.intercity);
+    const baseRadius = getAttemptRadiusMeters(
       dispatchConfig.baseDistanceMeters || dispatchConfig.maxDistanceMeters,
       attemptIndex,
     );
+    const radius = isOutstationRide ? Math.max(baseRadius, 25000) : baseRadius;
     const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
     if (dispatchConfig.dispatchType === 'one_by_one' && attemptIndex > 0 && dispatchState.driverIds.length) {
       closeDriverRequestWindow(rideId, dispatchState.driverIds);
@@ -1480,16 +1484,20 @@ export const startDispatchFlow = async (ride, { forceRestart = false } = {}) => 
   }
 
   const scheduledAt = ride?.scheduledAt ? new Date(ride.scheduledAt) : null;
+  const isOutstationRide = String(ride?.serviceType || '').toLowerCase() === 'intercity'
+    || String(ride?.serviceType || '').toLowerCase() === 'outstation'
+    || Boolean(ride?.intercity);
+  const bookingMode = String(ride?.bookingMode || 'normal').trim().toLowerCase();
+  // Outstation trips and bidding rides dispatch immediately so drivers get the ride request in real-time.
+  // Standard city scheduled rides (e.g. days in advance) wait for their lead window before full dispatch.
+  const shouldDispatchImmediately = isOutstationRide || bookingMode === 'bidding';
+
   // Start searching a lead window before the scheduled pickup, so a captain is lined up ahead of
   // time instead of only when the trip is already due. If the lead window has already passed (a trip
   // booked for 10 minutes out), delayMs goes <= 0 and it dispatches immediately.
   const delayMs = scheduledAt
     ? scheduledAt.getTime() - SCHEDULED_DISPATCH_LEAD_MS - Date.now()
     : 0;
-  const bookingMode = String(ride?.bookingMode || 'normal').trim().toLowerCase();
-  // Bidding opens straight away for a ride now. A scheduled one waits like any other, or drivers got
-  // it as a ride-now request days ahead.
-  const shouldDispatchImmediately = bookingMode === 'bidding' && !(scheduledAt && delayMs > 0);
 
   if (!shouldDispatchImmediately && scheduledAt && Number.isFinite(delayMs) && delayMs > 0) {
     const rideId = String(ride._id);
@@ -1692,6 +1700,18 @@ export const announceScheduledRide = async (ride) => {
   const kind = ride.serviceType === 'intercity'
     ? 'outstation ride'
     : ride.serviceType === 'hourly_rental' ? 'rental' : 'ride';
+  for (const driver of drivers) {
+    emitToDriver(driver._id, 'scheduledRideAvailable', {
+      rideId: String(ride._id),
+      serviceType: ride.serviceType || 'ride',
+      scheduledAt: ride.scheduledAt,
+      pickupAddress: ride.pickupAddress || '',
+      dropAddress: ride.dropAddress || '',
+      fare: ride.fare,
+      intercity: ride.intercity || null,
+    });
+  }
+
   const toPlace = String(ride.dropAddress || '').split(',')[0].trim();
   await sendPushNotificationToEntities({
     driverIds,

@@ -66,7 +66,7 @@ const rideSchema = new mongoose.Schema(
     },
     serviceType: {
       type: String,
-      enum: ['ride', 'parcel', 'intercity'],
+      enum: ['ride', 'parcel', 'intercity', 'outstation'],
       default: 'ride',
       lowercase: true,
       trim: true,

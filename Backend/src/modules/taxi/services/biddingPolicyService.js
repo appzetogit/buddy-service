@@ -19,7 +19,7 @@ const BIDDING_SERVICE_KEYS = BIDDING_SERVICES.map((service) => service.key);
 export const resolveBiddingServiceKey = (serviceType) => {
   const normalized = String(serviceType || 'ride').trim().toLowerCase();
 
-  if (normalized === 'intercity') {
+  if (normalized === 'intercity' || normalized === 'outstation') {
     return 'outstation';
   }
 
