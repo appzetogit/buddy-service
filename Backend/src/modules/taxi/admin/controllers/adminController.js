@@ -272,6 +272,10 @@ export const deleteDriver = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
+export const getDriverWalletHistory = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getDriverWalletHistory(req.params.id)),
+);
+
 export const adjustDriverWallet = asyncHandler(async (req, res) =>
   ok(res, await adminService.adjustDriverWallet(req.params.id, req.body)),
 );

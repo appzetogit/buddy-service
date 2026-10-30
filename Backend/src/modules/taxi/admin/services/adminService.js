@@ -3534,6 +3534,11 @@ export const rejectDriverWithdrawalRequest = async (requestId) => {
   };
 };
 
+export const getDriverWalletHistory = async (driverId) => {
+  const transactions = await WalletTransaction.find({ driverId }).sort({ createdAt: -1 }).lean();
+  return { results: transactions, total: transactions.length };
+};
+
 export const adjustDriverWallet = async (id, payload = {}) => {
   const amount = Number(payload.amount || 0);
   if (!Number.isFinite(amount) || amount < 0) {
@@ -4021,6 +4026,44 @@ const labelDriverDocuments = (documents, labels) => {
   );
 };
 
+const buildDriverMonthlyChart = (rides = []) => {
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [];
+  const earnings = [];
+  const completed = [];
+  const cancelled = [];
+
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const mLabel = monthNames[d.getMonth()];
+    const y = d.getFullYear();
+    const m = d.getMonth();
+
+    const mRides = rides.filter((r) => {
+      const rd = r.completedAt || r.createdAt;
+      if (!rd) return false;
+      const date = new Date(rd);
+      return date.getFullYear() === y && date.getMonth() === m;
+    });
+
+    const mCompleted = mRides.filter((r) => String(r.status || '').toLowerCase() === 'completed');
+    const mCancelled = mRides.filter((r) => String(r.status || '').toLowerCase() === 'cancelled');
+    const mEarnings = mCompleted.reduce((sum, r) => sum + Number(r.driverEarnings || (Number(r.fare || 0) - Number(r.commissionAmount || 0))), 0);
+
+    months.push(mLabel);
+    earnings.push(Math.round(mEarnings * 100) / 100);
+    completed.push(mCompleted.length);
+    cancelled.push(mCancelled.length);
+  }
+
+  return {
+    months,
+    earnings,
+    trips: { completed, cancelled },
+  };
+};
+
 export const getDriverProfile = async (id) => {
   const driver = await Driver.findById(id).lean();
   if (!driver) {
@@ -4091,6 +4134,8 @@ export const getDriverProfile = async (id) => {
 
   return {
     ...serializeDriver(driver),
+    approvalStatus: driver.approvalStatus || (driver.approve ? 'approved' : 'pending'),
+    vehicleType: driver.vehicleType || driver.registerFor || '',
     documents: labelDriverDocuments(driver.documents || {}, documentLabels),
     joined_at: driver.createdAt ? new Date(driver.createdAt).toLocaleString('en-IN') : 'N/A',
     vehicle: {
@@ -4131,6 +4176,53 @@ export const getDriverProfile = async (id) => {
       transaction_count: walletTransactions.length,
     },
     location: hasValidLocation ? { lat, lng } : null,
+    requests: await Promise.all(
+      rides.map(async (ride) => {
+        const user = ride.userId ? await User.findById(ride.userId).select('name phone email').lean() : null;
+        const paymentInfo = describeRidePayment(ride);
+        return {
+          _id: String(ride._id),
+          request_id: String(ride._id),
+          date: ride.createdAt,
+          user_name: user?.name || ride.parcel?.senderName || 'Rider',
+          user_phone: user?.phone || '',
+          driver_name: driver.name || 'Driver',
+          trip_status: String(ride.status || 'upcoming').toLowerCase(),
+          paid: paymentInfo.status === 'paid',
+          payment_option: paymentInfo.method || ride.paymentMethod || 'cash',
+          fare: Number(ride.fare || 0),
+          driver_earnings: Number(ride.driverEarnings || 0),
+          commission_amount: Number(ride.commissionAmount || 0),
+          pickup_address: ride.pickupAddress || '',
+          drop_address: ride.dropAddress || '',
+          service_type: ride.serviceType || 'ride',
+        };
+      })
+    ),
+    withdrawals: (await WithdrawalRequest.find({ driver_id: driver._id }).sort({ createdAt: -1 }).lean()).map((w) => ({
+      _id: String(w._id),
+      date: w.createdAt,
+      name: driver.name || '',
+      mobile: driver.phone || '',
+      requested_amount: Number(w.amount || 0),
+      status: String(w.status || 'pending').toLowerCase(),
+    })),
+    reviews: await Promise.all(
+      rides
+        .filter((r) => r.feedback?.rating || r.feedback?.comment)
+        .map(async (r) => {
+          const user = r.userId ? await User.findById(r.userId).select('name phone email').lean() : null;
+          return {
+            _id: String(r._id),
+            request_id: String(r._id),
+            date: r.completedAt || r.createdAt,
+            rating: Number(r.feedback?.rating || 0),
+            comment: r.feedback?.comment || '',
+            user_name: user?.name || r.parcel?.senderName || 'Rider',
+          };
+        })
+    ),
+    chart: buildDriverMonthlyChart(rides),
   };
 };
 

@@ -638,6 +638,7 @@ const DriverDetails = () => {
   const wallet = profile?.wallet || {};
   const requests = profile?.requests || [];
   const withdrawals = profile?.withdrawals || [];
+  const reviews = profile?.reviews || [];
   const backRoute = location.state?.from || '/admin/drivers';
   const onboardingVehicle = profile?.onboarding?.vehicle || {};
   const vehicleFieldSummary = useMemo(() => ([
@@ -1122,8 +1123,43 @@ const DriverDetails = () => {
           )}
 
           {activeTab === 'Review History' && (
-            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-500">
-              No reviews found.
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
+                      <th className="px-6 py-3">Request Id</th>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Rider Name</th>
+                      <th className="px-4 py-3">Rating</th>
+                      <th className="px-4 py-3">Feedback / Comment</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
+                    {reviews.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="px-6 py-12 text-center text-gray-400">No reviews found.</td>
+                      </tr>
+                    ) : (
+                      reviews.map((rev) => (
+                        <tr key={rev._id || rev.request_id}>
+                          <td className="px-6 py-3 font-mono text-xs">{String(rev.request_id || rev._id || '').slice(-8).toUpperCase()}</td>
+                          <td className="px-4 py-3 text-xs">
+                            {rev.date ? new Date(rev.date).toLocaleString('en-IN') : 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-gray-900">{rev.user_name || 'Rider'}</td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center gap-1 font-semibold text-amber-500">
+                              ★ {rev.rating || 0}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{rev.comment || 'No comment provided'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

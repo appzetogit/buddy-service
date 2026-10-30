@@ -23,6 +23,8 @@ import {
   approveDriverDeletionRequest,
   deleteAppModule,
   deleteDriver,
+  adjustDriverWallet,
+  getDriverWalletHistory,
   deleteDriverNeededDocument,
   deleteGoodsType,
   deleteOnboardingScreen,
@@ -184,6 +186,8 @@ adminRouter.get('/admin/wallet/drivers/negative-balance', authenticate(['admin']
 adminRouter.get('/admin/wallet/drivers/withdrawals', authenticate(['admin']), getDriverWithdrawalSummaries);
 adminRouter.get('/admin/wallet/drivers/withdrawals/request/:requestId', authenticate(['admin']), getDriverWithdrawalContextByRequestId);
 adminRouter.get('/admin/wallet/drivers/:id/withdrawals', authenticate(['admin']), getDriverWithdrawals);
+adminRouter.get('/admin/wallet/drivers/:id/history', authenticate(['admin']), getDriverWalletHistory);
+adminRouter.post('/admin/wallet/drivers/:id/adjust', authenticate(['admin']), adjustDriverWallet);
 adminRouter.patch('/admin/wallet/drivers/withdrawals/:requestId/approve', authenticate(['admin']), approveDriverWithdrawalRequest);
 adminRouter.patch('/admin/wallet/drivers/withdrawals/:requestId/reject', authenticate(['admin']), rejectDriverWithdrawalRequest);
 adminRouter.get('/admin/driver-ratings', authenticate(['admin']), getDriverRatings);
