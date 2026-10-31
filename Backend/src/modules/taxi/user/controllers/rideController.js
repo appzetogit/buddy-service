@@ -680,6 +680,15 @@ export const verifyRazorpayRideCompletion = async (req, res) => {
 
     await session.commitTransaction();
 
+    // An online ride credits no extra wallet money here (its fare settles with the trip), so the
+    // wallet event below often does not fire. The driver still has to hear that the rider paid.
+    emitToDriver(liveRide.driverId, 'ride:payment:received', {
+      rideId,
+      amount: paymentAmounts.totalCharge,
+      method: 'online',
+      message: `Rider paid Rs ${paymentAmounts.totalCharge.toFixed(0)} online for this trip.`,
+    });
+
     if (result.walletResult?.transaction) {
       emitToDriver(liveRide.driverId, 'driver:wallet:updated', {
         wallet: result.walletResult.wallet,

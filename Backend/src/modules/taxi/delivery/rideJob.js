@@ -123,6 +123,8 @@ export const buildRideJob = async (ride, { riderPosition = null, partnerId = nul
       deliveryFeeBreakdown: { riderFee: estimate.earnings, deliveryBoyFee: estimate.earnings },
     },
     paymentMethod: isCash ? 'cash' : 'online',
+    // 'paid' once the rider has paid online (during or after the trip).
+    paymentStatus: ['paid', 'captured', 'completed'].includes(String(raw.driverPaymentCollection?.status || '')) ? 'paid' : 'pending',
     payment: { method: isCash ? 'cash' : 'online', amountDue: isCash ? fare : 0 },
     amountToCollect: isCash ? fare : 0,
 
