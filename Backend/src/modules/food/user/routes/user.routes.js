@@ -46,6 +46,15 @@ import {
     removeFavoriteFoodController
 } from '../controllers/userFavorites.controller.js';
 
+import {
+    createGroupOrderController,
+    getGroupOrderController,
+    joinGroupOrderController,
+    setMyGroupItemsController,
+    markGroupOrderPlacedController,
+    leaveGroupOrderController
+} from '../controllers/groupOrder.controller.js';
+
 const router = express.Router();
 
 router.get('/profile', getCurrentUserProfileController);
@@ -92,6 +101,14 @@ router.post('/favorites/restaurants/:restaurantId', addFavoriteRestaurantControl
 router.delete('/favorites/restaurants/:restaurantId', removeFavoriteRestaurantController);
 router.post('/favorites/foods/:foodId', addFavoriteFoodController);
 router.delete('/favorites/foods/:foodId', removeFavoriteFoodController);
+
+// Group ordering (Bearer USER)
+router.post('/group-orders', createGroupOrderController);
+router.get('/group-orders/:code', getGroupOrderController);
+router.post('/group-orders/:code/join', joinGroupOrderController);
+router.put('/group-orders/:code/my-items', setMyGroupItemsController);
+router.post('/group-orders/:code/placed', markGroupOrderPlacedController);
+router.delete('/group-orders/:code', leaveGroupOrderController);
 
 // Delete account (Bearer USER)
 router.delete('/account', deleteUserAccountController);
