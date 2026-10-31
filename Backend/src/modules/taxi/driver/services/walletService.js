@@ -417,8 +417,14 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
     const commissionAmount = Math.min(Math.round((tripCommission + platformFee) * 100) / 100, fare);
     const paymentMethod = normalizePaymentMethod(ride.paymentMethod);
     const driverEarnings = Math.max(Math.round((fare - commissionAmount) * 100) / 100, 0);
-    const amount = paymentMethod === 'cash' ? -commissionAmount : driverEarnings;
-    const type = paymentMethod === 'cash' ? 'commission_deduction' : 'ride_earning';
+    // Paid in the app during the trip: verifyRazorpayRideFare already put the whole fare in the
+    // driver's wallet, so this settles like cash (commission out). Settling it as 'online' credited
+    // the earnings a second time on top of that fare.
+    const fareAlreadyInWallet = ride.driverPaymentCollection?.source === 'rider_fare_online'
+      && String(ride.driverPaymentCollection?.status || '').toLowerCase() === 'paid';
+    const settleAsCash = paymentMethod === 'cash' || fareAlreadyInWallet;
+    const amount = settleAsCash ? -commissionAmount : driverEarnings;
+    const type = settleAsCash ? 'commission_deduction' : 'ride_earning';
 
     ride.paymentMethod = paymentMethod;
     ride.commissionAmount = commissionAmount;
@@ -439,7 +445,7 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
         amount,
         type,
         rideId: ride._id,
-        description: paymentMethod === 'cash'
+        description: settleAsCash
           ? `Admin commission for trip #${String(ride._id).slice(-8).toUpperCase()}`
           : `Earnings for trip #${String(ride._id).slice(-8).toUpperCase()}`,
         session,
