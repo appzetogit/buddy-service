@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.buddyserviceappzeto.user",
+      "sha256_cert_fingerprints": [
+        "B2:5F:38:BE:03:05:1C:81:1B:3A:A1:CD:93:3A:97:FC:76:96:D9:97:B7:A0:9B:9E:15:5A:4D:48:B1:C9:C3:71",
+        "23:B0:C4:89:48:91:EC:5B:BF:A5:5E:E0:BF:ED:C2:0A:18:13:91:9B:88:CB:88:7A:C0:B4:E3:24:6C:1E:FF:BB"
+      ]
+    }
+  }
+]
