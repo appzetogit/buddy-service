@@ -1594,6 +1594,21 @@ export const listApprovedRestaurants = async (query = {}) => {
         // cuisines is an array of strings.
         filter.cuisines = { $in: [new RegExp(escapeRegex(cuisine), 'i')] };
     }
+    // Only restaurants that actually sell an approved, available item in this category.
+    const categoryIdRaw = String(query.categoryId || '').trim();
+    if (categoryIdRaw) {
+        if (!mongoose.Types.ObjectId.isValid(categoryIdRaw)) {
+            return emptyRestaurantListResponse(page, limit);
+        }
+        const { FoodItem } = await import('../../admin/models/food.model.js');
+        filter._id = {
+            $in: await FoodItem.distinct('restaurantId', {
+                categoryId: new mongoose.Types.ObjectId(categoryIdRaw),
+                approvalStatus: 'approved',
+                isAvailable: true,
+            }),
+        };
+    }
     if (query.hasOffers === 'true') {
         filter.offer = { $exists: true, $ne: null, $ne: '' };
     }
