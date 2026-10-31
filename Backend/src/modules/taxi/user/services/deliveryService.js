@@ -49,12 +49,16 @@ const goodsTypeAllowsVehicle = (goodsType, vehicle) => {
     .map(normalizeVehicleLabel)
     .filter(Boolean);
 
-  if (!allowedLabels.length || allowedLabels.includes('both') || allowedLabels.includes('all')) {
+  // Service-scope words (seeded data stores 'delivery') name no vehicle, so they restrict nothing.
+  // Matching them against vehicle names refused every vehicle for that goods type.
+  const SCOPE_WORDS = new Set(['both', 'all', 'delivery', 'taxi']);
+  const vehicleLabels = allowedLabels.filter((label) => !SCOPE_WORDS.has(label));
+  if (!vehicleLabels.length) {
     return true;
   }
 
   const tokens = getVehicleTokens(vehicle);
-  return allowedLabels.some((label) => tokens.some((token) => token.includes(label) || label.includes(token)));
+  return vehicleLabels.some((label) => tokens.some((token) => token.includes(label) || label.includes(token)));
 };
 
 const ensureDeliveryVehicleAllowed = async ({ vehicleTypeId, parcel }) => {
