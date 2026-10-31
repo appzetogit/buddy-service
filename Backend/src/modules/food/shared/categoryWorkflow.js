@@ -279,6 +279,7 @@ export const serializeCategoryForResponse = (category = {}, options = {}) => {
         sortOrder: category.sortOrder || 0,
         itemCount: options.includeCounts ? Number(stats?.totalFoods || 0) : undefined,
         approvedFoodCount: options.includeCounts ? Number(stats?.approvedFoods || 0) : undefined,
+        productCount: category.productCount !== undefined ? Number(category.productCount || 0) : undefined,
         createdAt: category.createdAt,
         updatedAt: category.updatedAt
     };

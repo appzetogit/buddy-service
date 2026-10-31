@@ -3,6 +3,7 @@ import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodCategory } from '../../admin/models/category.model.js';
 import { FoodItem } from '../../admin/models/food.model.js';
 import { FoodRestaurant } from '../models/restaurant.model.js';
+import { FoodZone } from '../../admin/models/zone.model.js';
 import { deleteFoodImageAsset } from '../../services/foodImage.service.js';
 import {
     ACTIVE_PUBLIC_CATEGORY_FILTER,
@@ -189,17 +190,60 @@ export async function listPublicCategories(query = {}) {
     const search = typeof query.search === 'string' ? query.search.trim() : '';
     const zoneIdRaw = typeof query.zoneId === 'string' ? query.zoneId.trim() : '';
 
-    const approvedCategoryIds = await FoodItem.distinct('categoryId', {
-        approvalStatus: 'approved',
-        categoryId: { $ne: null }
-    });
+    // Active, approved restaurants (in caller's zone when zoneId is passed)
+    const restaurantFilter = {
+        status: 'approved',
+        isActive: { $ne: false },
+        isDeleted: { $ne: true }
+    };
 
-    if (!approvedCategoryIds.length) {
-        return { categories: [], total: 0, page, limit };
+    if (zoneIdRaw && mongoose.Types.ObjectId.isValid(zoneIdRaw)) {
+        const zoneObjId = new mongoose.Types.ObjectId(zoneIdRaw);
+        restaurantFilter.$or = [{ zoneId: zoneObjId }];
+        const zoneDoc = await FoodZone.findOne({ _id: zoneIdRaw, isActive: true }).lean();
+        const coords = Array.isArray(zoneDoc?.coordinates) ? zoneDoc.coordinates : [];
+        if (coords.length >= 3) {
+            const ring = coords
+                .map((c) => [Number(c.longitude), Number(c.latitude)])
+                .filter((pair) => pair.every((n) => Number.isFinite(n)));
+            if (ring.length >= 3) {
+                const first = ring[0];
+                const last = ring[ring.length - 1];
+                if (first[0] !== last[0] || first[1] !== last[1]) ring.push(first);
+                restaurantFilter.$or.push({ location: { $geoWithin: { $geometry: { type: 'Polygon', coordinates: [ring] } } } });
+            }
+        }
+    }
+
+    const activeRestaurantIds = await FoodRestaurant.find(restaurantFilter).distinct('_id');
+
+    // One aggregation on the food items collection
+    const countMap = new Map();
+    if (activeRestaurantIds.length > 0) {
+        const counts = await FoodItem.aggregate([
+            {
+                $match: {
+                    restaurantId: { $in: activeRestaurantIds },
+                    approvalStatus: 'approved',
+                    isAvailable: true,
+                    categoryId: { $ne: null }
+                }
+            },
+            {
+                $group: {
+                    _id: '$categoryId',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+        for (const row of counts) {
+            if (row._id) {
+                countMap.set(String(row._id), Number(row.count) || 0);
+            }
+        }
     }
 
     const filter = {
-        _id: { $in: approvedCategoryIds },
         ...ACTIVE_PUBLIC_CATEGORY_FILTER,
         $and: [{ $or: GLOBAL_CATEGORY_FILTER }, { $or: APPROVED_CATEGORY_FILTER }]
     };
@@ -221,7 +265,11 @@ export async function listPublicCategories(query = {}) {
     ]);
 
     await backfillLegacyCategoryWorkflow(list);
-    const categories = list.map((category) => serializeCategoryForResponse(category));
+    const categories = list.map((category) => {
+        const serialized = serializeCategoryForResponse(category);
+        serialized.productCount = Number(countMap.get(String(category._id)) || 0);
+        return serialized;
+    });
 
     return { categories, total, page, limit };
 }

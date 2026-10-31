@@ -7,7 +7,7 @@ export const apiRateLimiter = rateLimit({
     windowMs,
     // Dev UX: local UI can generate lots of background API calls (location, polling, etc).
     // Keep production strict, but avoid blocking local development.
-    max: config.nodeEnv === 'development' ? Math.max(config.rateLimitMaxRequests, 2000) : config.rateLimitMaxRequests,
+    max: config.nodeEnv === 'development' ? Math.max(config.rateLimitMaxRequests, 5000) : Math.max(config.rateLimitMaxRequests, 2500),
     standardHeaders: true,
     legacyHeaders: false,
     /**
@@ -24,7 +24,11 @@ export const apiRateLimiter = rateLimit({
         if (url.includes('/payments/webhook/')) return true;
         // /admin/* routes use their own, separately-bucketed adminApiRateLimiter (see below),
         // mounted ahead of this one in app.js — never double-count them against the public bucket.
-        return /\/admin(\/|$)/.test(url);
+        if (/\/admin(\/|$)/.test(url)) return true;
+        // Delivery partners & drivers continuously poll for active/available orders, location updates & trips.
+        // Don't rate-limit polling operations or block delivery partners/drivers on active shifts.
+        if (/\/(food\/delivery|quick-commerce\/delivery|taxi\/delivery|delivery|driver)\//i.test(url)) return true;
+        return false;
     },
     message: {
         success: false,

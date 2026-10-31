@@ -98,7 +98,71 @@ const publicCategoryFilter = {
 
 const publicProductFilter = publicProductVisibilityFilter;
 
-const mapCategory = (category) => {
+export const fetchCategoryProductCounts = async (productQuery) => {
+  try {
+    const counts = await QuickProduct.aggregate([
+      { $match: productQuery },
+      {
+        $project: {
+          catIds: {
+            $setUnion: [
+              { $cond: [{ $ifNull: ['$headerId', false] }, ['$headerId'], []] },
+              { $cond: [{ $ifNull: ['$categoryId', false] }, ['$categoryId'], []] },
+              { $cond: [{ $ifNull: ['$subcategoryId', false] }, ['$subcategoryId'], []] },
+            ],
+          },
+        },
+      },
+      { $unwind: '$catIds' },
+      {
+        $group: {
+          _id: '$catIds',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const countMap = new Map();
+    for (const row of counts) {
+      if (row._id) {
+        countMap.set(String(row._id), Number(row.count) || 0);
+      }
+    }
+    return countMap;
+  } catch (err) {
+    console.error('[quick-commerce] fetchCategoryProductCounts error:', err);
+    return new Map();
+  }
+};
+
+export const propagateCategoryProductCounts = (countMap, categories = []) => {
+  const propagated = new Map(countMap);
+  if (!Array.isArray(categories) || !categories.length) return propagated;
+
+  const parentChildMap = new Map();
+  for (const cat of categories) {
+    if (cat.parentId) {
+      const pId = String(cat.parentId);
+      if (!parentChildMap.has(pId)) parentChildMap.set(pId, []);
+      parentChildMap.get(pId).push(String(cat._id || cat.id));
+    }
+  }
+
+  // Ensure parent/header categories include all items under their children
+  for (let pass = 0; pass < 3; pass++) {
+    for (const [pId, childIds] of parentChildMap.entries()) {
+      const pCount = propagated.get(pId) || 0;
+      const childrenSum = childIds.reduce((sum, cId) => sum + (propagated.get(cId) || 0), 0);
+      if (childrenSum > pCount) {
+        propagated.set(pId, childrenSum);
+      }
+    }
+  }
+
+  return propagated;
+};
+
+const mapCategory = (category, productCount = 0) => {
   // Do not default missing type to 'header' — that makes mid-level nodes
   // incorrectly become the GST/commission authority.
   const type = category.type || 'category';
@@ -112,6 +176,7 @@ const mapCategory = (category) => {
     type,
     parentId: category.parentId || null,
     color: category.accentColor || category.headerColor || '#0c831f',
+    productCount: Number(productCount ?? category.productCount ?? 0),
   };
 
   // Fees / icon / headerColor are header-only (source of truth for pricing + nav theme).
@@ -325,7 +390,7 @@ const mapBootstrapProduct = (product, sellerMap = {}) => {
   };
 };
 
-const slimCategoryRef = (item = {}) => ({
+const slimCategoryRef = (item = {}, countMap = null) => ({
   _id: item._id,
   name: item.name,
   slug: item.slug,
@@ -334,10 +399,11 @@ const slimCategoryRef = (item = {}) => ({
   businessType: item.businessType || undefined,
   parentId: item.parentId || null,
   status: item.status || 'active',
+  productCount: Number((countMap && countMap.get(String(item._id || item.id))) ?? item.productCount ?? 0),
 });
 
 /** Drop Mongo metadata + heavy nested category fields from experience sections. */
-const slimBootstrapExperienceSection = (section = {}) => {
+const slimBootstrapExperienceSection = (section = {}, countMap = null) => {
   const config = section.config && typeof section.config === 'object'
     ? { ...section.config }
     : {};
@@ -345,7 +411,7 @@ const slimBootstrapExperienceSection = (section = {}) => {
   if (config.categories?.items && Array.isArray(config.categories.items)) {
     config.categories = {
       ...config.categories,
-      items: config.categories.items.map(slimCategoryRef),
+      items: config.categories.items.map((cat) => slimCategoryRef(cat, countMap)),
     };
   }
 
@@ -485,9 +551,13 @@ export const getBootstrapData = async (req, res) => {
     const zoneScope = await resolveZoneCatalogScope(coords);
     const zoneMeta = toZoneServiceMeta(zoneScope);
     const productQuery = buildZoneProductFilter(publicProductFilter, zoneScope.sellerIds);
+    const hasCoords = coords.lat !== null && coords.lng !== null;
+    const countQuery = hasCoords
+      ? (zoneScope.serviceAvailable ? productQuery : null)
+      : publicProductFilter;
 
     // Parallel fetch — content.service.js in-memory cache serves most of these.
-    const [categories, products, heroConfig, experienceSections, offerSections, homeTiles, homeHeadings] = await Promise.all([
+    const [categories, products, heroConfig, experienceSections, offerSections, homeTiles, homeHeadings, rawCounts] = await Promise.all([
       getQuickCategories(),
       zoneScope.serviceAvailable
         ? QuickProduct.find(productQuery)
@@ -501,6 +571,7 @@ export const getBootstrapData = async (req, res) => {
       zoneScope.serviceAvailable ? getQuickOfferSections() : Promise.resolve([]),
       getQuickHomeTiles({ status: 'active' }),
       getQuickHomeHeadings(),
+      countQuery ? fetchCategoryProductCounts(countQuery) : Promise.resolve(new Map()),
     ]);
 
     const scopedExperience = filterSectionsByZoneSellers(experienceSections, zoneScope.sellerIds);
@@ -526,14 +597,16 @@ export const getBootstrapData = async (req, res) => {
         }
       : { banners: { items: [] }, categoryIds: [] };
 
+    const categoryProductCounts = propagateCategoryProductCounts(rawCounts, categories);
+
     return res.json({
       success: true,
       result: {
-        categories: categories.map(mapCategory),
+        categories: categories.map((c) => mapCategory(c, categoryProductCounts.get(String(c._id)) || 0)),
         products: products.map((p) => mapBootstrapProduct(p, sellerMap)),
         heroConfig: resolvedHero,
-        experienceSections: (scopedExperience.length ? scopedExperience : []).map(slimBootstrapExperienceSection),
-        offerSections: (scopedOffers || []).map(slimBootstrapExperienceSection),
+        experienceSections: (scopedExperience.length ? scopedExperience : []).map((s) => slimBootstrapExperienceSection(s, categoryProductCounts)),
+        offerSections: (scopedOffers || []).map((s) => slimBootstrapExperienceSection(s, categoryProductCounts)),
         homeTiles: (homeTiles || []).map((tile) => ({
           _id: tile._id,
           title: tile.title || '',
@@ -903,8 +976,23 @@ export const getCategories = async (req, res) => {
   setPublicCache(res, 30);
 
   const { tree, parentId } = req.query;
-  const categories = await getQuickCategories({ parentId });
-  const mapped = categories.map(mapCategory);
+  const coords = parseRequestCoords(req);
+  const zoneScope = await resolveZoneCatalogScope(coords);
+  const productQuery = buildZoneProductFilter(publicProductFilter, zoneScope.sellerIds);
+  const hasCoords = coords.lat !== null && coords.lng !== null;
+  const countQuery = hasCoords
+    ? (zoneScope.serviceAvailable ? productQuery : null)
+    : publicProductFilter;
+
+  const [categories, rawCounts] = await Promise.all([
+    getQuickCategories({ parentId }),
+    countQuery
+      ? fetchCategoryProductCounts(countQuery)
+      : Promise.resolve(new Map()),
+  ]);
+
+  const categoryProductCounts = propagateCategoryProductCounts(rawCounts, categories);
+  const mapped = categories.map((cat) => mapCategory(cat, categoryProductCounts.get(String(cat._id)) || 0));
 
   if (tree === 'true' || tree === true) {
     // Optimized tree builder using a map instead of recursive filter
@@ -922,6 +1010,18 @@ export const getCategories = async (req, res) => {
         root.push(cat);
       }
     });
+
+    const propagateTreeProductCounts = (nodes) => {
+      for (const node of nodes) {
+        if (node.children && node.children.length > 0) {
+          propagateTreeProductCounts(node.children);
+          const childSum = node.children.reduce((acc, c) => acc + (c.productCount || 0), 0);
+          node.productCount = Math.max(Number(node.productCount || 0), childSum);
+        }
+      }
+    };
+    propagateTreeProductCounts(root);
+
     return res.json({ success: true, results: root });
   }
 
