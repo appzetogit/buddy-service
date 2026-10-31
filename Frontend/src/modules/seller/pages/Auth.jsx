@@ -209,9 +209,9 @@ export default function SellerAuth() {
 
       toast.success(
         devOtp
-          ? (import.meta.env.DEV ? `OTP sent. Dev code: ${devOtp}` : "OTP sent to your seller number.")
+          ? (import.meta.env.DEV ? `OTP sent. Dev code: ${devOtp}` : "OTP sent to your seller WhatsApp number.")
           : deliveryMode === "sms"
-            ? "OTP sent to your seller number."
+            ? "OTP sent to your seller WhatsApp number."
             : "OTP generated. Check your messages shortly.",
       );
       setOtpPhone(resolvedPhone);

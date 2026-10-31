@@ -28,12 +28,15 @@ export const config = {
     otpRateWindow: Number(process.env.OTP_RATE_WINDOW || 600),
     useDefaultOtp: process.env.USE_DEFAULT_OTP === 'true',
 
-    // SMS India Hub
-    smsIndiaHubUsername: process.env.SMS_INDIA_HUB_USERNAME,
-    smsIndiaHubPassword: process.env.SMS_INDIA_HUB_PASSWORD,
-    smsApiKey: process.env.SMS_INDIA_HUB_API_KEY,
-    smsSenderId: process.env.SMS_INDIA_HUB_SENDER_ID,
-    smsDltTemplateId: process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID,
+    // WhatsApp (BhashSMS) — OTP + order status messages
+    whatsapp: {
+        baseUrl: process.env.WHATSAPP_API_BASE_URL || 'http://bhashsms.com/api/sendmsg.php',
+        username: process.env.WHATSAPP_API_USERNAME,
+        password: process.env.WHATSAPP_API_PASSWORD,
+        sender: process.env.WHATSAPP_SENDER_NUMBER,
+        otpTemplate: process.env.WHATSAPP_OTP_TEMPLATE || 'otp_login',
+        orderTemplate: process.env.WHATSAPP_ORDER_TEMPLATE || 'order_status',
+    },
 
     // Rate limiting
     rateLimitWindowMinutes: Number(process.env.RATE_LIMIT_WINDOW || 15),

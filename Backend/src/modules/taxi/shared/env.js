@@ -59,14 +59,6 @@ export const env = {
     staticOtpCode: readEnv('STATIC_OTP_CODE'),
     demoLoginPhones: readEnv('DEMO_LOGIN_PHONES'),
     otpExpiryMinutes: positiveNumber(process.env.OTP_EXPIRY_MINUTES, 10),
-    indiaHub: {
-      username: readEnv('SMS_INDIA_HUB_USERNAME'),
-      password: readEnv('SMS_INDIA_HUB_PASSWORD'),
-      apiKey: readEnv('SMS_INDIA_HUB_API_KEY'),
-      apiKeyOverride: readEnv('SMS_INDIA_HUB_API_KEY_OVERRIDE'),
-      senderId: readEnv('SMS_INDIA_HUB_SENDER_ID'),
-      dltTemplateId: readEnv('SMS_INDIA_HUB_DLT_TEMPLATE_ID'),
-    },
   },
   driverWallet: {
     joiningBonus: Number.isFinite(Number(process.env.DRIVER_JOINING_BONUS)) ? Number(process.env.DRIVER_JOINING_BONUS) : 100,

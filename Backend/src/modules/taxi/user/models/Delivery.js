@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { whatsappOrderStatusPlugin } from '../../../../core/notifications/whatsappOrderStatus.plugin.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
 
 const deliverySchema = new mongoose.Schema(
@@ -197,5 +198,13 @@ const deliverySchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+// Registered before the model is compiled; mongoose.models.X || ... would otherwise skip it.
+deliverySchema.plugin(whatsappOrderStatusPlugin, {
+  statusPath: 'status',
+  delivered: ['completed'],
+  cancelled: ['cancelled'],
+  orderIdOf: (r) => String(r._id).slice(-6).toUpperCase(),
+});
 
 export const Delivery = mongoose.models.Delivery || mongoose.model('Delivery', deliverySchema);

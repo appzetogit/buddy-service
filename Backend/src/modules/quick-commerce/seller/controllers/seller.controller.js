@@ -16,6 +16,7 @@ import { getIO, rooms } from "../../../../config/socket.js";
 import { logger } from "../../../../utils/logger.js";
 import { uploadImageBuffer } from "../../../../services/localUpload.service.js";
 import { sendError, sendResponse } from "../../../../utils/response.js";
+import { isWhatsappConfigured } from "../../../../utils/whatsapp.js";
 import { Seller } from "../models/seller.model.js";
 import { SellerNotification } from "../models/sellerNotification.model.js";
 import { SellerOrder } from "../models/sellerOrder.model.js";
@@ -1347,7 +1348,7 @@ export const requestSellerOtpController = async (req, res) => {
     // Persist OTP against last-10 + E.164 forms so verify matches login phone formats.
     const otpPhone = `+91${phoneSuffix}`;
     const otp = await createOrUpdateOtp(otpPhone);
-    const hasSmsProvider = Boolean(config.smsApiKey && config.smsSenderId);
+    const hasSmsProvider = isWhatsappConfigured();
     const isLocalRequest = ["localhost", "127.0.0.1", "::1"].includes(
       String(req.hostname || "").toLowerCase(),
     );
@@ -1358,7 +1359,7 @@ export const requestSellerOtpController = async (req, res) => {
 
     return sendResponse(res, 200, "OTP sent successfully", {
       phone: `+91 ${phoneSuffix}`,
-      deliveryMode: hasSmsProvider ? "sms" : (shouldExposeOtp ? "debug" : "sms"),
+      deliveryMode: hasSmsProvider ? "whatsapp" : (shouldExposeOtp ? "debug" : "whatsapp"),
       ...(shouldExposeOtp ? { otp } : {}),
     });
   } catch (error) {

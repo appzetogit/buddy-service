@@ -5,6 +5,7 @@
  * order living there would surface in Food admin/restaurant/user lists.
  */
 import mongoose from 'mongoose';
+import { whatsappOrderStatusPlugin } from '../../../core/notifications/whatsappOrderStatus.plugin.js';
 
 const geoPointSchema = new mongoose.Schema(
     {
@@ -710,6 +711,14 @@ orderSchema.pre('save', function blockLockedFinancialMutations(next) {
         );
     }
     return next();
+});
+
+orderSchema.plugin(whatsappOrderStatusPlugin, {
+    statusPath: 'orderStatus',
+    delivered: ['delivered'],
+    cancelled: ['cancelled_by_user', 'cancelled_by_restaurant', 'cancelled_by_admin', 'cancelled_by_system'],
+    refundPath: 'payment.refund.status',
+    orderIdOf: (o) => o.orderId,
 });
 
 export const QuickOrder = mongoose.model('QuickOrder', orderSchema, 'quick_orders');

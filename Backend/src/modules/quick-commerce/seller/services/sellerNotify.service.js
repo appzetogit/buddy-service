@@ -5,7 +5,6 @@ import { notifyOwnerSafely } from '../../../../core/notifications/firebase.servi
 import { computeNotificationExpiresAt } from '../../../../core/notifications/utils/notificationTtl.js';
 import { getIO, rooms } from '../../../../config/socket.js';
 import { sendSellerStatusEmail } from '../../../../utils/email.js';
-import { sendTransactionalSms } from '../../../../utils/sms.js';
 
 const isPlaceholderEmail = (email) => {
     const value = String(email || '').trim().toLowerCase();
@@ -138,12 +137,6 @@ export const upsertSellerNotification = async (sellerId, notification = {}) => {
                         status: key.includes('rejected') ? 'rejected' : 'approved',
                     }).catch((error) => {
                         console.warn('[sellerNotify] email failed:', error?.message || error);
-                    });
-                }
-                if (channels.sms !== false && seller.phone) {
-                    const smsBody = `${title}. ${message}`.replace(/\s+/g, ' ').trim().slice(0, 300);
-                    await sendTransactionalSms(seller.phone, smsBody).catch((error) => {
-                        console.warn('[sellerNotify] SMS failed:', error?.message || error);
                     });
                 }
             }

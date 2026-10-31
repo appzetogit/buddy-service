@@ -502,7 +502,7 @@ export default function UnifiedOTPFastLogin() {
           >
             <h2 className="mb-0.5 text-[22px] font-black text-foreground sm:text-[26px]">Welcome!</h2>
             <p className="mb-4 text-sm font-medium text-gray-500 sm:mb-5">
-              {step === 1 ? "Login to continue" : `Enter OTP sent to +91 ${phoneNumber}`}
+              {step === 1 ? "Login to continue" : `Enter OTP sent on WhatsApp to +91 ${phoneNumber}`}
             </p>
 
             <AnimatePresence mode="wait">

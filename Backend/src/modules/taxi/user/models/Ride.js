@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { whatsappOrderStatusPlugin } from '../../../../core/notifications/whatsappOrderStatus.plugin.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
 
 const rideSchema = new mongoose.Schema(
@@ -719,5 +720,13 @@ rideSchema.index({ userId: 1, createdAt: -1 });
 rideSchema.index({ driverId: 1, createdAt: -1 });
 rideSchema.index({ status: 1, liveStatus: 1, scheduledAt: 1, createdAt: -1 });
 rideSchema.index({ driverId: 1, scheduledAt: 1, status: 1, liveStatus: 1 });
+
+// Registered before the model is compiled; mongoose.models.X || ... would otherwise skip it.
+rideSchema.plugin(whatsappOrderStatusPlugin, {
+  statusPath: 'status',
+  delivered: ['completed'],
+  cancelled: ['cancelled'],
+  orderIdOf: (r) => String(r._id).slice(-6).toUpperCase(),
+});
 
 export const Ride = mongoose.models.TaxiRide || mongoose.model('TaxiRide', rideSchema);

@@ -75,7 +75,7 @@ export default function DriverLogin() {
       setOtp("");
       setStep(2);
       setResendTimer(RESEND_COOLDOWN_SECONDS);
-      toast.success("OTP sent to your phone");
+      toast.success("OTP sent to your WhatsApp");
     } catch (err) {
       toast.error(
         err?.response?.data?.message ||

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { whatsappOrderStatusPlugin } from '../../../../core/notifications/whatsappOrderStatus.plugin.js';
 import { buildLocationSchema } from '../../../../core/location/location.schema.js';
 
 const orderItemSchema = new mongoose.Schema(
@@ -596,6 +597,14 @@ orderSchema.pre('save', async function (next) {
         this.orderId = this.order_id;
     }
     next();
+});
+
+orderSchema.plugin(whatsappOrderStatusPlugin, {
+    statusPath: 'orderStatus',
+    delivered: ['delivered'],
+    cancelled: ['cancelled_by_user', 'rejected_by_restaurant', 'cancelled_by_restaurant', 'cancelled_by_admin'],
+    refundPath: 'payment.refund.status',
+    orderIdOf: (o) => o.order_id || o.orderId,
 });
 
 export const FoodOrder = mongoose.model('FoodOrder', orderSchema);
