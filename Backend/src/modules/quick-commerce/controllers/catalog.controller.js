@@ -609,14 +609,17 @@ export const getBootstrapData = async (req, res) => {
         heroConfig: resolvedHero,
         experienceSections: (scopedExperience.length ? scopedExperience : []).map((s) => slimBootstrapExperienceSection(s, categoryProductCounts)),
         offerSections: (scopedOffers || []).map((s) => slimBootstrapExperienceSection(s, categoryProductCounts)),
+        // Admin → Fast Fav tiles. The model's fields are label / imageUrl / targetPath /
+        // sortOrder; reading title / image / order sent every tile out blank.
         homeTiles: (homeTiles || []).map((tile) => ({
           _id: tile._id,
-          title: tile.title || '',
-          image: tile.image || tile.imageUrl || '',
-          linkType: tile.linkType || '',
-          linkValue: tile.linkValue || '',
+          title: tile.label || tile.title || '',
+          subtitle: tile.subtitle || '',
+          image: tile.imageUrl || tile.image || '',
+          sectionType: tile.sectionType || 'fast_fav',
+          targetPath: tile.targetPath || '',
           status: tile.status || 'active',
-          order: Number(tile.order) || 0,
+          order: Number(tile.sortOrder ?? tile.order) || 0,
         })),
         homeHeadings: homeHeadings || { fastFavHeading: 'Fast Fav', moreHeading: 'More' },
         ...zoneMeta,
@@ -1354,6 +1357,13 @@ export const getStoreDetails = async (req, res) => {
   }
 };
 
+const haversineKm = (lat1, lng1, lat2, lng2) => {
+  const r = (d) => (d * Math.PI) / 180;
+  const a = Math.sin(r(lat2 - lat1) / 2) ** 2
+    + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(r(lng2 - lng1) / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 export const getStores = async (req, res) => {
   setPrivateCache(res, 30);
   try {
@@ -1370,23 +1380,87 @@ export const getStores = async (req, res) => {
     }
 
     const sellers = await Seller.find(query)
-      .select('_id name shopName location shopInfo.shopImage shopInfo.openingHours rating')
+      .select('_id name shopName location shopInfo.shopImage shopInfo.openingHours rating totalRatings')
       .lean();
+    const sellerIds = sellers.map((x) => x._id);
+    const now = new Date();
 
-    return res.json({
-      success: true,
-      results: sellers.map(seller => ({
+    // What each store sells (for the Categories filter), how much, and how fast; plus its
+    // live coupons — the store list shows them like Grab's "Rp10.000 off · Min. spend".
+    const [catalog, coupons] = await Promise.all([
+      sellerIds.length
+        ? QuickProduct.aggregate([
+            { $match: { ...publicProductFilter, sellerId: { $in: sellerIds } } },
+            {
+              $group: {
+                _id: '$sellerId',
+                count: { $sum: 1 },
+                headers: { $addToSet: '$headerId' },
+                categories: { $addToSet: '$categoryId' },
+                deliveryTimes: { $addToSet: '$deliveryTime' },
+              },
+            },
+          ])
+        : [],
+      sellerIds.length
+        ? SellerCoupon.find({
+            sellerId: { $in: sellerIds },
+            status: 'Approved',
+            isActive: true,
+            validFrom: { $lte: now },
+            validTill: { $gte: now },
+          })
+            .select('sellerId code discountType discountValue maxDiscount minOrderValue')
+            .sort({ discountValue: -1 })
+            .lean()
+        : [],
+    ]);
+    const catalogBySeller = new Map(catalog.map((c) => [String(c._id), c]));
+    const couponsBySeller = new Map();
+    for (const c of coupons) {
+      const k = String(c.sellerId);
+      if (!couponsBySeller.has(k)) couponsBySeller.set(k, []);
+      couponsBySeller.get(k).push({
+        code: c.code,
+        discountType: c.discountType,
+        discountValue: Number(c.discountValue) || 0,
+        maxDiscount: Number(c.maxDiscount) || 0,
+        minOrderValue: Number(c.minOrderValue) || 0,
+      });
+    }
+    const minutesOf = (t) => Number(String(t || '').match(/\d+/)?.[0]) || null;
+
+    const results = sellers.map((seller) => {
+      const cat = catalogBySeller.get(String(seller._id));
+      const coordsOf = seller.location?.coordinates;
+      const distanceKm =
+        coords.lat !== null && coords.lng !== null && Array.isArray(coordsOf) && coordsOf.length === 2
+          ? Math.round(haversineKm(coords.lat, coords.lng, coordsOf[1], coordsOf[0]) * 10) / 10
+          : null;
+      const times = (cat?.deliveryTimes || []).map(minutesOf).filter(Boolean);
+      const openingHours = seller.shopInfo?.openingHours || '';
+      return {
         _id: seller._id,
         id: seller._id,
         name: seller.name || '',
         shopName: seller.shopName || seller.name || 'Store',
         location: seller.location || null,
         shopImage: seller.shopInfo?.shopImage || '',
-        openingHours: seller.shopInfo?.openingHours || '',
-        rating: seller.rating || 0
-      })),
-      ...zoneMeta
+        openingHours,
+        isOpen: isStoreCurrentlyOpen(openingHours),
+        rating: seller.rating || 0,
+        totalRatings: Number(seller.totalRatings) || 0,
+        distanceKm,
+        deliveryMinutes: times.length ? Math.min(...times) : null,
+        productCount: cat?.count || 0,
+        categoryIds: [...(cat?.headers || []), ...(cat?.categories || [])].filter(Boolean).map(String),
+        offers: (couponsBySeller.get(String(seller._id)) || []).slice(0, 3),
+      };
     });
+    // Nearest first when the customer's location is known.
+    results.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9));
+
+    return res.json({ success: true, results, ...zoneMeta });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message || 'Failed to fetch stores' });
   }
