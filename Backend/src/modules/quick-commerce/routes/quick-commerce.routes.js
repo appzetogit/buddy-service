@@ -19,6 +19,7 @@ import {
   getHomeTilesLean,
   getOffers,
   getProductById,
+  getAlsoBought,
   getProductReviews,
   submitProductReview,
   getProducts,
@@ -206,6 +207,7 @@ router.get("/categories", getCategories);
 router.get("/products", getProducts);
 router.get("/products/:productId/reviews", getProductReviews);
 router.post("/products/reviews", optionalAuth, submitProductReview);
+router.get("/products/:productId/also-bought", getAlsoBought);
 router.get("/products/:productId", getProductById);
 router.get("/zones/public", listPublicZones);
 router.get("/zones/detect", detectQuickZonePublic);

@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import { QuickCategory } from '../models/category.model.js';
 import { QuickProduct } from '../models/product.model.js';
 import { QuickReview } from '../models/review.model.js';
+import { SellerCoupon } from '../models/sellerCoupon.model.js';
+import { QuickOrder } from '../models/order.model.js';
 import { FoodUser } from '../../../core/users/user.model.js';
 import { Seller } from '../seller/models/seller.model.js';
 import {
@@ -1155,24 +1157,96 @@ export const getProductById = async (req, res) => {
     });
   }
 
-  const [sellerMap, header] = await Promise.all([
+  const now = new Date();
+  const [sellerMap, header, coupons] = await Promise.all([
     buildSellerMap([product]),
     product.headerId
       ? QuickCategory.findById(product.headerId).select('returnsEnabled returnWindowHours').lean()
       : null,
+    product.sellerId
+      ? SellerCoupon.find({
+          sellerId: product.sellerId,
+          status: 'Approved',
+          isActive: true,
+          firstOrderOnly: { $ne: true },
+          discountType: { $in: ['percentage', 'fixed'] },
+          validFrom: { $lte: now },
+          validTill: { $gte: now },
+        }).select('code discountType discountValue maxDiscount minOrderValue usageLimit usedCount').lean()
+      : [],
   ]);
+
+  const mapped = mapProduct(product, sellerMap);
+  const offer = bestSingleItemOffer(coupons, Number(mapped.price) || 0);
 
   // The replacement policy is set on the product's header category (it is what order
   // returns already go by); shown on the product page like "72 hours replacement".
   return res.json({
     success: true,
     result: {
-      ...mapProduct(product, sellerMap),
+      ...mapped,
       returnsEnabled: header ? header.returnsEnabled !== false : null,
       returnWindowHours: header ? Number(header.returnWindowHours || 72) : null,
+      // "Buy at ₹81 · Apply code X": the seller coupon that lowers one unit's price the most.
+      offer,
     },
     ...zoneMeta,
   });
+};
+
+/** The coupon that takes the most off a single unit at [price], as `{ code, buyAt, saving }`, or null. */
+export const bestSingleItemOffer = (coupons = [], price = 0) => {
+  let best = null;
+  for (const c of coupons) {
+    if (Number(c.minOrderValue || 0) > price) continue;
+    if (c.usageLimit != null && Number(c.usedCount || 0) >= Number(c.usageLimit)) continue;
+    let off = c.discountType === 'percentage'
+      ? (price * Number(c.discountValue || 0)) / 100
+      : Number(c.discountValue || 0);
+    if (c.discountType === 'percentage' && Number(c.maxDiscount) > 0) off = Math.min(off, Number(c.maxDiscount));
+    off = Math.min(Math.round(off), price);
+    if (off > 0 && off < price && (!best || off > best.saving)) {
+      best = { code: c.code, buyAt: price - off, saving: off };
+    }
+  }
+  return best;
+};
+
+/**
+ * "People also bought": products that appeared in the same orders as this one (last 180 days),
+ * most frequent first, limited to sellers serving the customer's zone.
+ */
+export const getAlsoBought = async (req, res) => {
+  setPrivateCache(res, 60);
+  const { productId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(productId)) {
+    return res.json({ success: true, results: [] });
+  }
+  const zoneScope = await resolveZoneCatalogScope(parseRequestCoords(req));
+  if (!zoneScope.serviceAvailable) return res.json({ success: true, results: [] });
+
+  const since = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+  const rows = await QuickOrder.aggregate([
+    { $match: { 'items.itemId': String(productId), createdAt: { $gte: since } } },
+    { $sort: { createdAt: -1 } },
+    { $limit: 500 },
+    { $unwind: '$items' },
+    { $match: { 'items.itemId': { $ne: String(productId) } } },
+    { $group: { _id: '$items.itemId', n: { $sum: 1 } } },
+    { $sort: { n: -1 } },
+    { $limit: 40 },
+  ]);
+  const ids = rows.map((r) => r._id).filter((id) => mongoose.Types.ObjectId.isValid(id));
+  if (!ids.length) return res.json({ success: true, results: [] });
+
+  const products = await QuickProduct.find({
+    ...buildZoneProductFilter(publicProductFilter, zoneScope.sellerIds),
+    _id: { $in: ids },
+  }).lean();
+  const rank = new Map(ids.map((id, i) => [String(id), i]));
+  products.sort((a, b) => rank.get(String(a._id)) - rank.get(String(b._id)));
+  const sellerMap = await buildSellerMap(products);
+  return res.json({ success: true, results: products.slice(0, 12).map((p) => mapProduct(p, sellerMap)) });
 };
 
 export const getProductReviews = async (req, res) => {
