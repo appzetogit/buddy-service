@@ -1155,11 +1155,22 @@ export const getProductById = async (req, res) => {
     });
   }
 
-  const sellerMap = await buildSellerMap([product]);
+  const [sellerMap, header] = await Promise.all([
+    buildSellerMap([product]),
+    product.headerId
+      ? QuickCategory.findById(product.headerId).select('returnsEnabled returnWindowHours').lean()
+      : null,
+  ]);
 
+  // The replacement policy is set on the product's header category (it is what order
+  // returns already go by); shown on the product page like "72 hours replacement".
   return res.json({
     success: true,
-    result: mapProduct(product, sellerMap),
+    result: {
+      ...mapProduct(product, sellerMap),
+      returnsEnabled: header ? header.returnsEnabled !== false : null,
+      returnWindowHours: header ? Number(header.returnWindowHours || 72) : null,
+    },
     ...zoneMeta,
   });
 };
