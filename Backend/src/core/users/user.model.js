@@ -9,6 +9,13 @@ const userAddressSchema = new mongoose.Schema(
             default: 'Home',
             index: true
         },
+        /** What the customer called it ("Mom's place"); empty = show the label. */
+        name: {
+            type: String,
+            default: '',
+            trim: true,
+            maxlength: 60
+        },
         street: {
             type: String,
             required: true,

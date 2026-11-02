@@ -10,6 +10,8 @@ const toGeoPoint = ({ latitude, longitude }) => {
     return { type: 'Point', coordinates: [lng, lat] };
 };
 
+const MAX_ADDRESSES = 20;
+
 const normalizeLabel = (label) => {
     const v = String(label || '').trim();
     if (v === 'Work') return 'Office';
@@ -30,6 +32,7 @@ export const addAddress = async (userId, dto) => {
 
     const address = {
         label: normalizeLabel(dto.label),
+        name: dto.name || '',
         street: dto.street,
         additionalDetails: dto.additionalDetails || '',
         city: dto.city,
@@ -40,20 +43,10 @@ export const addAddress = async (userId, dto) => {
         isDefault: false
     };
 
-    // If same label exists, update-in-place (keeps "Home/Office/Other" single entry best UX)
-    const existingIdx = user.addresses.findIndex((a) => String(a?.label) === String(address.label));
-    if (existingIdx >= 0) {
-        const existing = user.addresses[existingIdx];
-        existing.label = address.label;
-        existing.street = address.street;
-        existing.additionalDetails = address.additionalDetails;
-        existing.city = address.city;
-        existing.state = address.state;
-        existing.zipCode = address.zipCode;
-        existing.phone = address.phone;
-        if (address.location) existing.location = address.location;
-        await user.save();
-        return { address: existing.toObject() };
+    // Every save is a new address. Saving used to update whichever address already
+    // had the same label, so a second "Other" silently replaced the first one.
+    if (user.addresses.length >= MAX_ADDRESSES) {
+        throw new ValidationError(`You can save up to ${MAX_ADDRESSES} addresses. Delete one to add another.`);
     }
 
     // First address becomes default automatically
@@ -78,6 +71,7 @@ export const updateAddress = async (userId, addressId, dto) => {
     if (!address) throw new ValidationError('Address not found');
 
     if (dto.label !== undefined) address.label = normalizeLabel(dto.label);
+    if (dto.name !== undefined) address.name = dto.name || '';
     if (dto.street !== undefined) address.street = dto.street;
     if (dto.additionalDetails !== undefined) address.additionalDetails = dto.additionalDetails || '';
     if (dto.city !== undefined) address.city = dto.city;
