@@ -12,7 +12,6 @@ import { Label } from "@food/components/ui/label"
 const SECTIONS = [
   { key: "hero_banner", label: "Hero Banners", hint: "Top carousel. Add as many as you like.", image: true, subtitle: false, title: "optional" },
   { key: "service_card", label: "Service Cards", hint: "The 'Choose a service' cards (Quick Commerce, Food, Taxi).", image: true, subtitle: true, title: "optional" },
-  { key: "parcel_banner", label: "Parcel Banner", hint: "Banner under the service cards.", image: true, subtitle: false, title: "optional" },
   { key: "feature", label: "Bottom Options", hint: "Small icon + text options at the bottom (4 recommended).", image: false, subtitle: true, title: "required" },
 ]
 const SERVICES = [

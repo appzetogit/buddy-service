@@ -4,10 +4,9 @@ import mongoose from 'mongoose';
  * One row of the app home screen, managed from the admin panel.
  *   hero_banner   - top carousel (many allowed)
  *   service_card  - the "Choose a service" cards (Quick Commerce / Food / Taxi ...)
- *   parcel_banner - banner under the service cards
  *   feature       - the small icon + text options at the bottom (Live Offers, Secure Payments ...)
  */
-export const HOME_SECTIONS = ['hero_banner', 'service_card', 'parcel_banner', 'feature'];
+export const HOME_SECTIONS = ['hero_banner', 'service_card', 'feature'];
 export const HOME_LINK_TYPES = ['none', 'service', 'url'];
 // What a linkType 'service' may point to; the apps map these keys to their own screens.
 export const HOME_SERVICE_KEYS = ['quick_commerce', 'food', 'taxi', 'parcel'];

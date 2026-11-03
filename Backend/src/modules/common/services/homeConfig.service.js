@@ -34,7 +34,7 @@ const clean = (body = {}, existing = null) => {
 };
 
 const assertComplete = (fields, imageUrl) => {
-    const needsImage = ['hero_banner', 'service_card', 'parcel_banner'].includes(fields.section);
+    const needsImage = ['hero_banner', 'service_card'].includes(fields.section);
     if (needsImage && !imageUrl) throw new ValidationError('An image is required');
     if (fields.section === 'feature' && !fields.title) throw new ValidationError('A title is required');
     if (fields.section === 'feature' && !imageUrl && !fields.iconKey) throw new ValidationError('Choose an icon or upload an image');
@@ -104,7 +104,6 @@ export const getPublicHomeConfig = async () => {
     return {
         heroBanners: by('hero_banner'),
         serviceCards: by('service_card'),
-        parcelBanners: by('parcel_banner'),
         features: by('feature'),
     };
 };
