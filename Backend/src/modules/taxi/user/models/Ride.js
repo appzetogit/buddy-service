@@ -461,6 +461,13 @@ const rideSchema = new mongoose.Schema(
         default: 'INR',
         trim: true,
       },
+      // Split payment: `amount` is the full paid total; this is the part taken from the rider's
+      // Buddy Wallet and the part paid through the gateway (amount = walletAmount + onlineAmount).
+      walletAmount: { type: Number, default: 0, min: 0 },
+      onlineAmount: { type: Number, default: 0, min: 0 },
+      refundedAt: { type: Date, default: null },
+      refundMethod: { type: String, default: '', trim: true },
+      refundAmount: { type: Number, default: 0, min: 0 },
       linkUrl: {
         type: String,
         default: '',

@@ -24,12 +24,14 @@ export async function createPrepaidCheckoutSession({
   userId,
   dto,
   pricing,
+  walletAmount = 0,
 }) {
   if (!isRazorpayConfigured()) {
     throw new ValidationError('Online payment is not configured');
   }
 
-  const amountDue = Number(pricing?.total ?? 0);
+  // Wallet part is not charged here; only the remainder goes to the gateway.
+  const amountDue = Math.round((Number(pricing?.total ?? 0) - Number(walletAmount || 0)) * 100) / 100;
   const amountPaise = Math.round(amountDue * 100);
   if (amountPaise < 100) {
     throw new ValidationError('Amount too low for online payment');
@@ -43,6 +45,7 @@ export async function createPrepaidCheckoutSession({
     orderPayload: dto,
     pricing,
     amountDue,
+    walletAmount: Number(walletAmount || 0),
     currency: String(pricing?.currency || 'INR'),
     expiresAt,
   });
@@ -64,6 +67,8 @@ export async function createPrepaidCheckoutSession({
   return {
     checkoutId: String(session._id),
     pricing,
+    walletAmount: Number(walletAmount || 0),
+    onlineAmount: amountDue,
     razorpay: {
       key: getRazorpayKeyId(),
       orderId: rzOrder.id,

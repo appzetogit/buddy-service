@@ -62,7 +62,7 @@ import {
   verifyQuickCheckoutPayment,
 } from '../services/quickCheckout.service.js';
 import { releaseRidersForCancelledQuickOrder, notifySellersOrderWithdrawn } from '../services/quickOrderFlows.service.js';
-import { deductWalletBalance, refundWalletBalance } from '../../food/user/services/userWallet.service.js';
+import { deductWalletBalance, getWalletBalance, refundWalletBalance } from '../../food/user/services/userWallet.service.js';
 import {
     getGlobalPaymentSettings,
     assertPaymentMethodAllowed,
@@ -740,7 +740,22 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
     const deliveryFee = Number(pricing.deliveryFee || 0);
     const total = Number(pricing.total || 0);
     const orderNumber = `QC${Date.now().toString().slice(-8)}`;
-    const paymentModeRaw = String(req.body?.paymentMode || 'COD').toUpperCase();
+    let paymentModeRaw = String(req.body?.paymentMode || 'COD').toUpperCase();
+    // Online + wallet split (online only, never cash, logged-in users only). A verified checkout
+    // carries the wallet part it was priced with instead of re-reading the current balance.
+    let walletAmount = 0;
+    if (verifiedPrepaid) {
+      walletAmount = Math.max(0, Number(verifiedPrepaid.walletAmount || 0));
+    } else if (paymentModeRaw === 'ONLINE' && req.body?.useWallet === true && idQuery.userId) {
+      const balance = await getWalletBalance(idQuery.userId);
+      if (balance >= total) {
+        // The wallet alone covers it - nothing to pay online.
+        paymentModeRaw = 'WALLET';
+      } else if (balance > 0) {
+        // Razorpay needs at least Rs 1, so always leave Rs 1 for the gateway.
+        walletAmount = Math.max(0, Math.min(balance, Math.round((total - 1) * 100) / 100));
+      }
+    }
     const isOnlinePayment = paymentModeRaw === 'ONLINE';
     const isPrepaidVerified = Boolean(verifiedPrepaid);
     const isWalletPayment = paymentModeRaw === 'WALLET';
@@ -904,7 +919,7 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
     }
     const isScheduledOrder = Boolean(scheduledAt);
 
-    if (isPrepaidVerified && Math.round(total * 100) !== Math.round(Number(verifiedPrepaid.expectedAmount) * 100)) {
+    if (isPrepaidVerified && Math.round(total * 100) !== Math.round((Number(verifiedPrepaid.expectedAmount) + walletAmount) * 100)) {
       throw new ValidationError('Order total changed after payment. Contact support for a refund.');
     }
 
@@ -914,12 +929,15 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
         idQuery,
         requestBody: { ...(req.body || {}), paymentMode: 'ONLINE' },
         amountDue: total,
+        walletAmount,
       });
       return res.status(201).json({
         success: true,
         requiresPayment: true,
         checkoutId: checkout.checkoutId,
         amount: total,
+        walletAmount: checkout.walletAmount,
+        onlineAmount: checkout.onlineAmount,
         razorpay: checkout.razorpay,
         expiresAt: checkout.expiresAt,
         result: null,
@@ -973,6 +991,8 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
         method: paymentMode,
         status: isOnlinePayment ? (isPrepaidVerified ? 'paid' : 'created') : isWalletPayment ? 'paid' : 'cod_pending',
         amountDue: Math.max(0, total),  // total already includes platformFee
+        walletAmount: isWalletPayment ? Math.max(0, total) : walletAmount,
+        onlineAmount: isWalletPayment ? 0 : Math.max(0, Math.round((total - walletAmount) * 100) / 100),
         ...(isPrepaidVerified
           ? {
               razorpay: {
@@ -1088,12 +1108,15 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
       }
     }
 
-    if (isWalletPayment) {
+    // What is taken from the wallet: everything for a wallet order, the wallet part of a split.
+    // The gateway took the rest of a split before this point.
+    const walletCharged = isWalletPayment ? total : isPrepaidVerified ? walletAmount : 0;
+    if (walletCharged > 0) {
       try {
         await deductWalletBalance(
           idQuery.userId,
-          total,
-          'Quick commerce order payment',
+          walletCharged,
+          isWalletPayment ? 'Quick commerce order payment' : 'Wallet part of quick commerce order',
           {
             orderId: order.orderId,
             source: 'quick_order_payment',
@@ -1121,11 +1144,11 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
         `Quick stock deduction failed for ${order.orderId}: ${stockErr?.message || stockErr}`,
       );
 
-      if (isWalletPayment && idQuery.userId) {
+      if (walletCharged > 0 && idQuery.userId) {
         try {
           await refundWalletBalance(
             idQuery.userId,
-            total,
+            walletCharged,
             'Quick commerce order payment reversal',
             {
               orderId: order.orderId,
@@ -1285,11 +1308,11 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
           );
         }
       }
-      if (isWalletPayment && idQuery.userId) {
+      if (walletCharged > 0 && idQuery.userId) {
         try {
           await refundWalletBalance(
             idQuery.userId,
-            total,
+            walletCharged,
             'Quick commerce order payment reversal',
             {
               orderId: order.orderId,
@@ -1405,6 +1428,7 @@ export async function finalizeQuickCheckout(claimedSession) {
       razorpayPaymentId: claimedSession.razorpay?.paymentId,
       razorpaySignature: claimedSession.razorpay?.signature || 'webhook',
       expectedAmount: claimedSession.amountDue,
+      walletAmount: claimedSession.walletAmount || 0,
     },
   });
 
@@ -1412,7 +1436,7 @@ export async function finalizeQuickCheckout(claimedSession) {
     const reason = captured.body?.message || captured.body?.error || 'Order could not be created';
     await refundFailedQuickCheckout(claimedSession, reason);
     throw new ValidationError(
-      `${reason}. Your payment is being refunded automatically.`,
+      `${reason}. Your payment is being refunded to your wallet automatically.`,
     );
   }
 

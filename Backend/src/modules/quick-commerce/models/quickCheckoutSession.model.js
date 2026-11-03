@@ -21,7 +21,10 @@ const quickCheckoutSessionSchema = new mongoose.Schema(
     /** The place-order request body, replayed once payment is verified. */
     requestBody: { type: mongoose.Schema.Types.Mixed, required: true },
     /** Server-calculated total the customer was asked to pay (source of truth for the charge). */
+    /** Amount sent to the gateway. With a wallet split this is total - walletAmount. */
     amountDue: { type: Number, required: true, min: 0 },
+    /** Wallet part of a split payment; debited when the order is created after the gateway pays. */
+    walletAmount: { type: Number, default: 0, min: 0 },
     currency: { type: String, default: 'INR' },
     razorpay: {
       orderId: { type: String, default: '' },

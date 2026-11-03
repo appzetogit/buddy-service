@@ -406,9 +406,8 @@ const ReturnRequestPage = () => {
           <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Refund method</p>
           <div className="grid gap-2">
             {[
+              // Refunds are credited to the wallet only (UPI / bank payouts are retired).
               { id: "wallet", label: "Wallet", desc: "Instant credit to app wallet" },
-              { id: "upi", label: "UPI", desc: "Refund to your UPI ID" },
-              { id: "bank", label: "Bank", desc: "Refund to bank account" },
             ].map((method) => (
               <button
                 key={method.id}

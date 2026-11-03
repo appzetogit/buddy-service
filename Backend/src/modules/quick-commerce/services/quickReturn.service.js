@@ -357,7 +357,8 @@ export const createQuickCommerceReturnRequest = async ({
     throw new ValidationError('Return reason must be at least 3 characters');
   }
 
-  const method = validateRefundMethodSelection(refundMethod, { userId, payoutDetails });
+  // Refunds always go to the wallet, whatever method the client sent (UPI / bank payouts are retired).
+  const method = validateRefundMethodSelection('wallet', { userId, payoutDetails });
 
   const identityQuery = buildOrderIdentityQuery(orderId);
   if (!identityQuery) throw new ValidationError('orderId is required');

@@ -24,6 +24,7 @@ import {
   updateRideLifecycle,
 } from '../../services/rideService.js';
 import {
+  applyUserWalletAdjustment,
   cancelRideByUser,
   emitToDriver,
   getSocketServer,
@@ -228,6 +229,8 @@ const finalizeRideCompletion = async ({
       source: paymentRecord?.source || paymentSource || '',
       status: 'paid',
       amount: totalCharge,
+      walletAmount: paymentRecord?.walletAmount || 0,
+      onlineAmount: paymentRecord?.onlineAmount || 0,
       currency: paymentRecord?.currency || ride.driverPaymentCollection?.currency || 'INR',
       linkUrl: paymentRecord?.linkUrl || ride.driverPaymentCollection?.linkUrl || '',
       paidAt: paymentRecord?.paidAt || new Date(),
@@ -274,6 +277,63 @@ const finalizeRideCompletion = async ({
     walletResult,
   };
 };
+
+/**
+ * Split payment (online only): the rider may cover part of an online payment from the Buddy Wallet.
+ * Returns the wallet part (0 = no split). The wallet is debited only at verify, after the gateway
+ * part is paid, so an abandoned checkout never touches the wallet.
+ */
+const resolveWalletSplit = async (userId, total, useWallet) => {
+  if (!(useWallet === true || useWallet === 'true' || useWallet === 1 || useWallet === '1')) {
+    return 0;
+  }
+  await ensureUserWallet(userId);
+  const wallet = await UserWallet.findOne({ userId }).select('balance').lean();
+  const walletAmount = roundMoney(Math.min(Number(wallet?.balance || 0), total));
+  if (walletAmount <= 0) {
+    return 0;
+  }
+  if (roundMoney(total - walletAmount) < 1) {
+    throw new ApiError(400, 'Your wallet covers this payment. Please pay with wallet.');
+  }
+  return walletAmount;
+};
+
+// The wallet part is carried on the Razorpay order (server-set notes), never trusted from the client.
+const walletPartOfOrder = (order) => roundMoney(Number(order?.notes?.walletAmount || 0)) || 0;
+
+/** Debit the wallet part inside the verify transaction. Idempotent per gateway payment id. */
+const debitSplitWallet = async ({ userId, walletAmount, onlineAmount, rideId, paymentId, session }) => {
+  if (walletAmount <= 0) {
+    return;
+  }
+  const result = await applyUserWalletAdjustment({
+    userId,
+    amount: walletAmount,
+    kind: 'debit',
+    title: `Ride payment (wallet part) ${String(rideId).slice(-6)}`,
+    referenceKey: `ride-split:${paymentId}`,
+    provider: 'ride_split_wallet',
+    requireSufficientFunds: true,
+    session,
+  });
+  if (result.status === 'insufficient_funds') {
+    const error = new ApiError(409, 'Your wallet balance changed. The online payment was added to your wallet; please pay again.');
+    error.refundOnline = onlineAmount;
+    throw error;
+  }
+};
+
+/** The gateway part is already captured but the wallet part failed: keep nothing, return it to the wallet. */
+const refundOnlinePartToWallet = async ({ userId, amount, rideId, paymentId }) =>
+  applyUserWalletAdjustment({
+    userId,
+    amount,
+    kind: 'credit',
+    title: `Refund for ride payment ${String(rideId).slice(-6)}`,
+    referenceKey: `ride-split-refund:${paymentId}`,
+    provider: 'ride_split_refund',
+  });
 
 const resolveRazorpayCredentials = async () => {
   return resolveConfiguredGatewayCredentials('razor_pay');
@@ -543,6 +603,9 @@ export const createRazorpayRideCompletionOrder = async (req, res) => {
     throw new ApiError(400, 'No payable amount remains for this ride');
   }
 
+  const walletAmount = await resolveWalletSplit(req.auth.sub, paymentAmounts.totalCharge, req.body?.useWallet);
+  const onlineAmount = roundMoney(paymentAmounts.totalCharge - walletAmount);
+
   const compactRideId = rideId.replace(/[^a-zA-Z0-9]/g, '').slice(-8) || 'ride';
   const compactUserId = String(req.auth?.sub || '').replace(/[^a-zA-Z0-9]/g, '').slice(-8) || 'usr';
   const receipt = `uride_${compactUserId}_${compactRideId}_${Date.now().toString(36)}`;
@@ -551,7 +614,7 @@ export const createRazorpayRideCompletionOrder = async (req, res) => {
     method: 'POST',
     path: '/orders',
     body: {
-      amount: Math.round(paymentAmounts.totalCharge * 100),
+      amount: Math.round(onlineAmount * 100),
       currency: 'INR',
       receipt,
       notes: {
@@ -560,6 +623,7 @@ export const createRazorpayRideCompletionOrder = async (req, res) => {
         driverId: String(ride.driverId),
         fareDue: String(paymentAmounts.fareDue),
         tipAmount: String(tipAmount),
+        walletAmount: String(walletAmount),
         source: 'ride_completion',
       },
     },
@@ -578,6 +642,8 @@ export const createRazorpayRideCompletionOrder = async (req, res) => {
       fareDue: paymentAmounts.fareDue,
       tipAmount: paymentAmounts.tipAmount,
       totalCharge: paymentAmounts.totalCharge,
+      walletAmount,
+      onlineAmount,
     },
   });
 };
@@ -628,8 +694,10 @@ export const verifyRazorpayRideCompletion = async (req, res) => {
   });
 
   const paymentAmounts = buildCompletionAmounts(ride, tipAmount);
-  const verifiedTotalCharge = roundMoney(Number(order?.amount || 0) / 100);
-  if (verifiedTotalCharge <= 0) {
+  const onlineAmount = roundMoney(Number(order?.amount || 0) / 100);
+  const walletAmount = walletPartOfOrder(order);
+  const verifiedTotalCharge = roundMoney(onlineAmount + walletAmount);
+  if (onlineAmount <= 0) {
     throw new ApiError(400, 'Invalid order amount');
   }
 
@@ -658,6 +726,7 @@ export const verifyRazorpayRideCompletion = async (req, res) => {
     session.startTransaction();
 
     const liveRide = await loadCompletedRideForUser(rideId, req.auth.sub, session);
+    await debitSplitWallet({ userId: req.auth.sub, walletAmount, onlineAmount, rideId, paymentId, session });
     const result = await finalizeRideCompletion({
       ride: liveRide,
       userId: req.auth.sub,
@@ -673,6 +742,8 @@ export const verifyRazorpayRideCompletion = async (req, res) => {
         providerMode: 'razorpay_order',
         source: 'ride_completion_razorpay',
         currency: order.currency || 'INR',
+        walletAmount,
+        onlineAmount,
         paidAt: new Date(),
       },
       session,
@@ -708,6 +779,9 @@ export const verifyRazorpayRideCompletion = async (req, res) => {
     });
   } catch (error) {
     await session.abortTransaction();
+    if (error.refundOnline) {
+      await refundOnlinePartToWallet({ userId: req.auth.sub, amount: error.refundOnline, rideId, paymentId });
+    }
     throw error;
   } finally {
     session.endSession();
@@ -845,6 +919,9 @@ export const createRazorpayRideFareOrder = async (req, res) => {
     throw new ApiError(400, 'No fare to pay for this ride');
   }
 
+  const walletAmount = await resolveWalletSplit(req.auth.sub, fare, req.body?.useWallet);
+  const onlineAmount = roundMoney(fare - walletAmount);
+
   const { keyId, keySecret } = await resolveRazorpayCredentials();
   const compactRideId = rideId.replace(/[^a-zA-Z0-9]/g, '').slice(-8) || 'ride';
   const compactUserId = String(req.auth?.sub || '').replace(/[^a-zA-Z0-9]/g, '').slice(-8) || 'usr';
@@ -853,13 +930,14 @@ export const createRazorpayRideFareOrder = async (req, res) => {
     method: 'POST',
     path: '/orders',
     body: {
-      amount: Math.round(fare * 100),
+      amount: Math.round(onlineAmount * 100),
       currency: 'INR',
       receipt: `ufare_${compactUserId}_${compactRideId}_${Date.now().toString(36)}`,
       notes: {
         rideId,
         userId: String(req.auth.sub),
         driverId: String(ride.driverId),
+        walletAmount: String(walletAmount),
         source: RIDER_FARE_ONLINE_SOURCE,
       },
     },
@@ -875,6 +953,8 @@ export const createRazorpayRideFareOrder = async (req, res) => {
       amount: order.amount,
       currency: order.currency || 'INR',
       fare,
+      walletAmount,
+      onlineAmount,
     },
   });
 };
@@ -919,10 +999,13 @@ export const verifyRazorpayRideFare = async (req, res) => {
   ) {
     throw new ApiError(400, 'This payment is not for this ride');
   }
-  const paidAmount = roundMoney(Number(order?.amount || 0) / 100);
-  if (paidAmount <= 0) {
+  const onlineAmount = roundMoney(Number(order?.amount || 0) / 100);
+  if (onlineAmount <= 0) {
     throw new ApiError(400, 'Invalid order amount');
   }
+  // Total settled = gateway part + the wallet part carried on the order.
+  const walletAmount = walletPartOfOrder(order);
+  const paidAmount = roundMoney(onlineAmount + walletAmount);
 
   if (isDriverCollectionPaid(ride)) {
     throw new ApiError(409, 'This fare was already paid');
@@ -933,6 +1016,8 @@ export const verifyRazorpayRideFare = async (req, res) => {
   let driverId = null;
   try {
     session.startTransaction();
+
+    await debitSplitWallet({ userId: req.auth.sub, walletAmount, onlineAmount, rideId, paymentId, session });
 
     // Marking the fare paid and crediting the driver happen together, and
     // only once: a second verify finds the fare already paid and stops.
@@ -956,6 +1041,8 @@ export const verifyRazorpayRideFare = async (req, res) => {
             source: RIDER_FARE_ONLINE_SOURCE,
             status: 'paid',
             amount: paidAmount,
+            walletAmount,
+            onlineAmount,
             currency: order.currency || 'INR',
             linkUrl: '',
             paidAt: new Date(),
@@ -990,6 +1077,9 @@ export const verifyRazorpayRideFare = async (req, res) => {
     await session.commitTransaction();
   } catch (error) {
     await session.abortTransaction();
+    if (error.refundOnline) {
+      await refundOnlinePartToWallet({ userId: req.auth.sub, amount: error.refundOnline, rideId, paymentId });
+    }
     throw error;
   } finally {
     session.endSession();

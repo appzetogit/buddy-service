@@ -144,49 +144,78 @@ export const verifyWalletTopupPayment = async (userId, payload) => {
     return { wallet: await getUserWallet(userId) };
 };
 
+const money = (n) => Math.round(Number(n) * 100) / 100;
+
+/** Spendable balance (0 when the user has no wallet yet). */
+export const getWalletBalance = async (userId) => {
+    const id = String(userId || '');
+    if (!mongoose.Types.ObjectId.isValid(id)) return 0;
+    const wallet = await FoodUserWallet.findOne({ userId: new mongoose.Types.ObjectId(id) }).select('balance').lean();
+    return Math.max(0, money(wallet?.balance || 0));
+};
+
+// Balance + ledger row change together in ONE atomic update, so two requests at once cannot both
+// spend the same rupees and a crash cannot leave a balance without its transaction row.
 export const deductWalletBalance = async (userId, amountInr, description = 'Order payment', metadata = {}) => {
-    const amount = Number(amountInr);
+    const amount = money(amountInr);
     if (!Number.isFinite(amount) || amount <= 0) {
         throw new ValidationError('Invalid deduction amount');
     }
 
-    const wallet = await ensureWallet(userId);
-    if (wallet.balance < amount) {
-        throw new ValidationError('Insufficient wallet balance');
-    }
-
-    wallet.transactions.unshift({
-        type: 'deduction',
-        amount,
-        status: 'Completed',
-        description,
-        metadata: { source: 'order_payment', ...(metadata || {}) }
-    });
-
-    wallet.balance = Number(wallet.balance) - amount;
-    await wallet.save();
+    await ensureWallet(userId);
+    const updated = await FoodUserWallet.findOneAndUpdate(
+        { userId: new mongoose.Types.ObjectId(String(userId)), balance: { $gte: amount } },
+        {
+            $inc: { balance: -amount },
+            $push: {
+                transactions: {
+                    $each: [{
+                        type: 'deduction',
+                        amount,
+                        status: 'Completed',
+                        description,
+                        metadata: { source: 'order_payment', ...(metadata || {}) },
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    }],
+                    $position: 0,
+                },
+            },
+        },
+        { new: true },
+    );
+    if (!updated) throw new ValidationError('Insufficient wallet balance');
 
     return { wallet: await getUserWallet(userId) };
 };
 
 export const refundWalletBalance = async (userId, amountInr, description = 'Order refund', metadata = {}) => {
-    const amount = Number(amountInr);
+    const amount = money(amountInr);
     if (!Number.isFinite(amount) || amount <= 0) {
         return { wallet: await getUserWallet(userId) };
     }
 
-    const wallet = await ensureWallet(userId);
-    wallet.transactions.unshift({
-        type: 'refund',
-        amount,
-        status: 'Completed',
-        description,
-        metadata: { source: 'order_refund', ...(metadata || {}) }
-    });
-
-    wallet.balance = Number(wallet.balance) + amount;
-    await wallet.save();
+    await ensureWallet(userId);
+    await FoodUserWallet.updateOne(
+        { userId: new mongoose.Types.ObjectId(String(userId)) },
+        {
+            $inc: { balance: amount },
+            $push: {
+                transactions: {
+                    $each: [{
+                        type: 'refund',
+                        amount,
+                        status: 'Completed',
+                        description,
+                        metadata: { source: 'order_refund', ...(metadata || {}) },
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    }],
+                    $position: 0,
+                },
+            },
+        },
+    );
 
     return { wallet: await getUserWallet(userId) };
 };
-

@@ -174,6 +174,9 @@ const paymentSchema = new mongoose.Schema(
             default: 'cod_pending'
         },
         amountDue: { type: Number, min: 0 },
+        /** Online orders paid partly from the user's wallet: wallet part + gateway part = amountDue. */
+        walletAmount: { type: Number, default: 0, min: 0 },
+        onlineAmount: { type: Number, default: 0, min: 0 },
         razorpay: {
             orderId: { type: String },
             paymentId: { type: String },

@@ -92,6 +92,7 @@ const RideComplete = () => {
   const [selectedOnlineMethod, setSelectedOnlineMethod] = useState('upi');
   const [walletSnapshot, setWalletSnapshot] = useState({ balance: 0, currency: 'INR' });
   const [walletLoading, setWalletLoading] = useState(false);
+  const [useWallet, setUseWallet] = useState(false);
   const [paymentCollection, setPaymentCollection] = useState(() => state.driverPaymentCollection || null);
   const [rideLiveStatus, setRideLiveStatus] = useState(() => String(state.liveStatus || state.status || '').toLowerCase());
   const [tipSettings, setTipSettings] = useState({
@@ -126,6 +127,12 @@ const RideComplete = () => {
   const totalBill = fare + Number(selectedTip || 0);
   const fareDueNow = isCollectionPaid(paymentCollection) ? 0 : fare;
   const payableNow = fareDueNow + Number(selectedTip || 0);
+  // Optional wallet + online split (online payments only, never cash).
+  const walletBalance = Number(walletSnapshot.balance || 0);
+  const canUseWallet = selectedPaymentMethod === 'online' && payableNow > 0 && walletBalance > 0;
+  const walletPart = Math.min(walletBalance, payableNow);
+  const onlinePart = Math.max(payableNow - walletPart, 0);
+  const walletOnly = canUseWallet && useWallet && walletBalance >= payableNow;
   const isRideFinalized = ['completed', 'delivered'].includes(rideLiveStatus) || Boolean(state.feedback?.submittedAt);
   const tipsEnabled = String(tipSettings.enable_tips || '1') === '1';
   const minimumTipAmount = Number(tipSettings.min_tip_amount || 0);
@@ -211,7 +218,8 @@ const RideComplete = () => {
     let active = true;
 
     const loadWalletSnapshot = async () => {
-      if (selectedPaymentMethod !== 'wallet') {
+      // Online also needs the balance, for the optional wallet + online split.
+      if (selectedPaymentMethod !== 'wallet' && selectedPaymentMethod !== 'online') {
         return;
       }
 
@@ -329,7 +337,7 @@ const RideComplete = () => {
 
       let response;
 
-      if (Number(payableNow || 0) > 0 && selectedPaymentMethod === 'online') {
+      if (Number(payableNow || 0) > 0 && selectedPaymentMethod === 'online' && !walletOnly) {
         const scriptLoaded = await loadRazorpayScript();
         if (!scriptLoaded) {
           throw new Error('Razorpay SDK failed to load');
@@ -339,6 +347,7 @@ const RideComplete = () => {
           rating,
           comment,
           tipAmount: selectedTip || 0,
+          useWallet: canUseWallet && useWallet,
         });
         const order = orderResponse?.data || orderResponse || {};
 
@@ -393,7 +402,7 @@ const RideComplete = () => {
 
           rzp.open();
         });
-      } else if (Number(payableNow || 0) > 0 && selectedPaymentMethod === 'wallet') {
+      } else if (Number(payableNow || 0) > 0 && (selectedPaymentMethod === 'wallet' || walletOnly)) {
         response = await api.post(`/rides/${rideId}/complete-payment/wallet`, {
           rating,
           comment,
@@ -662,6 +671,29 @@ const RideComplete = () => {
               className="w-full resize-none rounded-[12px] border border-slate-100 bg-white px-3 py-2 text-[13px] font-bold text-slate-900 outline-none placeholder:text-slate-300"
             />
           </div>
+
+          {canUseWallet && !isSubmitted ? (
+            <label className="mt-4 flex cursor-pointer items-center justify-between gap-3 rounded-[14px] border border-slate-100 bg-slate-50 px-3 py-3">
+              <span className="min-w-0">
+                <span className="flex items-center gap-2 text-[13px] font-black text-slate-900">
+                  <Wallet size={15} /> Use wallet balance (Rs {walletBalance.toFixed(2)})
+                </span>
+                <span className="mt-1 block text-[11px] font-bold text-slate-500">
+                  {useWallet
+                    ? walletOnly
+                      ? `Rs ${payableNow.toFixed(2)} from wallet`
+                      : `Wallet Rs ${walletPart.toFixed(2)} + Online Rs ${onlinePart.toFixed(2)}`
+                    : 'Pay part of it from your wallet, the rest online'}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={useWallet}
+                onChange={(event) => setUseWallet(event.target.checked)}
+                className="h-5 w-5 shrink-0 accent-slate-900"
+              />
+            </label>
+          ) : null}
 
           {error ? <p className="mt-3 text-[12px] font-black text-red-500">{error}</p> : null}
 

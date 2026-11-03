@@ -73,7 +73,8 @@ export const processQuickOrderRefund = async (
       : refundTo === 'wallet' || refundTo === 'gateway'
         ? refundTo
         : 'gateway';
-  const targetMethod = paymentMethod === 'wallet' ? 'wallet' : normalizedRefundTo;
+  // Refunds always go to the wallet. Only a guest order (no account, so no wallet) falls back to the gateway.
+  const targetMethod = paymentMethod === 'wallet' || order.userId ? 'wallet' : normalizedRefundTo;
   const processedAt = new Date();
 
   if (targetMethod === 'wallet') {

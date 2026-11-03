@@ -10,6 +10,7 @@ import {
   initiateRazorpayRefund,
 } from '../../food/orders/helpers/razorpay.helper.js';
 import { notifyOwnersSafely } from '../../food/orders/services/order.helpers.js';
+import { refundWalletBalance } from '../../food/user/services/userWallet.service.js';
 import { logger } from '../../../utils/logger.js';
 
 const CHECKOUT_TTL_MS = 30 * 60 * 1000; // 30 minutes, same as Food
@@ -25,10 +26,12 @@ const ownerFilter = ({ userId = null, sessionId = '' } = {}) => {
 };
 
 /** Create the session + Razorpay order for an online checkout. No QuickOrder yet. */
-export async function createQuickCheckoutSession({ idQuery, requestBody, amountDue }) {
+export async function createQuickCheckoutSession({ idQuery, requestBody, amountDue, walletAmount = 0 }) {
   if (!isRazorpayConfigured()) throw new ValidationError('Online payment is not configured');
 
-  const amountPaise = Math.round(Number(amountDue || 0) * 100);
+  // Only the part not covered by the wallet goes to the gateway.
+  const onlineAmount = Math.round((Number(amountDue || 0) - Number(walletAmount || 0)) * 100) / 100;
+  const amountPaise = Math.round(onlineAmount * 100);
   if (amountPaise < 100) throw new ValidationError('Amount too low for online payment');
 
   const session = new QuickCheckoutSession({
@@ -36,7 +39,8 @@ export async function createQuickCheckoutSession({ idQuery, requestBody, amountD
     sessionId: idQuery?.userId ? '' : String(idQuery?.sessionId || ''),
     status: 'pending_payment',
     requestBody,
-    amountDue: Number(amountDue),
+    amountDue: onlineAmount,
+    walletAmount: Number(walletAmount || 0),
     expiresAt: new Date(Date.now() + CHECKOUT_TTL_MS),
   });
 
@@ -51,6 +55,8 @@ export async function createQuickCheckoutSession({ idQuery, requestBody, amountD
 
   return {
     checkoutId: String(session._id),
+    walletAmount: Number(walletAmount || 0),
+    onlineAmount,
     razorpay: {
       key: getRazorpayKeyId(),
       orderId: rzOrder.id,
@@ -165,7 +171,17 @@ export async function refundFailedQuickCheckout(session, reason) {
   const paymentId = session?.razorpay?.paymentId;
   let refundedOk = false;
   try {
-    if (paymentId) {
+    if (paymentId && session.userId) {
+      // Refunds always go to the wallet. (The wallet part of a split was never taken for an unplaced order.)
+      await refundWalletBalance(String(session.userId), Number(session.amountDue || 0), 'Refund: quick order could not be placed', {
+        source: 'quick_checkout_refund',
+        checkoutId: String(session._id),
+        paymentId: String(paymentId),
+      });
+      refundedOk = true;
+      logger.warn(`[QuickCheckout] ${session._id} could not become an order (${reason}). Credited Rs ${session.amountDue} to the wallet.`);
+    } else if (paymentId) {
+      // Guest checkout has no wallet - the only way back is the original payment method.
       const refund = await initiateRazorpayRefund(paymentId, Number(session.amountDue || 0));
       refundedOk = Boolean(refund?.success);
       logger.warn(

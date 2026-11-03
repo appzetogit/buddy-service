@@ -1053,7 +1053,8 @@ export async function dropSellerFromQuickOrder(parentOrder, sellerId, sellerOrde
   let refundId = '';
   if (refundAmount > 0 && paid && parentOrder.userId) {
     try {
-      if (paymentMethod === 'wallet') {
+      // Refunds always go to the wallet (this branch already requires a logged-in user).
+      if (paymentMethod === 'wallet' || parentOrder.payment?.razorpay?.paymentId) {
         await refundWalletBalance(parentOrder.userId, refundAmount, 'Quick order partial refund', {
           orderId: String(parentOrder.orderId),
           source: 'quick_order_partial_refund',

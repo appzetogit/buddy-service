@@ -29,7 +29,10 @@ const foodCheckoutSessionSchema = new mongoose.Schema(
     orderPayload: { type: mongoose.Schema.Types.Mixed, required: true },
     /** Server-recalculated pricing (source of truth for amount charged) */
     pricing: { type: mongoose.Schema.Types.Mixed, required: true },
+    /** Amount sent to the gateway. With a wallet split this is total - walletAmount. */
     amountDue: { type: Number, required: true, min: 0 },
+    /** Wallet part of a split payment; debited when the order is created after the gateway pays. */
+    walletAmount: { type: Number, default: 0, min: 0 },
     currency: { type: String, default: 'INR' },
     razorpay: {
       // Indexed via schema.index below (sparse) — avoid duplicate index:true here.

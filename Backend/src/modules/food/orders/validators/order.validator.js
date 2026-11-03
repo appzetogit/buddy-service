@@ -97,6 +97,8 @@ export function validateCreateOrderDto(body) {
         sendCutlery: z.boolean().optional(),
         // COD (cash / razorpay_qr-at-delivery) is disabled — prepaid only.
         paymentMethod: z.enum(['razorpay', 'card', 'wallet']),
+        // Online only: pay as much as possible from the wallet and the rest online.
+        useWallet: z.boolean().optional(),
         zoneId: z.string().nullable().optional(),
         scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
         deliveryOption: z.string().optional(),

@@ -45,6 +45,8 @@ const foodTransactionSchema = new mongoose.Schema({
         method: { type: String, default: 'cash', trim: true },
         status: { type: String, default: 'cod_pending', trim: true },
         amountDue: { type: Number, default: 0, min: 0 },
+        walletAmount: { type: Number, default: 0, min: 0 },
+        onlineAmount: { type: Number, default: 0, min: 0 },
         razorpay: {
             orderId: { type: String, default: '' },
             paymentId: { type: String, default: '' },

@@ -85,6 +85,8 @@ function buildPaymentSnapshot(order) {
     method: String(order.payment?.method || 'cash'),
     status: String(order.payment?.status || 'cod_pending'),
     amountDue: Number(order.payment?.amountDue ?? order.pricing?.total ?? 0) || 0,
+    walletAmount: Number(order.payment?.walletAmount || 0) || 0,
+    onlineAmount: Number(order.payment?.onlineAmount || 0) || 0,
     razorpay: {
       orderId: String(order.payment?.razorpay?.orderId || ''),
       paymentId: String(order.payment?.razorpay?.paymentId || ''),

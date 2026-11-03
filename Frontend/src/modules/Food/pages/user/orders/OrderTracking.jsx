@@ -707,7 +707,7 @@ export default function OrderTracking() {
   const [showCancelDialog, setShowCancelDialog] = useState(false)
   const [showOrderDetails, setShowOrderDetails] = useState(false)
   const [cancellationReason, setCancellationReason] = useState("")
-  const [refundDestination, setRefundDestination] = useState("source")
+  const [refundDestination, setRefundDestination] = useState("wallet")
   const [isCancelling, setIsCancelling] = useState(false)
   const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false)
   const [deliveryInstructions, setDeliveryInstructions] = useState("")
@@ -1681,11 +1681,11 @@ export default function OrderTracking() {
             ? 'Order cancelled successfully. No refund required as payment was not made.'
             : refundDestination === 'wallet'
               ? 'Order cancelled successfully. Refund has been added to your wallet.'
-              : 'Order cancelled successfully. Refund will be processed to your original payment method.');
+              : 'Order cancelled successfully. Refund has been added to your wallet.');
         toast.success(successMessage);
         setShowCancelDialog(false);
         setCancellationReason("");
-        setRefundDestination("source");
+        setRefundDestination("wallet");
         // Refresh order data
         const orderResponse = await fetchOrderDetailsWithFallback({ force: true });
         if (orderResponse.data?.success && orderResponse.data.data?.order) {
@@ -2765,34 +2765,9 @@ export default function OrderTracking() {
               if (!isRazorpayPaid) return null
 
               return (
-                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                  <p className="text-sm font-semibold text-gray-900">Refund preference</p>
-                  <div className="space-y-2">
-                    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-gray-200 bg-white px-3 py-2">
-                      <input
-                        type="radio"
-                        name="refund-destination"
-                        value="source"
-                        checked={refundDestination === "source"}
-                        onChange={() => setRefundDestination("source")}
-                        disabled={isCancelling}
-                        className="mt-0.5"
-                      />
-                      <span className="text-sm text-gray-700">Refund to original payment method (5-7 working days)</span>
-                    </label>
-                    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-gray-200 bg-white px-3 py-2">
-                      <input
-                        type="radio"
-                        name="refund-destination"
-                        value="wallet"
-                        checked={refundDestination === "wallet"}
-                        onChange={() => setRefundDestination("wallet")}
-                        disabled={isCancelling}
-                        className="mt-0.5"
-                      />
-                      <span className="text-sm text-gray-700">Refund to wallet (instant credit)</span>
-                    </label>
-                  </div>
+                <div className="space-y-1 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-sm font-semibold text-gray-900">Refund</p>
+                  <p className="text-sm text-gray-700">The full amount you paid will be credited to your wallet instantly.</p>
                 </div>
               )
             })()}

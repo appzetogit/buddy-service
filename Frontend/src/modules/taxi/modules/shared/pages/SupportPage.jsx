@@ -10,7 +10,7 @@ const RIDER_FAQ = [
   { q: 'Can I raise my fare to find a driver faster?', a: 'Yes. If no driver has accepted, the app lets you add a small amount to your fare. Drivers nearby see the new fare immediately. You always see the final amount before adding it.' },
   { q: 'How do I cancel a ride, and is there a charge?', a: 'Tap Cancel on the trip screen. Cancelling soon after booking is free; a small cancellation fee may apply if the driver has already arrived or waited for you. The fee, if any, is shown before you confirm.' },
   { q: 'I left something in the vehicle. What should I do?', a: 'Contact Buddy support with your trip date and pickup location. Our team will contact the driver and help arrange its return.' },
-  { q: 'How do refunds work?', a: 'If you were charged incorrectly or paid for a trip that did not happen, contact support with the trip details. Approved refunds go back to your original payment method or Buddy wallet within 5-7 working days.' },
+  { q: 'How do refunds work?', a: 'If you were charged incorrectly or paid for a trip that did not happen, contact support with the trip details. Approved refunds are credited to your Buddy wallet.' },
   { q: 'How do I delete my account?', a: 'Email contact Buddy support from the app using your registered mobile number and ask for account deletion. We complete it within 30 days, as described in our Privacy Policy.' },
 ];
 

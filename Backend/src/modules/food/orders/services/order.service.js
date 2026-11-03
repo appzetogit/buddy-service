@@ -257,12 +257,12 @@ export async function createOrder(userId, dto, options = {}) {
       : undefined,
   };
 
-  const paymentMethod = dto.paymentMethod === "card" ? "razorpay" : dto.paymentMethod;
+  let paymentMethod = dto.paymentMethod === "card" ? "razorpay" : dto.paymentMethod;
   const isCash = paymentMethod === "cash" || paymentMethod === "razorpay_qr";
   if (isCash) {
     throw new ValidationError('Cash on Delivery is no longer available. Please pay online or with wallet.');
   }
-  const isWallet = paymentMethod === "wallet";
+  let isWallet = paymentMethod === "wallet";
   const verifiedPrepaid = options.verifiedPrepaid || null;
 
   // Always recalculate server-side (coupon validity + fees + catalog prices) before placing
@@ -315,8 +315,25 @@ export async function createOrder(userId, dto, options = {}) {
     throw new ValidationError(msg);
   }
 
+  // Online + wallet split (online only, never cash). A verified checkout carries the wallet part
+  // it was priced with, so it is not re-derived from whatever the balance is now.
+  let walletAmount = 0;
+  if (verifiedPrepaid) {
+    walletAmount = Math.max(0, Number(verifiedPrepaid.walletAmount || 0));
+  } else if (paymentMethod === "razorpay" && dto.useWallet === true) {
+    const balance = await userWalletService.getWalletBalance(userId);
+    if (balance >= normalizedPricing.total) {
+      // The wallet alone covers it - nothing to pay online.
+      paymentMethod = "wallet";
+      isWallet = true;
+    } else if (balance > 0) {
+      // Razorpay needs at least Rs 1, so always leave Rs 1 for the gateway.
+      walletAmount = Math.max(0, Math.min(balance, Math.round((normalizedPricing.total - 1) * 100) / 100));
+    }
+  }
+
   if (verifiedPrepaid && Number.isFinite(Number(verifiedPrepaid.expectedAmount))) {
-    const expected = Math.round(Number(verifiedPrepaid.expectedAmount) * 100);
+    const expected = Math.round((Number(verifiedPrepaid.expectedAmount) + walletAmount) * 100);
     const actual = Math.round(normalizedPricing.total * 100);
     if (expected !== actual) {
       throw new ValidationError("Order total changed after payment. Contact support for a refund.");
@@ -346,12 +363,15 @@ export async function createOrder(userId, dto, options = {}) {
       userId,
       dto: lockedDto,
       pricing: normalizedPricing,
+      walletAmount,
     });
     return {
       order: null,
       checkoutId: checkout.checkoutId,
       paymentType: 'PREPAID',
       amount: normalizedPricing.total,
+      walletAmount: checkout.walletAmount,
+      onlineAmount: checkout.onlineAmount,
       razorpayOrderId: checkout.razorpay?.orderId || null,
       pricing: checkout.pricing,
       razorpay: checkout.razorpay,
@@ -654,6 +674,8 @@ export async function createOrder(userId, dto, options = {}) {
       method: "razorpay",
       status: "paid",
       amountDue: normalizedPricing.total,
+      walletAmount,
+      onlineAmount: Math.round((normalizedPricing.total - walletAmount) * 100) / 100,
       razorpay: {
         orderId: verifiedPrepaid.razorpayOrderId,
         paymentId: verifiedPrepaid.razorpayPaymentId,
@@ -665,6 +687,8 @@ export async function createOrder(userId, dto, options = {}) {
       method: paymentMethod,
       status: isCash ? "cod_pending" : isWallet ? "paid" : "created",
       amountDue: normalizedPricing.total,
+      walletAmount: isWallet ? normalizedPricing.total : 0,
+      onlineAmount: isWallet ? 0 : normalizedPricing.total,
       razorpay: {},
       qr: {},
     };
@@ -730,6 +754,29 @@ export async function createOrder(userId, dto, options = {}) {
     } catch (err) {
       await FoodOrder.deleteOne({ _id: order._id });
       throw err;
+    }
+  }
+
+  // Wallet part of an online order. The gateway already took the rest, so if the wallet cannot
+  // cover its part any more (spent in the meantime) the order is dropped and what the user paid
+  // online goes back to their wallet - never kept for an order that does not exist.
+  if (verifiedPrepaid && walletAmount > 0) {
+    try {
+      await userWalletService.deductWalletBalance(
+        userId,
+        walletAmount,
+        `Wallet part of order #${order.order_id || order._id}`,
+        { orderId: order._id, source: 'order_payment_split' },
+      );
+    } catch (err) {
+      await FoodOrder.deleteOne({ _id: order._id });
+      await userWalletService.refundWalletBalance(
+        userId,
+        order.payment.onlineAmount,
+        'Refund: order could not be placed (wallet balance changed)',
+        { source: 'order_payment_split_reversal' },
+      );
+      throw new ValidationError('Wallet balance changed while paying. Your online payment was added to your wallet - please place the order again.');
     }
   }
 
@@ -855,6 +902,7 @@ export async function verifyPayment(userId, dto) {
         razorpayPaymentId: dto.razorpayPaymentId,
         razorpaySignature: dto.razorpaySignature,
         expectedAmount: claimed.amountDue,
+        walletAmount: claimed.walletAmount || 0,
       },
     });
 
@@ -968,20 +1016,24 @@ export async function finalizeCheckoutFromWebhook(rzOrderId, rzPaymentId) {
     // Silently returning here left them charged with no order and no refund. Refund it and
     // alert an admin; never keep money for an order that will not exist.
     try {
-      const { initiateRazorpayRefund } = await import('../helpers/razorpay.helper.js');
-      const refund = await initiateRazorpayRefund(rzPaymentId, Number(session.amountDue || 0));
+      // Refunds always go to the wallet. The wallet part was never taken for an unplaced order.
+      await userWalletService.refundWalletBalance(
+        String(session.userId),
+        Number(session.amountDue || 0),
+        'Refund: payment arrived after checkout expired',
+        { source: 'expired_checkout_refund', checkoutId: String(session._id), paymentId: String(rzPaymentId) },
+      );
       logger.warn(
-        `Checkout ${session._id} expired but payment ${rzPaymentId} was captured. ` +
-        `Auto-refund ${refund.success ? 'initiated' : 'FAILED'}: ${refund.refundId || refund.error}`,
+        `Checkout ${session._id} expired but payment ${rzPaymentId} was captured. Credited Rs ${session.amountDue} to the user's wallet.`,
       );
       await notifyOwnersSafely([{ ownerType: 'ADMIN', ownerId: 'GLOBAL' }], {
-        title: refund.success ? 'Expired checkout auto-refunded' : 'Expired checkout refund FAILED',
+        title: 'Expired checkout refunded to wallet',
         body: `Payment ${rzPaymentId} (₹${session.amountDue}) arrived after checkout ${session._id} expired.`,
         data: { type: 'expired_checkout_payment', checkoutId: String(session._id), paymentId: String(rzPaymentId) },
       });
     } catch (refundErr) {
       logger.error(
-        `CRITICAL: expired checkout ${session._id} was paid (${rzPaymentId}) and auto-refund threw: ${refundErr.message}. Manual refund required.`,
+        `CRITICAL: expired checkout ${session._id} was paid (${rzPaymentId}) and the wallet refund threw: ${refundErr.message}. Manual refund required.`,
       );
     }
     return null;
@@ -1002,6 +1054,7 @@ export async function finalizeCheckoutFromWebhook(rzOrderId, rzPaymentId) {
       razorpayPaymentId: rzPaymentId,
       razorpaySignature: claimed.razorpay?.signature || 'webhook',
       expectedAmount: claimed.amountDue,
+      walletAmount: claimed.walletAmount || 0,
     },
   });
 
@@ -1054,36 +1107,13 @@ async function applyOrderRefundIfPaid(order, { recordedByRole = 'SYSTEM', record
     };
   };
 
+  // Refunds always go to the wallet (preferWallet is kept for callers but no longer changes this).
   if (paymentMethod === 'razorpay' && order.payment?.razorpay?.paymentId) {
-    if (preferWallet) {
-      try {
-        await refundToWallet();
-      } catch (err) {
-        logger.warn(`applyOrderRefundIfPaid wallet (razorpay→wallet) failed for ${order._id}: ${err?.message || err}`);
-        order.payment.refund = { status: 'failed', destination: 'wallet', amount: order.pricing.total };
-      }
-    } else {
-      try {
-        const refundResult = await initiateRazorpayRefund(
-          order.payment.razorpay.paymentId,
-          order.pricing.total,
-        );
-        if (refundResult.success) {
-          order.payment.status = 'refunded';
-          order.payment.refund = {
-            status: 'processed',
-            destination: 'source',
-            amount: order.pricing.total,
-            refundId: refundResult.refundId,
-            processedAt: new Date(),
-          };
-        } else {
-          order.payment.refund = { status: 'failed', destination: 'source', amount: order.pricing.total };
-        }
-      } catch (err) {
-        logger.warn(`applyOrderRefundIfPaid razorpay failed for ${order._id}: ${err?.message || err}`);
-        order.payment.refund = { status: 'failed', destination: 'source', amount: order.pricing.total };
-      }
+    try {
+      await refundToWallet();
+    } catch (err) {
+      logger.warn(`applyOrderRefundIfPaid wallet (razorpay→wallet) failed for ${order._id}: ${err?.message || err}`);
+      order.payment.refund = { status: 'failed', destination: 'wallet', amount: order.pricing.total };
     }
   } else if (paymentMethod === 'wallet') {
     try {
@@ -1777,10 +1807,8 @@ export async function cancelOrder(orderId, userId, reason, refundDestination = "
 
   const paymentMethod = String(order.payment?.method || "cash").toLowerCase();
   const paymentStatus = String(order.payment?.status || "cod_pending").toLowerCase();
-  const normalizedRefundDestination =
-    String(refundDestination || "source").toLowerCase() === "wallet"
-      ? "wallet"
-      : "source";
+  // Refunds always go to the wallet, whatever destination the client asked for.
+  const normalizedRefundDestination = "wallet";
   const hasRefundProcessed =
     String(order.payment?.refund?.status || "none").toLowerCase() === "processed";
 
@@ -2984,29 +3012,18 @@ export async function updateOrderStatusRestaurant(
     (!order.payment.refund || order.payment.refund.status !== "processed")
   ) {
     try {
-      const refundResult = await initiateRazorpayRefund(
-        order.payment.razorpay.paymentId,
-        order.pricing.total
-      );
-
-      if (refundResult.success) {
-        order.payment.status = "refunded";
-        order.payment.refund = {
-          status: "processed",
-          amount: order.pricing.total,
-          refundId: refundResult.refundId,
-          processedAt: new Date()
-        };
-      } else {
-        // Record failure so admin knows a manual refund might be needed
-        order.payment.refund = {
-          status: "failed",
-          amount: order.pricing.total
-        };
-      }
+      // Refunds always go to the wallet (wallet part + online part together = pricing.total).
+      await userWalletService.refundWalletBalance(order.userId, order.pricing.total, `Refund for order #${order.order_id || order._id} cancelled by restaurant`, { orderId: order._id });
+      order.payment.status = "refunded";
+      order.payment.refund = {
+        status: "processed",
+        destination: "wallet",
+        amount: order.pricing.total,
+        processedAt: new Date()
+      };
     } catch (err) {
-      console.error(`Automated refund failed for Order ${order._id.toString()} (Restaurant Cancel):`, err);
-      order.payment.refund = { status: "failed", amount: order.pricing.total };
+      console.error(`Automated wallet refund failed for Order ${order._id.toString()} (Restaurant Cancel):`, err);
+      order.payment.refund = { status: "failed", destination: "wallet", amount: order.pricing.total };
     }
     // Re-save order with updated payment status
     await order.save();

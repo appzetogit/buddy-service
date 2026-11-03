@@ -93,7 +93,7 @@ const legalContent = {
       {
         title: 'Refund eligibility',
         body:
-          'Eligible refunds will be credited within 5 to 10 business days to the original payment method, subject to banking timelines.',
+          'Eligible refunds are credited to your Buddy wallet.',
       },
       {
         title: 'How to request a refund',

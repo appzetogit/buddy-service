@@ -296,6 +296,8 @@ function Cart() {
   const [showPaymentSheet, setShowPaymentSheet] = useState(false)
   const [walletBalance, setWalletBalance] = useState(0)
   const [isLoadingWallet, setIsLoadingWallet] = useState(false)
+  // Online payment only: pay what the wallet can cover from the wallet, the rest online.
+  const [useWalletSplit, setUseWalletSplit] = useState(false)
   const [showAddMoneyModal, setShowAddMoneyModal] = useState(false)
   const [restaurantNote, setRestaurantNote] = useState(() => {
     try {
@@ -1269,7 +1271,7 @@ function Cart() {
 
   // Fetch wallet when user selects Wallet, or when opening the payment sheet (to show balance / low-balance CTA)
   useEffect(() => {
-    if (selectedPaymentMethod !== "wallet" && !showPaymentSheet) return undefined
+    if (selectedPaymentMethod !== "wallet" && selectedPaymentMethod !== "razorpay" && !showPaymentSheet) return undefined
 
     let cancelled = false
     const fetchWalletBalance = async () => {
@@ -1492,10 +1494,17 @@ function Cart() {
       items: comparison
     }
   }, [cart, total])
+  const walletSplitAmount =
+    selectedPaymentMethod === "razorpay" && useWalletSplit && walletBalance > 0
+      ? Math.min(Math.floor(walletBalance * 100) / 100, total)
+      : 0
+  const onlineSplitAmount = Math.max(0, Math.round((total - walletSplitAmount) * 100) / 100)
   const selectedPaymentLabel =
     selectedPaymentMethod === "wallet"
       ? "Wallet"
-      : "Online Payment"
+      : walletSplitAmount > 0
+        ? `Wallet ${RUPEE_SYMBOL}${walletSplitAmount.toFixed(0)} + Online ${RUPEE_SYMBOL}${onlineSplitAmount.toFixed(0)}`
+        : "Online Payment"
 
   // Restaurant name from data or cart
   const restaurantName = isMultiRestaurantOrder
@@ -1861,6 +1870,7 @@ function Cart() {
         tip: tipsConfig.tipsEnabled && tip > 0 ? tip : undefined,
         sendCutlery: sendCutlery !== false,
         paymentMethod: selectedPaymentMethod,
+        useWallet: walletSplitAmount > 0 ? true : undefined,
         // `useZone()` can return `null`. Zod expects string/undefined, not null.
         zoneId: zoneId || undefined,
         scheduledAt: isScheduled ? new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString() : undefined,
@@ -3493,6 +3503,30 @@ function Cart() {
                       )}
                     </button>
                   ))}
+
+                  {selectedPaymentMethod === "razorpay" && walletBalance > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setUseWalletSplit((v) => !v)}
+                      className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 text-left transition-all ${useWalletSplit
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
+                        : 'border-gray-200 dark:border-gray-700'}`}
+                    >
+                      <div>
+                        <p className="text-sm font-black text-gray-900 dark:text-gray-100">
+                          Use wallet balance ({RUPEE_SYMBOL}{walletBalance.toFixed(0)})
+                        </p>
+                        <p className="text-[11px] font-bold text-gray-500 mt-0.5">
+                          {useWalletSplit
+                            ? `Wallet ${RUPEE_SYMBOL}${walletSplitAmount.toFixed(0)} + Online ${RUPEE_SYMBOL}${onlineSplitAmount.toFixed(0)}`
+                            : 'Pay part from wallet, the rest online'}
+                        </p>
+                      </div>
+                      <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center ${useWalletSplit ? 'bg-blue-500 border-blue-500' : 'border-gray-300 dark:border-gray-600'}`}>
+                        {useWalletSplit && <Check className="w-3.5 h-3.5 text-white" strokeWidth={4} />}
+                      </div>
+                    </button>
+                  )}
                 </div>
 
                 <div
@@ -3502,6 +3536,9 @@ function Cart() {
                   <div className="flex-shrink-0">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Total Pay</p>
                     <p className="text-xl font-black text-[#16A34A] tabular-nums">{RUPEE_SYMBOL}{total.toFixed(0)}</p>
+                    {walletSplitAmount > 0 && (
+                      <p className="text-[10px] font-bold text-gray-500 mt-0.5">Online now: {RUPEE_SYMBOL}{onlineSplitAmount.toFixed(0)}</p>
+                    )}
                   </div>
                   <Button
                     onClick={() => setShowPaymentSheet(false)}

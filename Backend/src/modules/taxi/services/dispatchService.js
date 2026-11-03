@@ -18,7 +18,6 @@ import { getRideRoom, isReservation, resolveSetPriceForRide } from './rideServic
 import { SOCKET_EVENTS } from '../socket/events.js';
 import { resolveTransportDispatchConfig } from './transportSettingsService.js';
 import { sendPushNotificationToEntities } from './pushNotificationService.js';
-import { initiateRazorpayRefund, isRazorpayConfigured } from '../../food/orders/helpers/razorpay.helper.js';
 
 export const OUTSTATION_AUTO_EXPIRE_HOURS = 3.5;
 export const OUTSTATION_AUTO_EXPIRE_MS = OUTSTATION_AUTO_EXPIRE_HOURS * 60 * 60 * 1000;
@@ -284,7 +283,7 @@ const matchDispatchDrivers = async ({
   return result;
 };
 
-const applyUserWalletAdjustment = async ({
+export const applyUserWalletAdjustment = async ({
   userId,
   amount,
   kind,
@@ -970,39 +969,21 @@ export const processRideCancellationRefund = async (ride, { feeDeducted = 0 } = 
     return { refunded: false, reason: 'payment_was_pending' };
   }
 
+  // Every refund goes to the rider's Buddy Wallet (full paid amount, wallet + online part), never back
+  // to the bank/gateway. The reference key makes a repeated call a no-op.
   const refundReference = `refund:ride:${String(ride._id)}`;
-  let refundMethod = 'wallet';
-  let gatewayRefundResult = null;
+  const refundMethod = 'wallet';
+  const gatewayRefundResult = null;
 
-  // 1. Attempt Gateway Refund (Razorpay) if paid via Razorpay
-  if (hasPaymentId && isRazorpayConfigured()) {
-    try {
-      const rzResult = await initiateRazorpayRefund(
-        ride.driverPaymentCollection.providerPaymentId,
-        refundableAmount,
-      );
-      if (rzResult?.success) {
-        refundMethod = 'gateway';
-        gatewayRefundResult = rzResult;
-      }
-    } catch (gatewayErr) {
-      console.warn('Razorpay gateway refund failed, falling back to wallet refund:', gatewayErr?.message);
-    }
-  }
-
-  // 2. If gateway refund didn't happen (or failed), credit directly to User's Buddy Wallet
-  let walletAdjustment = null;
-  if (refundMethod === 'wallet') {
-    walletAdjustment = await applyUserWalletAdjustment({
-      userId: ride.userId,
-      amount: refundableAmount,
-      kind: 'credit',
-      title: `Refund for cancelled booking ${String(ride._id).slice(-6)}`,
-      referenceKey: refundReference,
-      walletField: 'balance',
-      provider: 'ride_cancellation_refund',
-    });
-  }
+  const walletAdjustment = await applyUserWalletAdjustment({
+    userId: ride.userId,
+    amount: refundableAmount,
+    kind: 'credit',
+    title: `Refund for cancelled booking ${String(ride._id).slice(-6)}`,
+    referenceKey: refundReference,
+    walletField: 'balance',
+    provider: 'ride_cancellation_refund',
+  });
 
   // 3. Update ride record
   await Ride.updateOne(
@@ -1018,9 +999,7 @@ export const processRideCancellationRefund = async (ride, { feeDeducted = 0 } = 
   );
 
   // 4. Real-time socket notification to rider
-  const refundMsg = refundMethod === 'gateway'
-    ? `Refund of ₹${refundableAmount.toFixed(0)} initiated to your original payment method.`
-    : `Refund of ₹${refundableAmount.toFixed(0)} credited to your Buddy Wallet.`;
+  const refundMsg = `Refund of ₹${refundableAmount.toFixed(0)} credited to your Buddy Wallet.`;
 
   emitToRoom(getUserRoom(ride.userId), 'rideRefundProcessed', {
     rideId: String(ride._id),
