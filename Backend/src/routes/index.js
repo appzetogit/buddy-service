@@ -16,6 +16,7 @@ import quickCommerceSellerRoutes from '../modules/quick-commerce/seller/routes/s
 import quickCommerceDeliveryRoutes from '../modules/quick-commerce/delivery/quickDelivery.routes.js';
 import commonOnboardingFeeRoutes from '../modules/common/routes/onboardingFee.routes.js';
 import commonMapsRoutes from '../modules/common/routes/maps.routes.js';
+import { homeConfigPublicRouter, homeConfigAdminRouter } from '../modules/common/routes/homeConfig.routes.js';
 import userRoutes from '../modules/food/user/routes/user.routes.js';
 import orderUserRoutes from '../modules/food/orders/routes/order.routes.user.js';
 import diningUserRoutes from '../modules/food/dining/routes/dining.routes.user.js';
@@ -87,6 +88,8 @@ router.use('/v1/quick-commerce', quickCommerceRoutes);
 router.use('/v1/seller', quickCommerceSellerRoutes);
 router.use('/v1/common/onboarding-fees', commonOnboardingFeeRoutes);
 router.use('/v1/common/maps', commonMapsRoutes);
+router.use('/v1/common/home-config', homeConfigPublicRouter);
+router.use('/v1/common/admin/home-config', authMiddleware, requireRoles('ADMIN'), homeConfigAdminRouter);
 // Taxi (riders + admin): /api/v1/taxi/*. Own router and own error handler. Loaded defensively: a
 // problem inside the taxi module must never stop Food / Quick Commerce from starting.
 try {
