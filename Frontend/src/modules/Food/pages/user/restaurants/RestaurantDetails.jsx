@@ -3,7 +3,7 @@ import { createPortal } from "react-dom"
 import { normalizePagination } from "@food/utils/pagination"
 import { motion, AnimatePresence } from "framer-motion"
 import { useParams, useNavigate, useSearchParams } from "react-router-dom"
-import { restaurantAPI, diningAPI, orderAPI } from "@food/api"
+import { restaurantAPI, orderAPI } from "@food/api"
 import { fetchOutletTimingsCached } from "@food/utils/outletTimingsCache"
 import { fetchRestaurantsCached } from "@food/utils/restaurantListCache"
 import { API_BASE_URL } from "@food/api/config"
@@ -311,6 +311,9 @@ function RestaurantDetailsContent() {
   const [restaurantError, setRestaurantError] = useState(null)
   const fetchedRestaurantRef = useRef(false) // Track if restaurant has been fetched for current slug
   const fetchedSlugRef = useRef(null)
+  const inFlightSlugRef = useRef(null) // slug currently being fetched (blocks overlapping fetches)
+  const restaurantRef = useRef(null)
+  restaurantRef.current = restaurant
 
   const availableTimeSlots = useMemo(() => {
     if (!selectedDate || !restaurant) return []
@@ -479,13 +482,17 @@ function RestaurantDetailsContent() {
 
       // Prevent re-fetching for the same slug. Mobile location/zone updates can
       // trigger transient refetch failures that clear already-rendered content.
-      if (fetchedRestaurantRef.current && fetchedSlugRef.current === slug && restaurant) {
+      if (fetchedRestaurantRef.current && fetchedSlugRef.current === slug && restaurantRef.current) {
         return
       }
+      // A zone/location change mid-fetch used to start a 2nd overlapping fetch whose
+      // failure flashed "Restaurant not found" over a page that was about to load.
+      if (inFlightSlugRef.current === slug) return
+      inFlightSlugRef.current = slug
 
       try {
         // Keep the existing page visible on background retries.
-        setLoadingRestaurant(!fetchedRestaurantRef.current && !restaurant)
+        setLoadingRestaurant(!fetchedRestaurantRef.current && !restaurantRef.current)
         setRestaurantError(null)
 
         debugLog('Fetching restaurant with slug:', slug)
@@ -499,35 +506,34 @@ function RestaurantDetailsContent() {
           ? { params: { lat: userLocation.latitude, lng: userLocation.longitude } }
           : {}
 
-        // Try dining API first (if available). If it doesn't return a valid restaurant,
-        // always fall back to restaurant API (important when diningAPI is stubbed).
-        try {
-          response = await diningAPI.getRestaurantBySlug(slug, locationConfig)
-          if (response?.data?.success && response?.data?.data) {
-            apiRestaurant = response.data.data
-            debugLog('? Found restaurant in dining API:', apiRestaurant)
-          } else {
-            debugLog('? Dining API returned no restaurant, falling back to restaurant API...')
-          }
-        } catch (diningError) {
-          // If dining API errors, we still fall back unless it's a hard network failure handled below.
-          if (diningError?.response?.status === 404) {
-            debugLog('? Restaurant not found in dining API, trying restaurant API...')
-          } else {
-            debugWarn('? Dining API failed, trying restaurant API...', diningError?.message)
+        // Direct lookup by slug/ID (diningAPI.getRestaurantBySlug hits this same endpoint,
+        // so a separate dining call only doubled the wait on failures).
+        // Transient failures (timeout/5xx/network) are retried and then surfaced as a
+        // load error - never as a false "Restaurant not found". Only a real 404 counts.
+        let directLookupFailure = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            response = await restaurantAPI.getRestaurantById(slug, locationConfig)
+            if (response?.data?.success && response?.data?.data) {
+              apiRestaurant = response.data.data
+            }
+            directLookupFailure = null
+            break
+          } catch (lookupErr) {
+            directLookupFailure = lookupErr
+            if (lookupErr?.response?.status === 404) break
+            await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)))
           }
         }
+        if (!apiRestaurant && directLookupFailure && directLookupFailure.response?.status !== 404) {
+          throw directLookupFailure
+        }
 
-        // Restaurant API fallback (works for both ObjectId and slug)
+        // Name-search fallback only when the direct lookup definitively found nothing.
         if (!apiRestaurant) {
           try {
-            // First, try to get restaurant directly by slug/ID (no zoneId needed)
             try {
-              response = await restaurantAPI.getRestaurantById(slug, locationConfig)
-              if (response?.data?.success && response?.data?.data) {
-                apiRestaurant = response.data.data
-                debugLog('? Found restaurant in restaurant API by slug/ID:', apiRestaurant)
-              }
+              throw directLookupFailure || new Error('no direct match')
             } catch (directLookupError) {
               // If direct lookup fails, try searching by name.
               // Fallback without zoneId so missing live location never blocks this page.
@@ -1257,6 +1263,7 @@ function RestaurantDetailsContent() {
           }
         }
       } finally {
+        if (inFlightSlugRef.current === slug) inFlightSlugRef.current = null
         setLoadingRestaurant(false)
         setLoadingMenuItems(false)
       }
@@ -1271,7 +1278,7 @@ function RestaurantDetailsContent() {
     }
 
     fetchRestaurant()
-  }, [slug, zoneId, restaurant])
+  }, [slug, zoneId])
 
   useEffect(() => {
     const restaurantId = restaurant?.mongoId || restaurant?.id || restaurant?.restaurantId
@@ -2287,21 +2294,9 @@ function RestaurantDetailsContent() {
     )
   }
 
-  // Show error if restaurant is still null
+  // No restaurant and no error yet = a fetch is about to start; never flash "not found".
   if (!restaurant) {
-    return (
-      <AnimatedPage>
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <AlertCircle className="h-12 w-12 text-red-500" />
-            <span className="text-sm text-gray-600">Restaurant not found</span>
-            <Button onClick={goBack} variant="outline">
-              Go Back
-            </Button>
-          </div>
-        </div>
-      </AnimatedPage>
-    )
+    return <RestaurantDetailSkeleton />
   }
 
   const availabilityStatus = getRestaurantAvailabilityStatus(restaurant, new Date(availabilityTick))
