@@ -16,6 +16,9 @@ export async function listMessagesController(req, res, next) {
             peerRole: req.query?.peerRole,
             peerId: req.query?.peerId,
             orderId: req.query?.orderId,
+            conversationId: req.query?.conversationId,
+            page: req.query?.page,
+            limit: req.query?.limit,
         });
         return sendResponse(res, 200, 'Messages fetched successfully', data);
     } catch (err) {
@@ -30,6 +33,7 @@ export async function sendMessageController(req, res, next) {
             peerId: req.body?.peerId,
             orderId: req.body?.orderId,
             text: req.body?.text,
+            conversationId: req.body?.conversationId,
         });
         return sendResponse(res, 201, 'Message sent successfully', data);
     } catch (err) {

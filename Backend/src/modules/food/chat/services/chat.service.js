@@ -99,6 +99,24 @@ const ownerTargetFromToken = (token) => {
     return { ownerType: role, ownerId: id };
 };
 
+/** Loads a conversation the caller is part of (apps open a thread by conversationId from the list). */
+async function loadMyConversation(myToken, conversationId) {
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) throw new ValidationError('Invalid conversationId');
+    const conversation = await FoodChatConversation.findOne({
+        _id: conversationId,
+        $or: [{ partyAToken: myToken }, { partyBToken: myToken }],
+    }).lean();
+    if (!conversation) throw new NotFoundError('Conversation not found');
+    return conversation;
+}
+
+/** Turns a conversationId into the peerRole/peerId/orderId the rest of the service works with. */
+async function peerFromConversation(myToken, conversationId) {
+    const c = await loadMyConversation(myToken, conversationId);
+    const { role, id } = parseToken(peerTokenFor(c, myToken));
+    return { peerRole: role, peerId: id, orderId: c.orderId ? String(c.orderId) : undefined };
+}
+
 export async function listConversations(reqUser, { orderId } = {}) {
     const myToken = myTokenFromReqUser(reqUser);
     const filter = { $or: [{ partyAToken: myToken }, { partyBToken: myToken }] };
@@ -119,24 +137,40 @@ export async function listConversations(reqUser, { orderId } = {}) {
     }));
 }
 
-export async function listMessages(reqUser, { peerRole, peerId, orderId }) {
+export async function listMessages(reqUser, { peerRole, peerId, orderId, conversationId, page, limit }) {
     const myToken = myTokenFromReqUser(reqUser);
-    const { partyAToken, partyBToken } = await resolveConversationParties({ myToken, peerRole, peerId, orderId });
 
-    const conversation = await FoodChatConversation.findOne({
-        orderId: orderId || null,
-        partyAToken,
-        partyBToken,
-    }).lean();
+    let conversation;
+    if (conversationId && !peerRole) {
+        conversation = await loadMyConversation(myToken, conversationId);
+    } else {
+        const { partyAToken, partyBToken } = await resolveConversationParties({ myToken, peerRole, peerId, orderId });
+        conversation = await FoodChatConversation.findOne({
+            orderId: orderId || null,
+            partyAToken,
+            partyBToken,
+        }).lean();
+    }
     if (!conversation) return { conversationId: null, messages: [] };
 
-    const messages = await FoodChatMessage.find({ conversationId: conversation._id })
-        .sort({ createdAt: 1 })
-        .lean();
+    // No page/limit = the whole thread (old behaviour). With them: newest `limit` per page, shown oldest-first.
+    const lim = Math.min(Math.max(parseInt(limit, 10) || 0, 0), 100);
+    const pg = Math.max(parseInt(page, 10) || 1, 1);
+    let query = FoodChatMessage.find({ conversationId: conversation._id });
+    let hasMore = false;
+    let rows;
+    if (lim) {
+        rows = await query.sort({ createdAt: -1 }).skip((pg - 1) * lim).limit(lim + 1).lean();
+        hasMore = rows.length > lim;
+        rows = rows.slice(0, lim).reverse();
+    } else {
+        rows = await query.sort({ createdAt: 1 }).lean();
+    }
 
     return {
         conversationId: String(conversation._id),
-        messages: messages.map((m) => ({
+        ...(lim ? { page: pg, limit: lim, hasMore } : {}),
+        messages: rows.map((m) => ({
             id: String(m._id),
             senderToken: m.senderToken,
             text: m.text,
@@ -145,11 +179,14 @@ export async function listMessages(reqUser, { peerRole, peerId, orderId }) {
     };
 }
 
-export async function sendMessage(reqUser, { peerRole, peerId, orderId, text }) {
+export async function sendMessage(reqUser, { peerRole, peerId, orderId, text, conversationId }) {
     const trimmed = String(text || '').trim();
     if (!trimmed) throw new ValidationError('Message text is required');
 
     const myToken = myTokenFromReqUser(reqUser);
+    if (conversationId && !peerRole) {
+        ({ peerRole, peerId, orderId } = await peerFromConversation(myToken, conversationId));
+    }
     const { partyAToken, partyBToken, peerToken } = await resolveConversationParties({
         myToken, peerRole, peerId, orderId,
     });
