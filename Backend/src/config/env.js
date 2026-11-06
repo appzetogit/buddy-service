@@ -30,7 +30,7 @@ export const config = {
 
     // WhatsApp (BhashSMS) — OTP + order status messages
     whatsapp: {
-        baseUrl: process.env.WHATSAPP_API_BASE_URL || 'http://bhashsms.com/api/sendmsg.php',
+        baseUrl: process.env.WHATSAPP_API_BASE_URL || 'https://bhashsms.com/api/sendmsgutil.php',
         username: process.env.WHATSAPP_API_USERNAME,
         password: process.env.WHATSAPP_API_PASSWORD,
         sender: process.env.WHATSAPP_SENDER_NUMBER,
