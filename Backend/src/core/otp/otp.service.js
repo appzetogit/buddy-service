@@ -11,6 +11,21 @@ const generateOtpCode = () => {
     return String(code);
 };
 
+/**
+ * Fixed OTP for listed numbers, from DEMO_LOGIN_PHONES=9301988718:1234,... (same setting the taxi
+ * login reads). Only an addition: unlisted numbers, or a malformed entry, get a real OTP as before.
+ */
+const demoOtpFor = (phone) => {
+    const last10 = (v) => String(v || '').replace(/\D/g, '').slice(-10);
+    for (const entry of String(process.env.DEMO_LOGIN_PHONES || '').split(',')) {
+        const [p, code] = entry.split(':');
+        if (last10(p).length === 10 && last10(p) === last10(phone) && /^\d{4,8}$/.test(String(code || '').trim())) {
+            return String(code).trim();
+        }
+    }
+    return null;
+};
+
 export const createOrUpdateOtp = async (phone) => {
     const existing = await FoodOtp.findOne({ phone });
     const now = new Date();
@@ -32,8 +47,11 @@ export const createOrUpdateOtp = async (phone) => {
         }
     }
 
+    const demoOtp = demoOtpFor(phone);
     let otp;
-    if (config.useDefaultOtp) {
+    if (demoOtp) {
+        otp = demoOtp;
+    } else if (config.useDefaultOtp) {
         otp = '1234';
         logger.info(`Default OTP mode enabled – OTP is ${otp} for phone ${phone}`);
     } else {
@@ -69,7 +87,7 @@ export const createOrUpdateOtp = async (phone) => {
 
     // USE_DEFAULT_OTP=true -> fixed 1234, nothing sent. Otherwise the OTP goes out on WhatsApp.
     // Failure is logged, not thrown: the OTP is already stored and the user can resend.
-    if (!config.useDefaultOtp) {
+    if (!config.useDefaultOtp && !demoOtp) {
         await sendWhatsappOtp(phone, otp);
     }
 
