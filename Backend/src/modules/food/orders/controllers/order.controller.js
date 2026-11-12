@@ -223,6 +223,20 @@ export async function updateOrderStatusRestaurantController(req, res, next) {
     }
 }
 
+/** Self pickup handed over: body `{ code }` (the code the customer shows). */
+export async function completePickupRestaurantController(req, res, next) {
+    try {
+        const order = await orderService.completePickupRestaurant(
+            req.params.orderId,
+            req.user?.userId,
+            req.body?.code,
+        );
+        return sendResponse(res, 200, 'Order collected by the customer', { order });
+    } catch (err) {
+        next(err);
+    }
+}
+
 export async function listOrdersAvailableDeliveryController(req, res, next) {
     try {
         const deliveryPartnerId = req.user?.userId;

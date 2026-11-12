@@ -69,6 +69,8 @@ export function validateCalculateOrderDto(body) {
         deliverySpeedOptionId: z.string().optional(),
         deliveryOption: z.string().optional(),
         tip: z.number().min(0).optional(),
+        // 'pickup': the customer collects it from the restaurant (no rider, no delivery fee).
+        fulfillment: z.enum(['delivery', 'pickup']).optional(),
     });
     const result = schema.safeParse(body);
     if (!result.success) {
@@ -99,6 +101,8 @@ export function validateCreateOrderDto(body) {
         paymentMethod: z.enum(['razorpay', 'card', 'wallet']),
         // Online only: pay as much as possible from the wallet and the rest online.
         useWallet: z.boolean().optional(),
+        // 'pickup': the customer collects it from the restaurant (no rider, no delivery fee).
+        fulfillment: z.enum(['delivery', 'pickup']).optional(),
         zoneId: z.string().nullable().optional(),
         scheduledAt: z.string().datetime({ offset: true }).nullable().optional(),
         deliveryOption: z.string().optional(),

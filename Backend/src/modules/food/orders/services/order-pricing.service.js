@@ -326,6 +326,11 @@ export async function calculateOrderPricing(userId, dto) {
     tip = rawTip;
   }
 
+  // Self pickup: the customer collects it, so there is no rider to pay, tip
+  // or charge for (delivery, speed and peak-hour fees are all 0).
+  const isPickup = String(dto.fulfillment || '').toLowerCase() === 'pickup';
+  if (isPickup) tip = 0;
+
   let deliveryBoySettings = await FoodDeliveryBoySettings.findOne({ isActive: true })
     .sort({ createdAt: -1 })
     .lean();
@@ -398,6 +403,15 @@ export async function calculateOrderPricing(userId, dto) {
     }
   }
 
+  if (isPickup) {
+    if (restaurants.length > 1) {
+      throw new ValidationError('Pickup is available for one restaurant at a time');
+    }
+    baseDeliveryFee = 0;
+    baseRiderFee = 0;
+    deliveryFeeSource = 'pickup';
+  }
+
   // Order: base → Delivery Speed Options → multi-resto / split surcharges
   const speedOptions = Array.isArray(deliveryBoySettings?.deliverySpeedOptions)
     ? deliveryBoySettings.deliverySpeedOptions.filter((o) => o && o.isEnabled !== false)
@@ -441,7 +455,7 @@ export async function calculateOrderPricing(userId, dto) {
   const baseCustomerDeliveryFee = Math.max(0, baseDeliveryFee + customerSurcharge);
 
   // Free delivery (threshold or free-delivery coupon): customer pays ₹0 — speed fee must not apply.
-  let deliveryWaived = isFreeByThreshold;
+  let deliveryWaived = isFreeByThreshold || isPickup;
   const codeRaw = dto.couponCode
     ? String(dto.couponCode).trim().toUpperCase()
     : '';
@@ -495,9 +509,11 @@ export async function calculateOrderPricing(userId, dto) {
     isSplitOrder,
     deliveryBoySettings,
   });
-  const riderFee = Number(
-    (riderSurchargeResult.fee + (deliveryWaived ? 0 : speedShares.speedShareDriver)).toFixed(2),
-  );
+  const riderFee = isPickup
+    ? 0
+    : Number(
+      (riderSurchargeResult.fee + (deliveryWaived ? 0 : speedShares.speedShareDriver)).toFixed(2),
+    );
   const deliveryMarginBase = Math.max(
     0,
     Number(
@@ -528,7 +544,7 @@ export async function calculateOrderPricing(userId, dto) {
     fee: deliveryFee,
     userCharge: baseDeliveryFee,
     deliveryBoyFee: baseRiderFee,
-    riderBaseFee: riderSurchargeResult.fee,
+    riderBaseFee: isPickup ? 0 : riderSurchargeResult.fee,
     riderFee,
     riderAdditionalCharge: riderSurchargeResult.surcharge,
     deliveryMarginBase,
@@ -640,6 +656,7 @@ export async function calculateOrderPricing(userId, dto) {
       platformSubsidy,
       couponCategory,
       tip,
+      fulfillment: isPickup ? 'pickup' : 'delivery',
       freeDeliveryThreshold: freeThreshold > 0 ? freeThreshold : undefined,
       total,
       currency: 'INR',

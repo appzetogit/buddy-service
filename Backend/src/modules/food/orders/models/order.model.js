@@ -163,7 +163,8 @@ const dispatchSchema = new mongoose.Schema(
         modeAtCreation: { type: String, enum: ['auto'], default: 'auto' },
         status: {
             type: String,
-            enum: ['unassigned', 'offered', 'assigned', 'accepted', 'rejected', 'cancelled', 'timed_out'],
+            // not_required: a self-pickup order; no rider is ever looked for.
+            enum: ['unassigned', 'offered', 'assigned', 'accepted', 'rejected', 'cancelled', 'timed_out', 'not_required'],
             default: 'unassigned'
         },
         deliveryPartnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner', default: null },
@@ -495,6 +496,8 @@ const orderSchema = new mongoose.Schema(
             default: () => ({})
         },
         restaurantNote: { type: String, default: '', trim: true },
+        /** delivery = a rider brings it; pickup = the customer collects it at the restaurant. */
+        fulfillment: { type: String, enum: ['delivery', 'pickup'], default: 'delivery', index: true },
         deliveryInstructions: { type: String, default: '', trim: true, maxlength: 240 },
         note: { type: String, default: '', trim: true },
         sendCutlery: { type: Boolean, default: true },
