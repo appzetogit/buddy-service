@@ -191,6 +191,11 @@ const rideSchema = new mongoose.Schema(
         type: [String],
         default: [],
       },
+      /// Optional voice note from the sender (up to 30 s), an uploaded .m4a.
+      voiceNote: {
+        url: { type: String, default: '' },
+        durationSec: { type: Number, default: 0 },
+      },
       /// Handling notes from the sender ('fragile', 'call before arriving').
       /// Separate from `description`, which names what is inside.
       instructions: {
