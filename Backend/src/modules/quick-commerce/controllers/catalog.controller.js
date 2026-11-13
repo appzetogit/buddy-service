@@ -1071,7 +1071,16 @@ export const getProducts = async (req, res) => {
   }
   if (search) {
     const term = escapeRegex(String(search).trim().slice(0, 80));
-    if (term) query.name = { $regex: term, $options: 'i' };
+    // Name, brand or tag: the product page's "<brand> · Explore all
+    // products" searches by brand, which matched nothing on name alone.
+    // In $and so it never replaces the category $or above.
+    if (term) {
+      const rx = { $regex: term, $options: 'i' };
+      query.$and = [
+        ...(query.$and || []),
+        { $or: [{ name: rx }, { brand: rx }, { tags: rx }] },
+      ];
+    }
   }
   if (sellerId) {
     query.sellerId = sellerId;
