@@ -1017,6 +1017,28 @@ export const processRideCancellationRefund = async (ride, { feeDeducted = 0 } = 
   };
 };
 
+/// A ride cancelled by someone other than the rider (no driver, expiry, admin):
+/// the socket reaches an open app, the push reaches a closed one and lands in
+/// the app's notification inbox.
+const tellRiderRideCancelled = (ride, reason, rideBody, parcelBody) => {
+  emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
+    rideId: String(ride._id),
+    room: getRideRoom(ride._id),
+    reason,
+  });
+  const parcel = ride.serviceType === 'parcel';
+  sendPushNotificationToEntities({
+    userIds: [String(ride.userId)],
+    title: parcel ? 'Parcel cancelled' : 'Ride cancelled',
+    body: parcel ? parcelBody : rideBody,
+    data: {
+      type: 'ride_cancelled',
+      rideId: String(ride._id),
+      serviceType: ride.serviceType || 'ride',
+    },
+  }).catch((error) => console.error('Failed to send rider ride-cancelled push', error));
+};
+
 export const autoCancelExpiredOutstationRide = async (rideOrId) => {
   const rideId = rideOrId?._id ? String(rideOrId._id) : String(rideOrId);
   if (!rideId) return;
@@ -1049,11 +1071,7 @@ export const autoCancelExpiredOutstationRide = async (rideOrId) => {
     closeDriverRequestWindow(rideId, dispatchState.driverIds);
   }
 
-  emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
-    rideId: String(ride._id),
-    room: getRideRoom(ride._id),
-    reason: 'Outstation booking expired as no driver accepted within 3-4 hours.',
-  });
+  tellRiderRideCancelled(ride, 'Outstation booking expired as no driver accepted within 3-4 hours.', 'No driver accepted your outstation booking, so it was cancelled.', 'No driver took your parcel, so it was cancelled.');
 
   emitToRoom(getRideRoom(ride._id), 'rideRequestClosed', {
     rideId: String(ride._id),
@@ -1136,11 +1154,7 @@ const closeRideAsUnmatched = async (rideId) => {
   await User.updateOne({ _id: ride.userId, currentRideId: ride._id }, { currentRideId: null });
   await persistDispatchTrackingProgress({ rideId, reset: true }).catch(() => null);
 
-  emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
-    rideId: String(ride._id),
-    room: getRideRoom(ride._id),
-    reason: 'No drivers accepted the ride request',
-  });
+  tellRiderRideCancelled(ride, 'No drivers accepted the ride request', 'No driver accepted your ride, so it was cancelled. Please try again.', 'No driver took your parcel, so it was cancelled. Please try again.');
 
   emitToRoom(getRideRoom(ride._id), 'rideRequestClosed', {
     rideId: String(ride._id),
@@ -1199,11 +1213,7 @@ export const cancelRideByAdmin = async (rideId) => {
   ]);
   await persistDispatchTrackingProgress({ rideId, reset: true }).catch(() => null);
 
-  emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
-    rideId: String(ride._id),
-    room: getRideRoom(ride._id),
-    reason: 'Ride was deleted by admin',
-  });
+  tellRiderRideCancelled(ride, 'Ride was deleted by admin', 'Your ride was cancelled by support.', 'Your parcel was cancelled by support.');
 
   if (ride.driverId) {
     emitToRoom(getDriverRoom(ride.driverId), 'rideRequestClosed', {
