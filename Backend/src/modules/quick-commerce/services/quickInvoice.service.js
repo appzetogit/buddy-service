@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { FoodUser } from '../../../core/users/user.model.js';
 import { Seller } from '../seller/models/seller.model.js';
+import { FoodOrder } from '../../food/orders/models/order.model.js';
 import {
   FONTS,
   formatDate,
@@ -148,4 +149,29 @@ export const renderQuickInvoicePdf = (order, { company, symbol, customer, seller
       .text('This is a computer-generated invoice and needs no signature.', left, doc.page.height - 60, { width, align: 'center' });
     doc.end();
   });
+};
+
+/**
+ * The same invoice for a Food order, for its owner only (null when not theirs).
+ * Food orders share the item / pricing / payment / address shape, so only the
+ * order number and the seller (the restaurant) are mapped here.
+ */
+export const buildFoodInvoicePdf = async (identityFilter, userId) => {
+  const order = await FoodOrder.findOne({ ...identityFilter, userId }).lean();
+  if (!order) return null;
+  const { company, symbol } = await loadCompany();
+  const customer = await FoodUser.findById(userId).select('name phone').lean();
+  const number = order.order_id || order.orderId || String(order._id).slice(-8);
+  return {
+    number,
+    pdf: await renderQuickInvoicePdf(
+      { ...order, orderId: number },
+      {
+        company,
+        symbol,
+        customer: customer || { name: order.customerName, phone: order.customerPhone },
+        seller: { shopName: order.restaurantName },
+      },
+    ),
+  };
 };
