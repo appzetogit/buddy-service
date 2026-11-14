@@ -382,6 +382,12 @@ const rideSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    /// Cash trips: when the driver marked the cash as received (from the sender
+    /// at pickup or the receiver / passenger at drop).
+    cashCollectedAt: {
+      type: Date,
+      default: null,
+    },
     // Set when an admin cancels the ride from the Trips page.
     cancelledBy: {
       type: String,
