@@ -7,6 +7,45 @@ import { FoodReferralSettings } from '../../admin/models/referralSettings.model.
 import { FoodReferralLog } from '../../admin/models/referralLog.model.js';
 import { creditReferralReward } from './userWallet.service.js';
 
+/** A short code people can read out and type: up to 4 letters of the name + 4 digits ("RIDH4821"). */
+export const shortReferralCode = (name, digits = Math.floor(1000 + Math.random() * 9000)) => {
+    const letters = String(name || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4) || 'BUDY';
+    return `${letters}${digits}`;
+};
+
+const isLegacyCode = (code, userId) => !code || code === String(userId) || mongoose.Types.ObjectId.isValid(code);
+
+/**
+ * The user's short referral code, made (and saved) the first time it is needed. Accounts from
+ * before short codes carried their id as the code; those get a short one too, and their id keeps
+ * working through [resolveReferrerId], so links already shared are not broken.
+ */
+export const ensureShortReferralCode = async (userDoc) => {
+    if (!userDoc || !isLegacyCode(userDoc.referralCode, userDoc._id)) return userDoc?.referralCode || '';
+    for (let i = 0; i < 8; i += 1) {
+        const code = shortReferralCode(userDoc.name);
+        // ponytail: check-then-write; two users racing to the same random code is ~1 in 9000, add a unique index if it ever matters.
+        if (!(await FoodUser.exists({ referralCode: code }))) {
+            await FoodUser.updateOne({ _id: userDoc._id }, { $set: { referralCode: code } });
+            userDoc.referralCode = code;
+            return code;
+        }
+    }
+    return userDoc.referralCode || String(userDoc._id);
+};
+
+/** The referrer behind a typed code: a short code ("RIDH4821") or, for old links, an account id. */
+export const resolveReferrerId = async (code) => {
+    const raw = String(code || '').trim();
+    if (!raw) return null;
+    if (mongoose.Types.ObjectId.isValid(raw)) {
+        const byId = await FoodUser.exists({ _id: raw });
+        if (byId) return new mongoose.Types.ObjectId(raw);
+    }
+    const byCode = await FoodUser.findOne({ referralCode: raw.toUpperCase() }).select('_id').lean();
+    return byCode?._id || null;
+};
+
 /** Shared by signup-time ref crediting (core/auth/auth.service.js) and applyUserReferral below. */
 export const creditUserReferral = async (userDoc, referrerId, settingsDoc) => {
     const reward = Math.max(0, Number(settingsDoc?.referralRewardUser) || 0);
@@ -51,12 +90,10 @@ export const applyUserReferral = async (userId, code) => {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
         throw new ValidationError('User not found');
     }
-    const refRaw = String(code || '').trim();
-    if (!refRaw || !mongoose.Types.ObjectId.isValid(refRaw)) {
+    const referrerId = await resolveReferrerId(code);
+    if (!referrerId) {
         throw new ValidationError('Invalid referral code');
     }
-
-    const referrerId = new mongoose.Types.ObjectId(refRaw);
     if (String(referrerId) === id) {
         throw new ValidationError('You cannot use your own referral code');
     }
@@ -112,7 +149,7 @@ export const getUserReferralDetails = async (userId) => {
 
     const oid = new mongoose.Types.ObjectId(id);
     const [user, wallet, settingsDoc, logs] = await Promise.all([
-        FoodUser.findById(oid).select('_id referralCount referralCode').lean(),
+        FoodUser.findById(oid).select('_id name referralCount referralCode').lean(),
         FoodUserWallet.findOne({ userId: oid }).select('referralEarnings').lean(),
         FoodReferralSettings.findOne({ isActive: true }).sort({ createdAt: -1 }).lean(),
         FoodReferralLog.find({ referrerId: oid, role: 'USER' })
@@ -120,6 +157,7 @@ export const getUserReferralDetails = async (userId) => {
             .limit(100)
             .lean()
     ]);
+    if (user) user.referralCode = await ensureShortReferralCode(user);
 
     const refereeIds = Array.from(
         new Set(
@@ -175,6 +213,13 @@ export const getUserReferralDetails = async (userId) => {
             pendingCount,
             rejectedCount
         },
+        referralCode: user?.referralCode || '',
+        // Off when no active settings, or a zero reward or limit: a code shared now earns nothing.
+        programActive: Boolean(
+            settingsDoc &&
+            Number(settingsDoc.referralRewardUser) > 0 &&
+            Number(settingsDoc.referralLimitUser) > 0
+        ),
         invitedFriends
     };
 };
