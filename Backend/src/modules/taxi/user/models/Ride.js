@@ -191,6 +191,13 @@ const rideSchema = new mongoose.Schema(
         type: [String],
         default: [],
       },
+      /// Cash parcels: who hands the driver the money - the sender at pickup
+      /// or the receiver at drop. Online payments ignore it.
+      cashPayer: {
+        type: String,
+        enum: ['sender', 'receiver'],
+        default: 'sender',
+      },
       /// Optional voice note from the sender (up to 30 s), an uploaded .m4a.
       voiceNote: {
         url: { type: String, default: '' },

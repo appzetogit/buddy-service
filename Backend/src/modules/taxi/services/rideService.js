@@ -188,6 +188,7 @@ const normalizeParcelPayload = (parcel = {}) => ({
   receiverMobile: String(parcel.receiverMobile || '').trim(),
   photos: normalizeParcelPhotos(parcel.photos),
   voiceNote: normalizeParcelVoiceNote(parcel.voiceNote),
+  cashPayer: String(parcel.cashPayer || '').trim().toLowerCase() === 'receiver' ? 'receiver' : 'sender',
   instructions: String(parcel.instructions || parcel.specialInstructions || '').trim().slice(0, 500),
 });
 
