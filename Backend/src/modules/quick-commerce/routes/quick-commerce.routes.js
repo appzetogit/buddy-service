@@ -38,6 +38,7 @@ import {
   cancelOrder,
   getMyOrders,
   getOrderById,
+  getOrderInvoice,
   placeOrder,
   verifyPayment,
   submitOrderRatingsController,
@@ -234,6 +235,7 @@ router.post("/orders", optionalAuth, placeOrder);
 router.post("/checkout/verify-payment", optionalAuth, verifyQuickCheckout);
 router.post("/checkout/cancel", optionalAuth, cancelQuickCheckout);
 router.get("/orders", optionalAuth, getMyOrders);
+router.get("/orders/:orderId/invoice", optionalAuth, getOrderInvoice);
 router.get("/orders/:orderId", optionalAuth, getOrderById);
 router.post("/orders/:orderId/verify-payment", optionalAuth, verifyPayment);
 router.post("/orders/:orderId/cancel", optionalAuth, cancelOrder);

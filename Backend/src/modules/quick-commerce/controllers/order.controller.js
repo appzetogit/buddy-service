@@ -1,3 +1,4 @@
+import { buildQuickInvoicePdf } from '../services/quickInvoice.service.js';
 import mongoose from 'mongoose';
 import { logger } from '../../../utils/logger.js';
 import { sendResponse } from '../../../utils/response.js';
@@ -1869,6 +1870,33 @@ export const getMyOrders = async (req, res) => {
     result: mappedOrders,
     results: mappedOrders,
   });
+};
+
+/** `GET /orders/:orderId/invoice` — the order's tax invoice as a PDF, for its owner only. */
+export const getOrderInvoice = async (req, res) => {
+  const accessQuery = buildOrderAccessQuery(req);
+  if (!accessQuery) {
+    return res.status(400).json({ success: false, message: 'sessionId or userId is required' });
+  }
+  const raw = String(req.params.orderId || '').trim();
+  const identity = [{ orderId: raw }];
+  if (mongoose.isValidObjectId(raw)) identity.unshift({ _id: raw });
+  const order = await QuickOrder.findOne({
+    orderType: 'quick',
+    $and: [accessQuery, { $or: identity }],
+  }).lean();
+  if (!order) {
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+  try {
+    const pdf = await buildQuickInvoicePdf(order);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Invoice-${order.orderId}.pdf"`);
+    return res.send(pdf);
+  } catch (error) {
+    logger.error(`[QuickInvoice] ${order.orderId}: ${error.message}`);
+    return res.status(500).json({ success: false, message: 'Could not create the invoice' });
+  }
 };
 
 export const getOrderById = async (req, res) => {

@@ -48,9 +48,9 @@ const resolveFonts = () => {
   return { regular: 'Helvetica', bold: 'Helvetica-Bold', unicode: false };
 };
 
-const FONTS = resolveFonts();
+export const FONTS = resolveFonts();
 
-const resolveLogoPath = () => {
+export const resolveLogoPath = () => {
   const candidates = [
     path.resolve(process.cwd(), 'src/assets/logo.png'),
     path.resolve(process.cwd(), 'Backend/src/assets/logo.png'),
@@ -68,7 +68,7 @@ const resolveLogoPath = () => {
   return null;
 };
 
-const money = (amount, symbol = '₹') => {
+export const money = (amount, symbol = '₹') => {
   const value = Number(amount || 0);
   const formatted = value.toLocaleString('en-IN', {
     minimumFractionDigits: 2,
@@ -77,7 +77,7 @@ const money = (amount, symbol = '₹') => {
   return `${symbol} ${formatted}`;
 };
 
-const formatDate = (date) =>
+export const formatDate = (date) =>
   new Date(date || Date.now()).toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'long',
@@ -85,7 +85,7 @@ const formatDate = (date) =>
     timeZone: 'Asia/Kolkata',
   });
 
-const formatTime = (date) =>
+export const formatTime = (date) =>
   new Date(date || Date.now()).toLocaleTimeString('en-IN', {
     hour: '2-digit',
     minute: '2-digit',
@@ -93,7 +93,7 @@ const formatTime = (date) =>
   });
 
 /** The business's own details and currency, from the admin panel. */
-const loadCompany = async () => {
+export const loadCompany = async () => {
   const [settingsDoc, landing] = await Promise.all([
     AdminBusinessSetting.findOne({ scope: 'default' }).select('general customization').lean(),
     getLandingContent().catch(() => null),
