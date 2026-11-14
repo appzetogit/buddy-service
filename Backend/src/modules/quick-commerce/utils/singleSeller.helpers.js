@@ -33,7 +33,7 @@ export const assertSingleSellerFromIds = (sellerIds, { context = 'cart' } = {}) 
 
   const message =
     context === 'order'
-      ? 'Quick Commerce orders support only one seller per order.'
+      ? 'Marketplace orders support only one seller per order.'
       : 'Your cart contains items from multiple sellers. Clear your cart to continue.';
 
   const error = new Error(message);

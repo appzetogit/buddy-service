@@ -1,3 +1,4 @@
+import { isPersonName } from "../users/personName.js";
 import crypto from "crypto";
 import ms from "ms";
 import { FoodUser } from "../users/user.model.js";
@@ -130,7 +131,9 @@ export const verifyUserOtpAndLogin = async (
   platform,
   name,
 ) => {
-  const trimmedName = typeof name === "string" ? name.trim() : "";
+  // A name that is not one (e.g. a phone number typed in) is not saved; login goes on.
+  const typedName = typeof name === "string" ? name.trim() : "";
+  const trimmedName = isPersonName(typedName) ? typedName : "";
   const existingUser = await FoodUser.findOne({ phone });
 
   // For first-time signup, require name before OTP verification so OTP is not consumed prematurely.
