@@ -1,3 +1,4 @@
+import { getRestaurantOrderableStatus } from '../../shared/utils/restaurantAvailability.js';
 import { FoodRestaurant } from '../models/restaurant.model.js';
 import { FoodFeeSettings } from '../../admin/models/feeSettings.model.js';
 import { uploadFileBuffer } from '../../../../services/localUpload.service.js';
@@ -36,6 +37,7 @@ import { FoodDiningCategory } from '../../dining/models/diningCategory.model.js'
 import { FoodDiningRestaurant } from '../../dining/models/diningRestaurant.model.js';
 import {
     getDefaultOutletTimingsShape,
+    attachOutletTimingsToRestaurants,
     getOutletTimingsMapForRestaurants,
     getOutletTimingsForRestaurant,
     parseOutletTimingsInput,
@@ -1857,8 +1859,20 @@ export const listPublicFoods = async (query = {}) => {
         }
     }
 
-    const restaurantIds = await FoodRestaurant.find(restaurantFilter).distinct('_id');
+    const restaurantDocs = await FoodRestaurant.find(restaurantFilter)
+        .select('_id status isAcceptingOrders')
+        .lean();
+    const restaurantIds = restaurantDocs.map((r) => r._id);
     if (!restaurantIds.length) return { foods: [] };
+
+    // Open now = taking orders and inside today's outlet timings (the same
+    // rule order placement uses). Closed restaurants' dishes go last.
+    const withTimings = await attachOutletTimingsToRestaurants(restaurantDocs);
+    const openNow = new Set(
+        withTimings
+            .filter((r) => getRestaurantOrderableStatus(r).isOrderable)
+            .map((r) => String(r._id)),
+    );
 
     const { FoodItem } = await import('../../admin/models/food.model.js');
     const { buildFoodVisibleCategoryFilter } = await import('../../shared/categoryWorkflow.js');
@@ -1887,10 +1901,18 @@ export const listPublicFoods = async (query = {}) => {
         foodFilter.$and = [...(foodFilter.$and || []), visibleCategoryFilter];
     }
 
-    const foods = await FoodItem.find(foodFilter)
+    const found = await FoodItem.find(foodFilter)
         .sort({ createdAt: -1 })
         .limit(limit)
         .lean();
+    const withOpen = found.map((f) => ({
+        ...f,
+        restaurantOpen: openNow.has(String(f.restaurantId)),
+    }));
+    const foods = [
+        ...withOpen.filter((f) => f.restaurantOpen),
+        ...withOpen.filter((f) => !f.restaurantOpen),
+    ];
 
     return { foods };
 };

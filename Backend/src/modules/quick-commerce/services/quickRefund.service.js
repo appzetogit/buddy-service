@@ -87,7 +87,7 @@ export const processQuickOrderRefund = async (
       };
     }
 
-    await refundWalletBalance(order.userId, amount, 'Quick order refund', {
+    await refundWalletBalance(order.userId, amount, 'Marketplace order refund', {
       orderId: String(order.orderId || ''),
       source: 'quick_order_cancel',
       cancelledBy,

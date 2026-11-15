@@ -16,11 +16,12 @@ import { logger } from '../../utils/logger.js';
  *   cancelled   - statuses meaning cancelled
  *   refundPath  - optional field that becomes 'processed' when a refund is done
  *   orderIdOf   - (doc) => text shown as the order number
+ *   pushRefund  - also send an app push when the refund is processed (for flows with no refund push of their own)
  */
 // shortcut: in-process dedupe only; with several server instances a rare duplicate message is possible.
 const recent = new Map();
 
-export const whatsappOrderStatusPlugin = (schema, { statusPath, delivered, cancelled, refundPath, orderIdOf }) => {
+export const whatsappOrderStatusPlugin = (schema, { statusPath, delivered, cancelled, refundPath, orderIdOf, pushRefund = false }) => {
     const eventFor = (status) =>
         delivered.includes(status) ? 'Delivered' : cancelled.includes(status) ? 'Cancelled' : null;
 
@@ -42,6 +43,26 @@ export const whatsappOrderStatusPlugin = (schema, { statusPath, delivered, cance
                 status: event,
             });
         })().catch((error) => logger.error(`[WhatsApp] order status failed: ${error.message}`));
+        if (event === 'Refunded' && pushRefund && doc?.userId) {
+            const refund = doc.payment?.refund || {};
+            const amount = Number(refund.amount || 0);
+            const to = (refund.processedMethod || refund.requestedMethod) === 'gateway'
+                ? 'your original payment method'
+                : 'your Buddy wallet';
+            // Imported lazily: the push service imports models, which would loop back here.
+            import('./firebase.service.js')
+                .then(({ notifyOwnerSafely }) =>
+                    notifyOwnerSafely(
+                        { ownerType: 'USER', ownerId: String(doc.userId) },
+                        {
+                            title: 'Refund processed',
+                            body: `${amount > 0 ? `Rs ${amount.toFixed(0)}` : 'The amount'} for order #${orderIdOf(doc)} has been refunded to ${to}.`,
+                            data: { type: 'order_refunded', orderId: String(orderIdOf(doc)), orderMongoId: String(doc._id) },
+                        },
+                    ),
+                )
+                .catch((error) => logger.error(`[Push] refund push failed: ${error.message}`));
+        }
     };
 
     schema.pre('save', function captureChange(next) {

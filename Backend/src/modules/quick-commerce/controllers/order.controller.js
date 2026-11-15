@@ -1,3 +1,4 @@
+import { buildQuickInvoicePdf } from '../services/quickInvoice.service.js';
 import mongoose from 'mongoose';
 import { logger } from '../../../utils/logger.js';
 import { sendResponse } from '../../../utils/response.js';
@@ -1116,7 +1117,7 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
         await deductWalletBalance(
           idQuery.userId,
           walletCharged,
-          isWalletPayment ? 'Quick commerce order payment' : 'Wallet part of quick commerce order',
+          isWalletPayment ? 'Marketplace order payment' : 'Wallet part of Marketplace order',
           {
             orderId: order.orderId,
             source: 'quick_order_payment',
@@ -1149,7 +1150,7 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
           await refundWalletBalance(
             idQuery.userId,
             walletCharged,
-            'Quick commerce order payment reversal',
+            'Marketplace order payment reversal',
             {
               orderId: order.orderId,
               source: 'quick_order_payment_reversal',
@@ -1313,7 +1314,7 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
           await refundWalletBalance(
             idQuery.userId,
             walletCharged,
-            'Quick commerce order payment reversal',
+            'Marketplace order payment reversal',
             {
               orderId: order.orderId,
               source: 'quick_order_payment_reversal',
@@ -1334,7 +1335,7 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
       });
     }
 
-    emitQuickOrderStatusUpdate(order, 'Quick order placed successfully.');
+    emitQuickOrderStatusUpdate(order, 'Marketplace order placed successfully.');
 
     // Rider first: the seller order is created by quickDispatch once a rider accepts.
     // A scheduled order waits for its slot (see activateDueScheduledQuickOrders).
@@ -1361,7 +1362,7 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
               : 'Quick Order Confirmed!',
             body: awaitingOnline
               ? `Order #${order.orderId} is created. Please complete payment to confirm.`
-              : `Your quick order #${order.orderId} has been placed successfully.`,
+              : `Your Marketplace order #${order.orderId} has been placed successfully.`,
             data: {
               type: awaitingOnline ? 'order_created_pending_payment' : 'order_created',
               orderId: String(order.orderId),
@@ -1387,8 +1388,8 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
     const statusCode = Number(error?.statusCode) || 500;
     return res.status(statusCode).json({
       success: false,
-      error: error?.message || 'Failed to place quick order',
-      message: error?.message || 'Failed to place quick order',
+      error: error?.message || 'Failed to place Marketplace order',
+      message: error?.message || 'Failed to place Marketplace order',
     });
   }
 }
@@ -1871,6 +1872,33 @@ export const getMyOrders = async (req, res) => {
   });
 };
 
+/** `GET /orders/:orderId/invoice` — the order's tax invoice as a PDF, for its owner only. */
+export const getOrderInvoice = async (req, res) => {
+  const accessQuery = buildOrderAccessQuery(req);
+  if (!accessQuery) {
+    return res.status(400).json({ success: false, message: 'sessionId or userId is required' });
+  }
+  const raw = String(req.params.orderId || '').trim();
+  const identity = [{ orderId: raw }];
+  if (mongoose.isValidObjectId(raw)) identity.unshift({ _id: raw });
+  const order = await QuickOrder.findOne({
+    orderType: 'quick',
+    $and: [accessQuery, { $or: identity }],
+  }).lean();
+  if (!order) {
+    return res.status(404).json({ success: false, message: 'Order not found' });
+  }
+  try {
+    const pdf = await buildQuickInvoicePdf(order);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Invoice-${order.orderId}.pdf"`);
+    return res.send(pdf);
+  } catch (error) {
+    logger.error(`[QuickInvoice] ${order.orderId}: ${error.message}`);
+    return res.status(500).json({ success: false, message: 'Could not create the invoice' });
+  }
+};
+
 export const getOrderById = async (req, res) => {
   try {
     const accessQuery = buildOrderAccessQuery(req);
@@ -1953,7 +1981,7 @@ export const getOrderById = async (req, res) => {
     logger.error(`Quick getOrderById failed: ${error?.message || error}`);
     return res.status(500).json({
       success: false,
-      error: error?.message || 'Failed to load quick order',
+      error: error?.message || 'Failed to load Marketplace order',
     });
   }
 };
@@ -2150,7 +2178,7 @@ export const cancelOrder = async (req, res) => {
     });
 
     const cancellationMessage =
-      refundResult?.message || 'Quick order cancelled successfully.';
+      refundResult?.message || 'Marketplace order cancelled successfully.';
     emitQuickOrderStatusUpdate(claimedOrder, cancellationMessage);
 
     return res.json({
@@ -2170,7 +2198,7 @@ export const cancelOrder = async (req, res) => {
     logger.error(`Quick cancelOrder failed: ${error?.message || error}`);
     return res.status(500).json({
       success: false,
-      error: error?.message || 'Failed to cancel quick order',
+      error: error?.message || 'Failed to cancel Marketplace order',
     });
   }
 };

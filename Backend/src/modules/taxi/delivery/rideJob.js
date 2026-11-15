@@ -143,6 +143,8 @@ export const buildRideJob = async (ride, { riderPosition = null, partnerId = nul
       driverEarnings: estimate.earnings,
       paymentMethod: raw.paymentMethod,
       collectedVia: raw.collectedVia || 'cash',
+      /** Cash trips: the driver has marked the cash as received. */
+      cashCollected: Boolean(raw.cashCollectedAt),
       /** The rider (passenger) tells the driver this code at pickup; it is checked on the server. */
       otpRequired: Boolean(raw.otp),
       otpVerified: Boolean(raw.startedAt),

@@ -4,6 +4,7 @@ import { requireRoles } from '../../../core/roles/role.middleware.js';
 import { RIDER_PLATFORM_ROLES } from '../shared/partner.js';
 import {
   acceptRideController,
+  cashCollectedController,
   completeRideController,
   getRideJob,
   giveBackRideController,
@@ -40,6 +41,7 @@ taxiDeliveryRouter.patch('/rides/:rideId/reject', ...riderOnly, rejectRideContro
 taxiDeliveryRouter.patch('/rides/:rideId/reached-pickup', ...riderOnly, reachedPickupController);
 taxiDeliveryRouter.post('/rides/:rideId/start', ...riderOnly, startRideController);
 taxiDeliveryRouter.patch('/rides/:rideId/reached-drop', ...riderOnly, reachedDropController);
+taxiDeliveryRouter.patch('/rides/:rideId/cash-collected', ...riderOnly, cashCollectedController);
 taxiDeliveryRouter.patch('/rides/:rideId/complete', ...riderOnly, completeRideController);
 taxiDeliveryRouter.post('/rides/:rideId/parcel-proof', ...riderOnly, parcelProofController);
 taxiDeliveryRouter.post('/rides/:rideId/location', ...riderOnly, updateRideLocationController);

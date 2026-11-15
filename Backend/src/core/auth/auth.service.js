@@ -1,3 +1,4 @@
+import { isPersonName } from "../users/personName.js";
 import crypto from "crypto";
 import ms from "ms";
 import { FoodUser } from "../users/user.model.js";
@@ -22,7 +23,11 @@ import { config } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
 import { sendAdminResetOtpEmail } from "../../utils/email.js";
 import mongoose from "mongoose";
-import { creditUserReferral } from "../../modules/food/user/services/userReferral.service.js";
+import {
+  creditUserReferral,
+  ensureShortReferralCode,
+  resolveReferrerId,
+} from "../../modules/food/user/services/userReferral.service.js";
 
 const ROLES = {
   USER: "USER",
@@ -126,7 +131,9 @@ export const verifyUserOtpAndLogin = async (
   platform,
   name,
 ) => {
-  const trimmedName = typeof name === "string" ? name.trim() : "";
+  // A name that is not one (e.g. a phone number typed in) is not saved; login goes on.
+  const typedName = typeof name === "string" ? name.trim() : "";
+  const trimmedName = isPersonName(typedName) ? typedName : "";
   const existingUser = await FoodUser.findOne({ phone });
 
   // For first-time signup, require name before OTP verification so OTP is not consumed prematurely.
@@ -195,16 +202,13 @@ export const verifyUserOtpAndLogin = async (
     }
   }
 
-  // Ensure referralCode exists (used for share links on older accounts).
-  if (!userDoc.referralCode) {
-    userDoc.referralCode = String(userDoc._id);
-    await userDoc.save();
-  }
+  // A short, typeable referral code (older accounts carried their id as the code).
+  await ensureShortReferralCode(userDoc);
 
-  // Referral crediting: only for brand new accounts.
+  // Referral crediting: only for brand new accounts. `ref` is a short code or, from old links, an id.
   const refRaw = typeof ref === "string" ? String(ref).trim() : "";
-  if (isNewUser && refRaw && mongoose.Types.ObjectId.isValid(refRaw)) {
-    const referrerId = new mongoose.Types.ObjectId(refRaw);
+  const referrerId = isNewUser && refRaw ? await resolveReferrerId(refRaw) : null;
+  if (referrerId) {
     if (String(referrerId) !== String(userDoc._id)) {
       try {
         const settingsDoc = await FoodReferralSettings.findOne({ isActive: true })

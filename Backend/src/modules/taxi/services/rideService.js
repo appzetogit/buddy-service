@@ -154,6 +154,17 @@ const normalizeParcelPhotos = (value) => {
     .slice(0, 2);
 };
 
+/// Sender's voice note: only a URL our own upload route issued (an .m4a
+/// under /uploads/) and a 1-30 s length; anything else is dropped.
+const normalizeParcelVoiceNote = (value) => {
+  const url = String(value?.url || '').trim();
+  if (!url || url.length > 2048 || !/\/uploads\/.+\.m4a$/i.test(url)) {
+    return { url: '', durationSec: 0 };
+  }
+  const sec = Math.round(Number(value?.durationSec) || 0);
+  return { url, durationSec: Math.min(30, Math.max(1, sec)) };
+};
+
 /// Carries a stored proof forward unchanged. Only ever reads what the driver
 /// endpoint already wrote - never rider input.
 const normalizeParcelProof = (proof = {}) => ({
@@ -176,6 +187,8 @@ const normalizeParcelPayload = (parcel = {}) => ({
   receiverName: String(parcel.receiverName || '').trim(),
   receiverMobile: String(parcel.receiverMobile || '').trim(),
   photos: normalizeParcelPhotos(parcel.photos),
+  voiceNote: normalizeParcelVoiceNote(parcel.voiceNote),
+  cashPayer: String(parcel.cashPayer || '').trim().toLowerCase() === 'receiver' ? 'receiver' : 'sender',
   instructions: String(parcel.instructions || parcel.specialInstructions || '').trim().slice(0, 500),
 });
 
@@ -836,6 +849,8 @@ export const resolveZoneForPickup = async (pickupCoords) => {
 export const resolveServiceLocationIdForPickup = async (pickupCoords) =>
   (await resolveZoneForPickup(pickupCoords)).serviceLocationId;
 
+const MIN_TRIP_METERS = 200;
+
 const haversineFallbackMeters = (c1, c2) => {
   if (!Array.isArray(c1) || !Array.isArray(c2) || c1.length < 2 || c2.length < 2) return 0;
   const [lng1, lat1] = c1.map(Number);
@@ -880,6 +895,11 @@ export const createRideRecord = async ({
 
   if (!user) {
     throw new ApiError(404, 'User not found');
+  }
+
+  // Pickup and drop at the same spot is not a trip (rides and parcels both land here).
+  if (haversineFallbackMeters(pickupCoords, dropCoords) < MIN_TRIP_METERS) {
+    throw new ApiError(400, `Drop location must be at least ${MIN_TRIP_METERS} m away from pickup`, { code: 'TRIP_TOO_SHORT' });
   }
 
   const requestedScheduledAt = normalizeScheduledAt(scheduledAt);

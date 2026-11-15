@@ -344,6 +344,11 @@ const transition = (nextStatus, message, { requireOtp = false } = {}) => async (
       paymentMethod: req.body?.paymentMethod,
       collectedVia: req.body?.collectedVia,
     });
+    // Older rider apps have no "cash collected" step: completing a cash trip
+    // with cash in hand records it.
+    if (nextStatus === RIDE_LIVE_STATUS.COMPLETED && String(req.body?.paymentMethod || '') === 'cash') {
+      await Ride.updateOne({ _id: current._id, cashCollectedAt: null }, { $set: { cashCollectedAt: new Date() } });
+    }
     await broadcastRideProgress(current._id);
 
     const ride = await loadOwnedRide(current._id, partnerId);
@@ -363,6 +368,27 @@ export const startRideController = transition(RIDE_LIVE_STATUS.STARTED, 'Ride st
 export const reachedDropController = transition(RIDE_LIVE_STATUS.ARRIVED, 'Reached destination');
 /** Fare collected (or already paid online); the ride is settled. */
 export const completeRideController = transition(RIDE_LIVE_STATUS.COMPLETED, 'Ride completed');
+
+/** Cash trips: the driver marks the fare as received (sender at pickup, or at drop). Idempotent. */
+export const cashCollectedController = async (req, res) => {
+  try {
+    const partnerId = await resolveRider(req);
+    if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
+    const ride = await loadOwnedRide(req.params.rideId, partnerId);
+    if (ride.paymentMethod !== 'cash') throw new ApiError(400, 'This trip is paid online - no cash to collect');
+    if ([RIDE_STATUS.CANCELLED].includes(ride.status)) throw new ApiError(400, 'This trip was cancelled');
+    if (!ride.cashCollectedAt) {
+      await Ride.updateOne({ _id: ride._id, cashCollectedAt: null }, { $set: { cashCollectedAt: new Date() } });
+    }
+    await broadcastRideProgress(req.params.rideId);
+    const fresh = await loadOwnedRide(req.params.rideId, partnerId);
+    return sendResponse(res, 200, 'Cash marked as collected', {
+      order: await buildRideJob(fresh, { partnerId, riderPosition: await riderPositionOf(partnerId) }),
+    });
+  } catch (error) {
+    return fail(res, error, 'Failed to mark cash as collected');
+  }
+};
 
 /** Parcel trips: the photo of the parcel at pickup / handover (required before start / complete). */
 export const parcelProofController = async (req, res) => {

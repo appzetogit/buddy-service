@@ -232,6 +232,7 @@ router.get('/orders', authMiddleware, requireRestaurant, orderController.listOrd
 router.get('/orders/rejection-reasons', authMiddleware, requireRestaurant, getOrderRejectionReasonsPublic);
 router.get('/orders/:orderId', authMiddleware, requireRestaurant, orderController.getOrderByIdRestaurantController);
 router.patch('/orders/:orderId/status', authMiddleware, requireRestaurant, orderController.updateOrderStatusRestaurantController);
+router.post('/orders/:orderId/pickup-complete', authMiddleware, requireRestaurant, orderController.completePickupRestaurantController);
 router.post('/orders/:orderId/resend-notification', authMiddleware, requireRestaurant, orderController.resendDeliveryNotificationRestaurantController);
 router.post('/orders/:orderId/delay', authMiddleware, requireRestaurant, orderController.reportOrderDelayController);
 

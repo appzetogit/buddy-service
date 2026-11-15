@@ -1,3 +1,4 @@
+import { isPersonName } from '../../../../core/users/personName.js';
 import { FoodUser } from '../../../../core/users/user.model.js';
 import { AuthError, ValidationError } from '../../../../core/auth/errors.js';
 import { replaceCloudinaryImage } from '../../services/foodImage.service.js';
@@ -18,7 +19,13 @@ export const updateCurrentUserProfile = async (userId, payload = {}) => {
     const user = await FoodUser.findById(userId);
     if (!user) throw new AuthError('Profile not found');
 
-    if (payload.name !== undefined) user.name = String(payload.name || '').trim();
+    if (payload.name !== undefined) {
+        const name = String(payload.name || '').trim();
+        if (name && !isPersonName(name)) {
+            throw new ValidationError('Name can only have letters');
+        }
+        user.name = name;
+    }
     if (payload.email !== undefined) user.email = String(payload.email || '').trim();
     if (payload.phone !== undefined) user.phone = String(payload.phone || '').trim();
     if (payload.profileImage !== undefined) user.profileImage = String(payload.profileImage || '').trim();

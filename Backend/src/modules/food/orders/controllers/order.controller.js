@@ -1,6 +1,8 @@
 import { sendResponse } from '../../../../utils/response.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import * as orderService from '../services/order.service.js';
+import { buildOrderIdentityFilter } from '../services/order.helpers.js';
+import { buildFoodInvoicePdf } from '../../../quick-commerce/services/quickInvoice.service.js';
 import { validateNewRestaurantAgainstLast } from '../services/restaurant-chain-radius.service.js';
 import { checkRestaurantEligibility } from '../services/active-restaurant-limit.service.js';
 import * as foodOrderPaymentService from '../services/foodOrderPayment.service.js';
@@ -106,6 +108,22 @@ export async function getOrderByIdUserController(req, res, next) {
         const orderId = req.params.orderId;
         const order = await orderService.getOrderById(orderId, { userId });
         return sendResponse(res, 200, 'Order retrieved', { order });
+    } catch (err) {
+        next(err);
+    }
+}
+
+/** `GET /:orderId/invoice` — the order's PDF invoice, for the customer who placed it. */
+export async function getOrderInvoiceUserController(req, res, next) {
+    try {
+        const filter = buildOrderIdentityFilter(req.params.orderId);
+        const userId = req.user?.userId;
+        if (!filter || !userId) throw new ValidationError('Order not found');
+        const result = await buildFoodInvoicePdf(filter, userId);
+        if (!result) return sendResponse(res, 404, 'Order not found');
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="Invoice-${result.number}.pdf"`);
+        return res.send(result.pdf);
     } catch (err) {
         next(err);
     }
@@ -218,6 +236,20 @@ export async function updateOrderStatusRestaurantController(req, res, next) {
         const dto = validateOrderStatusDto(req.body);
         const order = await orderService.updateOrderStatusRestaurant(orderId, restaurantId, dto.orderStatus, dto.note, dto.packingMinutes);
         return sendResponse(res, 200, 'Order status updated', { order });
+    } catch (err) {
+        next(err);
+    }
+}
+
+/** Self pickup handed over: body `{ code }` (the code the customer shows). */
+export async function completePickupRestaurantController(req, res, next) {
+    try {
+        const order = await orderService.completePickupRestaurant(
+            req.params.orderId,
+            req.user?.userId,
+            req.body?.code,
+        );
+        return sendResponse(res, 200, 'Order collected by the customer', { order });
     } catch (err) {
         next(err);
     }

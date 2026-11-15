@@ -173,7 +173,7 @@ export async function refundFailedQuickCheckout(session, reason) {
   try {
     if (paymentId && session.userId) {
       // Refunds always go to the wallet. (The wallet part of a split was never taken for an unplaced order.)
-      await refundWalletBalance(String(session.userId), Number(session.amountDue || 0), 'Refund: quick order could not be placed', {
+      await refundWalletBalance(String(session.userId), Number(session.amountDue || 0), 'Refund: Marketplace order could not be placed', {
         source: 'quick_checkout_refund',
         checkoutId: String(session._id),
         paymentId: String(paymentId),

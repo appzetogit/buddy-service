@@ -178,6 +178,18 @@ export async function validateRestaurantChain(anchorRestaurantId, newRestaurantI
  * @param {{ razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string, expectedAmount?: number }} [options.verifiedPrepaid]
  *        When set, Razorpay was already verified — create FoodOrder as paid (no unpaid order).
  */
+/**
+ * Self pickup has no rider to wait for, so the restaurant is told at once.
+ * `dispatch.acceptedAt` starts the restaurant-ack clock the watchdog reads
+ * (for a delivery that clock starts when the rider accepts).
+ */
+async function startPickupOrder(order) {
+  if (order.dispatch?.acceptedAt) return;
+  order.dispatch.acceptedAt = new Date();
+  await order.save();
+  await notifyRestaurantNewOrder(order);
+}
+
 export async function createOrder(userId, dto, options = {}) {
   const items = Array.isArray(dto.items) ? dto.items : [];
   if (items.length === 0) throw new ValidationError("No items in order");
@@ -274,7 +286,9 @@ export async function createOrder(userId, dto, options = {}) {
     deliverySpeedOptionId: dto.deliverySpeedOptionId,
     deliveryOption: dto.deliveryOption,
     tip: dto.tip,
+    fulfillment: dto.fulfillment,
   });
+  const isPickup = dto.fulfillment === 'pickup';
 
   // Prefer hydrated catalog lines for all downstream order creation
   const pricedItems = Array.isArray(recalculated.items) && recalculated.items.length > 0
@@ -727,7 +741,10 @@ export async function createOrder(userId, dto, options = {}) {
     deliveryOption: orderDeliveryOptionName,
     deliveryTime: orderDeliveryTimeLabel,
     estimatedTime: orderEstimatedMinutes,
-    dispatch: { modeAtCreation: dispatchMode, status: "unassigned" },
+    fulfillment: isPickup ? "pickup" : "delivery",
+    // Self pickup never enters dispatch: every dispatch query looks for
+    // unassigned/offered/assigned, so no rider is offered it.
+    dispatch: { modeAtCreation: dispatchMode, status: isPickup ? "not_required" : "unassigned" },
     statusHistory: [
       {
         at: new Date(),
@@ -822,7 +839,15 @@ export async function createOrder(userId, dto, options = {}) {
   }
 
   const dispatchableStatuses = ["created", "confirmed", "preparing", "ready_for_pickup", "ready", "picked_up"];
-  if (
+  const paidOrConfirmed =
+    isCash || isWallet || order.payment.status === "paid" || order.payment.status === "cod_pending";
+  if (isPickup) {
+    if (paidOrConfirmed && order.orderStatus === "created") {
+      try {
+        await startPickupOrder(order);
+      } catch { }
+    }
+  } else if (
     dispatchMode === "auto"
     && (isCash || isWallet || order.payment.status === "paid" || order.payment.status === "cod_pending")
     && dispatchableStatuses.includes(order.orderStatus)
@@ -979,7 +1004,13 @@ export async function verifyPayment(userId, dto) {
     "ready",
     "picked_up",
   ];
-  if (settings.dispatchMode === "auto" && dispatchableStatuses.includes(order.orderStatus)) {
+  if (order.fulfillment === "pickup") {
+    if (order.orderStatus === "created") {
+      try {
+        await startPickupOrder(order);
+      } catch { }
+    }
+  } else if (settings.dispatchMode === "auto" && dispatchableStatuses.includes(order.orderStatus)) {
     try {
       await tryAutoAssign(order._id);
     } catch { }
@@ -1411,7 +1442,7 @@ export async function getOrderById(
     const dispatchStatus = String(order.dispatch?.status || '').toLowerCase();
     const orderStatus = String(order.orderStatus || '').toLowerCase();
     const riderAssigned = Boolean(order.dispatch?.deliveryPartnerId);
-    const isAccepted = dispatchStatus === 'accepted';
+    const isAccepted = dispatchStatus === 'accepted' || dispatchStatus === 'not_required';
     const isHistorical =
       riderAssigned ||
       ['delivered', 'ready', 'ready_for_pickup', 'picked_up', 'out_for_delivery', 'preparing', 'confirmed'].includes(orderStatus) ||
@@ -1452,6 +1483,10 @@ export async function getOrderById(
       // Never collapse dual-leg into a single handoverOtp — that couples both drivers.
     } else if (!drop.verified && secret) {
       extras.handoverOtp = secret;
+    }
+    if (order.fulfillment === "pickup") {
+      const stop = order.pickups?.[0];
+      if (stop?.pickupOtp && !stop.pickupOtpVerified) extras.pickupCode = stop.pickupOtp;
     }
     return toUserOrderResponse(order, extras);
   }
@@ -1578,7 +1613,8 @@ export async function recoverStuckOrders() {
     //    stranded on an order the restaurant silently ignores.
     const awaitingRestaurantAck = await FoodOrder.find({
       orderStatus: 'created',
-      'dispatch.status': 'accepted',
+      // not_required: self pickup, restaurant told at creation (startPickupOrder).
+      'dispatch.status': { $in: ['accepted', 'not_required'] },
       'dispatch.acceptedAt': { $lt: new Date(now - RESTAURANT_ACK_RESEND_MS) },
     });
 
@@ -2078,7 +2114,8 @@ export async function listOrdersRestaurant(restaurantId, query) {
         { 'pickups.restaurantId': restaurantObjectId },
       ],
     },
-    { 'dispatch.status': 'accepted' },
+    // Self pickup has no rider: the restaurant sees it straight away.
+    { 'dispatch.status': { $in: ['accepted', 'not_required'] } },
     {
       $or: [
         { 'payment.method': { $in: ['cash', 'wallet'] } },
@@ -3057,6 +3094,105 @@ export async function updateOrderStatusRestaurant(
  * Manually re-trigger delivery partner search for a restaurant order.
  * Only allowed if status is preparing/ready and no partner has accepted yet.
  */
+/**
+ * Self pickup: the customer is at the counter. The restaurant types the code
+ * the customer shows (generated when the order turned ready), and the order is
+ * delivered and settled like a delivery, with no rider to pay.
+ */
+export async function completePickupRestaurant(orderId, restaurantId, code) {
+  const identity = buildOrderIdentityFilter(orderId);
+  const order = await FoodOrder.findOne({
+    ...identity,
+    restaurantId: new mongoose.Types.ObjectId(restaurantId),
+  });
+  if (!order) throw new NotFoundError("Order not found");
+  if (order.fulfillment !== "pickup") {
+    throw new ValidationError("This order is delivered by a rider, not collected by the customer.");
+  }
+  if (order.orderStatus === "delivered") return normalizeOrderForClient(order);
+  if (!["ready_for_pickup", "ready"].includes(order.orderStatus)) {
+    throw new ValidationError("Mark the order ready before handing it to the customer.");
+  }
+  const stop = order.pickups?.[0];
+  const expected = String(stop?.pickupOtp || "").trim();
+  if (!expected || String(code || "").trim() !== expected) {
+    throw new ValidationError("Wrong pickup code. Ask the customer for the code shown in their app.");
+  }
+
+  const from = order.orderStatus;
+  const now = new Date();
+  stop.pickupOtpVerified = true;
+  stop.status = "picked_up";
+  stop.pickedAt = now;
+  order.markModified("pickups");
+  order.orderStatus = "delivered";
+  order.deliveryState = {
+    ...(order.deliveryState?.toObject?.() || order.deliveryState || {}),
+    currentPhase: "delivered",
+    status: "delivered",
+    deliveredAt: now,
+  };
+  pushStatusHistory(order, {
+    byRole: "RESTAURANT",
+    byId: restaurantId,
+    from,
+    to: "delivered",
+    note: "Collected by the customer at the restaurant (pickup code verified).",
+  });
+  pushSettlementSnapshot(order, "complete", "Self pickup collected; no rider earning");
+  await order.save();
+
+  const payMethod = String(order.payment?.method || "razorpay");
+  await foodTransactionService.updateTransactionStatus(order._id, "payment_snapshot_sync", {
+    status: "captured",
+    paymentMethod: payMethod,
+    recordedByRole: "RESTAURANT",
+    recordedById: new mongoose.Types.ObjectId(restaurantId),
+    primaryRiderShare: 0,
+    sharedRiderShare: 0,
+    note: "Self pickup collected by the customer.",
+  });
+
+  try {
+    const io = getIO();
+    if (io) {
+      const payload = {
+        orderMongoId: order._id.toString(),
+        orderId: order._id.toString(),
+        orderStatus: "delivered",
+        status: "delivered",
+        fulfillment: "pickup",
+        title: "Order collected ✅",
+        message: "You collected your order. Enjoy your meal!",
+      };
+      io.to(rooms.user(order.userId)).emit("order_status_update", payload);
+      io.to(rooms.restaurant(restaurantId)).emit("order_status_update", payload);
+    }
+  } catch { }
+  await notifyOwnersSafely([{ ownerType: "USER", ownerId: order.userId }], {
+    title: "Order collected ✅",
+    body: `You collected order #${order.order_id || order._id}. Enjoy your meal!`,
+    data: { type: "order_status_update", orderId: String(order._id), status: "delivered" },
+  });
+
+  // Restaurant and platform are paid out exactly as for a delivery.
+  enqueueOrderEvent("delivery_completed", {
+    orderMongoId: order._id.toString(),
+    orderId: order.order_id || order._id.toString(),
+    deliveryPartnerId: null,
+    restaurantId: String(restaurantId),
+    riderEarning: 0,
+    sharedRiderEarning: 0,
+    platformProfit: Number(order.platformProfit) || 0,
+    payMethod,
+    paymentMethod: payMethod,
+    prevPayStatus: String(order.payment?.status || "paid"),
+    paymentStatus: "paid",
+  });
+
+  return normalizeOrderForClient(order);
+}
+
 export async function resendDeliveryNotificationRestaurant(orderId, restaurantId) {
   return dispatchService.resendDeliveryNotificationRestaurant(orderId, restaurantId);
   const order = await FoodOrder.findOne({
@@ -4606,7 +4742,9 @@ export async function processScheduledOrderAlerts() {
       try {
         await notifyOwnersSafely([{ ownerType: "USER", ownerId: order.userId }], {
           title: "Scheduled Order Activated! 🍔",
-          body: `Your scheduled order #${order.order_id || order._id} is now active and we are searching for a rider.`,
+          body: order.fulfillment === 'pickup'
+            ? `Your scheduled pickup order #${order.order_id || order._id} is now with the restaurant.`
+            : `Your scheduled order #${order.order_id || order._id} is now active and we are searching for a rider.`,
           data: {
             type: "order_created",
             orderId: String(order._id),
@@ -4615,6 +4753,15 @@ export async function processScheduledOrderAlerts() {
         });
       } catch (notificationErr) {
         logger.warn(`[ScheduledOrders] Push notification failed for user ${order.userId}: ${notificationErr.message}`);
+      }
+
+      if (order.fulfillment === 'pickup') {
+        try {
+          await startPickupOrder(order);
+        } catch (err) {
+          logger.error(`[ScheduledOrders] Pickup notify failed for ${order._id}: ${err.message}`);
+        }
+        continue;
       }
 
       // Trigger automatic rider assignment

@@ -722,6 +722,7 @@ orderSchema.plugin(whatsappOrderStatusPlugin, {
     cancelled: ['cancelled_by_user', 'cancelled_by_restaurant', 'cancelled_by_admin', 'cancelled_by_system'],
     refundPath: 'payment.refund.status',
     orderIdOf: (o) => o.orderId,
+    pushRefund: true,
 });
 
 export const QuickOrder = mongoose.model('QuickOrder', orderSchema, 'quick_orders');

@@ -7,6 +7,7 @@ import {
     listOrdersUserController,
     getOrderPaymentsUserController,
     getOrderByIdUserController,
+    getOrderInvoiceUserController,
     cancelOrderController,
     submitOrderRatingsController,
     getOrderDropOtpUserController,
@@ -26,6 +27,7 @@ router.get('/', listOrdersUserController);
 router.get('/restaurant-eligibility', restaurantEligibilityController);
 router.get('/:orderId/payments', getOrderPaymentsUserController);
 router.get('/:orderId/drop-otp', getOrderDropOtpUserController);
+router.get('/:orderId/invoice', getOrderInvoiceUserController);
 router.get('/:orderId', getOrderByIdUserController);
 router.patch('/:orderId/cancel', cancelOrderController);
 router.patch('/:orderId/ratings', submitOrderRatingsController);

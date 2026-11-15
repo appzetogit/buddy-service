@@ -87,6 +87,17 @@ const ensureDeliveryVehicleAllowed = async ({ vehicleTypeId, parcel }) => {
   }
 };
 
+/** Kilograms in the typed parcel weight ("25kg", "500 g", "1.5 ton", "12" = kg); null if no number. */
+export const parcelKg = (text) => {
+  const m = String(text ?? '').trim().toLowerCase().match(/(\d+(?:[.,]\d+)?)\s*([a-z]*)/);
+  if (!m) return null;
+  const n = Number(m[1].replace(',', '.'));
+  if (!Number.isFinite(n)) return null;
+  if (m[2].startsWith('t')) return n * 1000;
+  if (m[2].startsWith('g')) return n / 1000;
+  return n;
+};
+
 const roundCurrency = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 
 const toRadians = (value) => (Number(value) * Math.PI) / 180;
@@ -262,8 +273,14 @@ export const createDeliveryRecord = async ({
   const dropCoords = normalizePoint(drop, 'drop');
   const pricingZone = await assertIntracityDelivery(pickupCoords, dropCoords);
   const vehicle = vehicleTypeId
-    ? await Vehicle.findById(vehicleTypeId).select('delivery_distance_pricing service_tax').lean()
+    ? await Vehicle.findById(vehicleTypeId).select('name capacity delivery_distance_pricing service_tax').lean()
     : null;
+  // Admin "Maximum Weight / Capacity" is the most this vehicle carries, in kg.
+  const kg = parcelKg(parcel?.weight);
+  const maxKg = Number(vehicle?.capacity || 0);
+  if (kg != null && maxKg > 0 && kg > maxKg) {
+    throw new ApiError(400, `${vehicle.name || 'This vehicle'} carries up to ${maxKg} kg. Please choose a bigger vehicle.`, { code: 'PARCEL_TOO_HEAVY' });
+  }
   const [tariff, distance] = await Promise.all([
     resolveDeliveryTariff({ vehicle, zone: pricingZone }),
     resolveDeliveryDistance(pickupCoords, dropCoords),

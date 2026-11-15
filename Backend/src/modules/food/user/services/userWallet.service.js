@@ -57,7 +57,9 @@ export const getUserWallet = async (userId) => {
             description: t.description || '',
             date: t.createdAt,
             createdAt: t.createdAt,
-            metadata: t.metadata || {}
+            metadata: t.metadata || {},
+            // Set on top-ups paid through Razorpay; lets the app say "via UPI / Card".
+            razorpayPaymentId: t.razorpayPaymentId || null
         }))
     };
 };
