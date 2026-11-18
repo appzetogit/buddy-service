@@ -334,12 +334,15 @@ export async function createOrder(userId, dto, options = {}) {
   let walletAmount = 0;
   if (verifiedPrepaid) {
     walletAmount = Math.max(0, Number(verifiedPrepaid.walletAmount || 0));
-  } else if (paymentMethod === "razorpay" && dto.useWallet === true) {
+  } else if (paymentMethod === "razorpay" && dto.useWallet !== false) {
+    // useWallet not sent = use the wallet part automatically; false = the customer opted out.
     const balance = await userWalletService.getWalletBalance(userId);
     if (balance >= normalizedPricing.total) {
-      // The wallet alone covers it - nothing to pay online.
-      paymentMethod = "wallet";
-      isWallet = true;
+      // The wallet alone covers it - nothing to pay online (only when the customer asked for it).
+      if (dto.useWallet === true) {
+        paymentMethod = "wallet";
+        isWallet = true;
+      }
     } else if (balance > 0) {
       // Razorpay needs at least Rs 1, so always leave Rs 1 for the gateway.
       walletAmount = Math.max(0, Math.min(balance, Math.round((normalizedPricing.total - 1) * 100) / 100));

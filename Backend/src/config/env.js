@@ -36,6 +36,8 @@ export const config = {
         sender: process.env.WHATSAPP_SENDER_NUMBER,
         otpTemplate: process.env.WHATSAPP_OTP_TEMPLATE || 'otp_login',
         orderTemplate: process.env.WHATSAPP_ORDER_TEMPLATE || 'order_status',
+        // Optional: a provider-approved template worded for parcels. Unset = the order template is used.
+        parcelTemplate: process.env.WHATSAPP_PARCEL_TEMPLATE || '',
     },
 
     // Rate limiting

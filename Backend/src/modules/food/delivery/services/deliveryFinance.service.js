@@ -8,7 +8,7 @@ import { DeliveryBonusTransaction } from '../../admin/models/deliveryBonusTransa
 import { getDeliveryCashLimitSettings } from '../../admin/services/admin.service.js';
 import { getBalance } from '../../../../core/payments/transaction.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
-import { assertRazorpayAvailableInProduction, createRazorpayOrder, getRazorpayKeyId, isRazorpayConfigured, verifyPaymentSignature } from '../../orders/helpers/razorpay.helper.js';
+import { assertRazorpayAvailableInProduction, createRazorpayOrder, fetchCapturedPayment, getRazorpayKeyId, isRazorpayConfigured, verifyPaymentSignature } from '../../orders/helpers/razorpay.helper.js';
 import { resolveRiderPayoutAmount } from '../../orders/services/order.helpers.js';
 
 /**
@@ -453,6 +453,18 @@ export const verifyDeliveryCashDepositPayment = async (deliveryPartnerId, payloa
 
     if (!isValid) {
         throw new ValidationError('Payment verification failed');
+    }
+
+    if (isRazorpayConfigured()) {
+        // Razorpay itself must confirm a captured payment for exactly this deposit.
+        try {
+            const payment = await fetchCapturedPayment(paymentId, orderId);
+            if (Math.round(Number(payment.amount)) !== Math.round(Number(amount) * 100)) {
+                throw new Error('Paid amount does not match the deposit amount');
+            }
+        } catch (err) {
+            throw new ValidationError(err?.message || 'Payment verification failed');
+        }
     }
 
     const deposit = existing

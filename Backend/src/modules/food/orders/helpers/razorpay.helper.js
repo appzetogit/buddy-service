@@ -115,14 +115,33 @@ export function getRazorpayInstance() {
     return new Razorpay({ key_id: KEY_ID, key_secret: KEY_SECRET });
 }
 
-export function createRazorpayOrder(amountPaise, currency = 'INR', receipt = '') {
+export function createRazorpayOrder(amountPaise, currency = 'INR', receipt = '', notes = undefined) {
     const instance = getRazorpayInstance();
     if (!instance) return Promise.reject(new Error('Razorpay not configured'));
     return instance.orders.create({
         amount: Math.round(amountPaise),
         currency,
-        receipt: receipt || undefined
+        receipt: receipt || undefined,
+        ...(notes ? { notes } : {})
     });
+}
+
+/**
+ * Server-side proof that a checkout really paid: the signature is checked by the caller, this
+ * asks Razorpay itself. A payment that was cancelled/failed/only authorized never passes.
+ * Returns the payment entity ({ amount in paise, order_id, ... }) or throws.
+ */
+export async function fetchCapturedPayment(paymentId, expectedOrderId) {
+    const instance = getRazorpayInstance();
+    if (!instance) throw new Error('Razorpay not configured');
+    const payment = await instance.payments.fetch(paymentId);
+    if (String(payment?.order_id || '') !== String(expectedOrderId || '')) {
+        throw new Error('Payment does not belong to this order');
+    }
+    if (payment.status !== 'captured') {
+        throw new Error(`Payment is not completed (status: ${payment.status})`);
+    }
+    return payment;
 }
 
 export function createPaymentLink({ amountPaise, currency = 'INR', description, orderId, customerName, customerEmail, customerPhone }) {

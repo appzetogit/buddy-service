@@ -92,7 +92,7 @@ const RideComplete = () => {
   const [selectedOnlineMethod, setSelectedOnlineMethod] = useState('upi');
   const [walletSnapshot, setWalletSnapshot] = useState({ balance: 0, currency: 'INR' });
   const [walletLoading, setWalletLoading] = useState(false);
-  const [useWallet, setUseWallet] = useState(false);
+  const [useWallet, setUseWallet] = useState(true); // wallet money is used first by default
   const [paymentCollection, setPaymentCollection] = useState(() => state.driverPaymentCollection || null);
   const [rideLiveStatus, setRideLiveStatus] = useState(() => String(state.liveStatus || state.status || '').toLowerCase());
   const [tipSettings, setTipSettings] = useState({

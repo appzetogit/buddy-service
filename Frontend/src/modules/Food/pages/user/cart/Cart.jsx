@@ -297,7 +297,7 @@ function Cart() {
   const [walletBalance, setWalletBalance] = useState(0)
   const [isLoadingWallet, setIsLoadingWallet] = useState(false)
   // Online payment only: pay what the wallet can cover from the wallet, the rest online.
-  const [useWalletSplit, setUseWalletSplit] = useState(false)
+  const [useWalletSplit, setUseWalletSplit] = useState(true) // wallet money is used first by default
   const [showAddMoneyModal, setShowAddMoneyModal] = useState(false)
   const [restaurantNote, setRestaurantNote] = useState(() => {
     try {
@@ -1870,7 +1870,8 @@ function Cart() {
         tip: tipsConfig.tipsEnabled && tip > 0 ? tip : undefined,
         sendCutlery: sendCutlery !== false,
         paymentMethod: selectedPaymentMethod,
-        useWallet: walletSplitAmount > 0 ? true : undefined,
+        // Explicit either way: unticked must not fall back to the backend default (auto-use wallet).
+        useWallet: selectedPaymentMethod === "razorpay" && walletBalance > 0 ? walletSplitAmount > 0 : undefined,
         // `useZone()` can return `null`. Zod expects string/undefined, not null.
         zoneId: zoneId || undefined,
         scheduledAt: isScheduled ? new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString() : undefined,

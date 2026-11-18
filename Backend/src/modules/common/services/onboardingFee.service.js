@@ -1,6 +1,6 @@
 import { OnboardingFeeConfig } from '../models/onboardingFeeConfig.model.js';
 import { OnboardingPaymentLog } from '../models/onboardingPaymentLog.model.js';
-import { verifyPaymentSignature } from '../../food/orders/helpers/razorpay.helper.js';
+import { fetchCapturedPayment, verifyPaymentSignature } from '../../food/orders/helpers/razorpay.helper.js';
 import { ValidationError } from '../../../core/auth/errors.js';
 import { config } from '../../../config/env.js';
 import mongoose from 'mongoose';
@@ -69,6 +69,14 @@ export async function verifyAndConsumeOnboardingPayment({ role, paymentDetails =
     } else {
         // Validate signature using standard Razorpay helper
         isValid = verifyPaymentSignature(razorpayOrderId, razorpayPaymentId, razorpaySignature);
+        if (isValid) {
+            // The signature only proves the checkout answered; Razorpay must confirm the capture.
+            try {
+                await fetchCapturedPayment(razorpayPaymentId, razorpayOrderId);
+            } catch {
+                isValid = false;
+            }
+        }
     }
 
     if (!isValid) {

@@ -747,11 +747,12 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
     let walletAmount = 0;
     if (verifiedPrepaid) {
       walletAmount = Math.max(0, Number(verifiedPrepaid.walletAmount || 0));
-    } else if (paymentModeRaw === 'ONLINE' && req.body?.useWallet === true && idQuery.userId) {
+    } else if (paymentModeRaw === 'ONLINE' && req.body?.useWallet !== false && idQuery.userId) {
+      // useWallet not sent = use the wallet part automatically; false = the customer opted out.
       const balance = await getWalletBalance(idQuery.userId);
       if (balance >= total) {
-        // The wallet alone covers it - nothing to pay online.
-        paymentModeRaw = 'WALLET';
+        // The wallet alone covers it - nothing to pay online (only when the customer asked for it).
+        if (req.body?.useWallet === true) paymentModeRaw = 'WALLET';
       } else if (balance > 0) {
         // Razorpay needs at least Rs 1, so always leave Rs 1 for the gateway.
         walletAmount = Math.max(0, Math.min(balance, Math.round((total - 1) * 100) / 100));

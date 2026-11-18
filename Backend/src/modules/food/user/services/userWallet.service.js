@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodUserWallet } from '../models/userWallet.model.js';
-import { assertRazorpayAvailableInProduction, createRazorpayOrder, getRazorpayKeyId, isRazorpayConfigured, verifyPaymentSignature } from '../../orders/helpers/razorpay.helper.js';
+import { assertRazorpayAvailableInProduction, createRazorpayOrder, fetchCapturedPayment, getRazorpayInstance, getRazorpayKeyId, isRazorpayConfigured, verifyPaymentSignature } from '../../orders/helpers/razorpay.helper.js';
 
 const ensureWallet = async (userId) => {
     const id = String(userId || '');
@@ -91,7 +91,8 @@ export const createWalletTopupOrder = async (userId, amountInr) => {
     }
 
     const receipt = `wallet_topup_${String(userId).slice(-8)}_${Date.now()}`;
-    const order = await createRazorpayOrder(amountPaise, 'INR', receipt);
+    // userId is stamped on the Razorpay order so a verify can only credit the account that paid.
+    const order = await createRazorpayOrder(amountPaise, 'INR', receipt, { userId: String(userId), purpose: 'wallet_topup' });
 
     return {
         razorpay: {
@@ -107,12 +108,11 @@ export const verifyWalletTopupPayment = async (userId, payload) => {
     const orderId = String(payload?.razorpayOrderId || '').trim();
     const paymentId = String(payload?.razorpayPaymentId || '').trim();
     const signature = String(payload?.razorpaySignature || '').trim();
-    const amount = Number(payload?.amount);
+    let amount = Number(payload?.amount);
 
     if (!orderId) throw new ValidationError('razorpayOrderId is required');
     if (!paymentId) throw new ValidationError('razorpayPaymentId is required');
     if (!signature) throw new ValidationError('razorpaySignature is required');
-    if (!Number.isFinite(amount) || amount <= 0) throw new ValidationError('amount is required');
 
     const wallet = await ensureWallet(userId);
     const existing = wallet.transactions.find((t) => String(t.razorpayOrderId || '') === orderId);
@@ -126,6 +126,23 @@ export const verifyWalletTopupPayment = async (userId, payload) => {
         : true;
     if (!ok) {
         throw new ValidationError('Payment verification failed');
+    }
+
+    if (isRazorpayConfigured()) {
+        // Ask Razorpay itself: only a captured payment on THIS order, for THIS user, adds money,
+        // and the amount is Razorpay's, never the client's.
+        let payment;
+        try {
+            payment = await fetchCapturedPayment(paymentId, orderId);
+            const rzOrder = await getRazorpayInstance().orders.fetch(orderId);
+            const owner = String(rzOrder?.notes?.userId || '');
+            if (owner && owner !== String(userId)) throw new Error('This payment belongs to another account');
+        } catch (err) {
+            throw new ValidationError(err?.message || 'Payment verification failed');
+        }
+        amount = Math.round(Number(payment.amount)) / 100;
+    } else if (!Number.isFinite(amount) || amount <= 0) {
+        throw new ValidationError('amount is required');
     }
 
     // Store ONLY after payment is verified.

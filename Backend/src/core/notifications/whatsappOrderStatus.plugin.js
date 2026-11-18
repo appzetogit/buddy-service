@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { sendWhatsappOrderStatus } from '../../utils/whatsapp.js';
 import { logger } from '../../utils/logger.js';
+import { config } from '../../config/env.js';
 
 /**
  * Sends the customer a WhatsApp "order_status" message when an order is Placed, Delivered,
@@ -16,14 +17,22 @@ import { logger } from '../../utils/logger.js';
  *   cancelled   - statuses meaning cancelled
  *   refundPath  - optional field that becomes 'processed' when a refund is done
  *   orderIdOf   - (doc) => text shown as the order number
+ *   kindOf      - optional (doc) => 'parcel' | 'ride' | undefined; words the status for that kind
+ *                 ("Parcel Booked" instead of "Placed") and uses WHATSAPP_PARCEL_TEMPLATE for parcels
  *   pushRefund  - also send an app push when the refund is processed (for flows with no refund push of their own)
  */
 // shortcut: in-process dedupe only; with several server instances a rare duplicate message is possible.
 const recent = new Map();
 
-export const whatsappOrderStatusPlugin = (schema, { statusPath, delivered, cancelled, refundPath, orderIdOf, pushRefund = false }) => {
+export const whatsappOrderStatusPlugin = (schema, { statusPath, delivered, cancelled, refundPath, orderIdOf, kindOf, pushRefund = false }) => {
     const eventFor = (status) =>
         delivered.includes(status) ? 'Delivered' : cancelled.includes(status) ? 'Cancelled' : null;
+
+    const KIND_WORDS = {
+        parcel: { Placed: 'Parcel Booked', Delivered: 'Parcel Delivered', Cancelled: 'Parcel Cancelled' },
+        ride: { Placed: 'Ride Booked', Delivered: 'Ride Completed', Cancelled: 'Ride Cancelled' },
+    };
+    const labelFor = (doc, event) => KIND_WORDS[kindOf?.(doc)]?.[event] || event;
 
     const notify = (doc, event) => {
         // Same event for the same order within 10 min (e.g. webhook + save both fire) goes out once.
@@ -40,7 +49,8 @@ export const whatsappOrderStatusPlugin = (schema, { statusPath, delivered, cance
                 phone: user.phone,
                 name: user.name,
                 orderId: orderIdOf(doc),
-                status: event,
+                status: labelFor(doc, event),
+                template: kindOf?.(doc) === 'parcel' ? config.whatsapp.parcelTemplate || undefined : undefined,
             });
         })().catch((error) => logger.error(`[WhatsApp] order status failed: ${error.message}`));
         if (event === 'Refunded' && pushRefund && doc?.userId) {

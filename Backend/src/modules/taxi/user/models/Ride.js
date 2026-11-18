@@ -752,6 +752,7 @@ rideSchema.plugin(whatsappOrderStatusPlugin, {
   delivered: ['completed'],
   cancelled: ['cancelled'],
   orderIdOf: (r) => String(r._id).slice(-6).toUpperCase(),
+  kindOf: (r) => (r.serviceType === 'parcel' ? 'parcel' : 'ride'),
 });
 
 export const Ride = mongoose.models.TaxiRide || mongoose.model('TaxiRide', rideSchema);

@@ -362,7 +362,7 @@ const CheckoutPage = () => {
   const routerLocation = useRouterLocation();
   const [walletBalance, setWalletBalance] = useState(Number(userProfile?.walletBalance || 0));
   // Online payment only: pay what the wallet can cover from the wallet, the rest online.
-  const [useWalletSplit, setUseWalletSplit] = useState(false);
+  const [useWalletSplit, setUseWalletSplit] = useState(true); // wallet money is used first by default
 
   useEffect(() => {
     if (isAuthenticated && !isFullDataFetched) fetchFullWishlist();
@@ -1066,7 +1066,7 @@ const CheckoutPage = () => {
             : selectedPayment === "wallet"
               ? "WALLET"
               : "COD",
-        ...(selectedPayment === "online" && useWalletSplit && isAuthenticated && Number(walletBalance) > 0 ? { useWallet: true } : {}),
+        ...(selectedPayment === "online" && isAuthenticated && Number(walletBalance) > 0 ? { useWallet: Boolean(useWalletSplit) } : {}),
         discountTotal: discountAmount,
         taxTotal: gstAmount,
         platformFee,

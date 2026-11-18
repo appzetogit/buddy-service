@@ -284,9 +284,14 @@ const finalizeRideCompletion = async ({
  * part is paid, so an abandoned checkout never touches the wallet.
  */
 const resolveWalletSplit = async (userId, total, useWallet) => {
-  if (!(useWallet === true || useWallet === 'true' || useWallet === 1 || useWallet === '1')) {
+  // true = the rider asked for it; false = the rider opted out; not sent = use the wallet part
+  // automatically (an app that never sends the flag used to charge the whole fare online while
+  // the wallet money sat unused).
+  const optedOut = useWallet === false || useWallet === 'false' || useWallet === 0 || useWallet === '0';
+  if (optedOut) {
     return 0;
   }
+  const asked = useWallet === true || useWallet === 'true' || useWallet === 1 || useWallet === '1';
   await ensureUserWallet(userId);
   const wallet = await UserWallet.findOne({ userId }).select('balance').lean();
   const walletAmount = roundMoney(Math.min(Number(wallet?.balance || 0), total));
@@ -294,6 +299,11 @@ const resolveWalletSplit = async (userId, total, useWallet) => {
     return 0;
   }
   if (roundMoney(total - walletAmount) < 1) {
+    // Wallet covers it all: an explicit request must use the wallet-only endpoint; an app that did
+    // not ask keeps its normal online payment.
+    if (!asked) {
+      return 0;
+    }
     throw new ApiError(400, 'Your wallet covers this payment. Please pay with wallet.');
   }
   return walletAmount;
@@ -356,6 +366,23 @@ const razorpayRequest = async ({ method, path, body, keyId, keySecret }) => {
   }
 
   return payload;
+};
+
+// The signature only proves the checkout answered; ask Razorpay itself that this payment is on this
+// order and really captured (a cancelled / failed / merely authorized payment must never pass).
+const assertRazorpayPaymentCaptured = async ({ paymentId, orderId, keyId, keySecret }) => {
+  const payment = await razorpayRequest({
+    method: 'GET',
+    path: `/payments/${encodeURIComponent(paymentId)}`,
+    keyId,
+    keySecret,
+  });
+  if (String(payment?.order_id || '') !== String(orderId || '')) {
+    throw new ApiError(400, 'Payment does not belong to this order');
+  }
+  if (payment?.status !== 'captured') {
+    throw new ApiError(400, `Payment is not completed (status: ${payment?.status || 'unknown'})`);
+  }
 };
 
 export const createRide = async (req, res) => {
@@ -685,6 +712,7 @@ export const verifyRazorpayRideCompletion = async (req, res) => {
   if (expectedSignature !== signature) {
     throw new ApiError(400, 'Invalid payment signature');
   }
+  await assertRazorpayPaymentCaptured({ paymentId: paymentId, orderId: orderId, keyId, keySecret });
 
   const order = await razorpayRequest({
     method: 'GET',
@@ -984,6 +1012,7 @@ export const verifyRazorpayRideFare = async (req, res) => {
   if (expectedSignature !== signature) {
     throw new ApiError(400, 'Invalid payment signature');
   }
+  await assertRazorpayPaymentCaptured({ paymentId: paymentId, orderId: orderId, keyId, keySecret });
 
   // The order must be this ride's fare order, for this rider.
   const order = await razorpayRequest({
@@ -1242,6 +1271,7 @@ export const verifyRazorpayRideTip = async (req, res) => {
   if (expectedSignature !== signature) {
     throw new ApiError(400, 'Invalid payment signature');
   }
+  await assertRazorpayPaymentCaptured({ paymentId: paymentId, orderId: orderId, keyId, keySecret });
 
   const order = await razorpayRequest({
     method: 'GET',

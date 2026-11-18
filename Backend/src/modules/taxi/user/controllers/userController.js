@@ -507,6 +507,23 @@ const razorpayRequest = async ({ method, path, body, keyId, keySecret }) => {
   return payload;
 };
 
+// The signature only proves the checkout answered; ask Razorpay itself that this payment is on this
+// order and really captured (a cancelled / failed / merely authorized payment must never pass).
+const assertRazorpayPaymentCaptured = async ({ paymentId, orderId, keyId, keySecret }) => {
+  const payment = await razorpayRequest({
+    method: 'GET',
+    path: `/payments/${encodeURIComponent(paymentId)}`,
+    keyId,
+    keySecret,
+  });
+  if (String(payment?.order_id || '') !== String(orderId || '')) {
+    throw new ApiError(400, 'Payment does not belong to this order');
+  }
+  if (payment?.status !== 'captured') {
+    throw new ApiError(400, `Payment is not completed (status: ${payment?.status || 'unknown'})`);
+  }
+};
+
 const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 
@@ -1541,6 +1558,7 @@ const verifyAndApplyUserRazorpayWalletTopup = async ({
   if (expectedSignature !== normalizedSignature) {
     throw new ApiError(400, 'Invalid payment signature');
   }
+  await assertRazorpayPaymentCaptured({ paymentId: normalizedPaymentId, orderId: normalizedOrderId, keyId, keySecret });
 
   const order = await razorpayRequest({
     method: 'GET',
@@ -2142,6 +2160,7 @@ export const verifyRentalAdvancePayment = async (req, res) => {
   if (expectedSignature !== signature) {
     throw new ApiError(400, 'Invalid payment signature');
   }
+  await assertRazorpayPaymentCaptured({ paymentId: paymentId, orderId: orderId, keyId, keySecret });
 
   const order = await razorpayRequest({
     method: 'GET',

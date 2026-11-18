@@ -48,10 +48,10 @@ export const sendWhatsappOtp = (phone, otp) =>
     callBhash({ phone, template: config.whatsapp.otpTemplate, params: [otp], stype: 'auth' });
 
 /** order_status template: "Hello {{1}}, Your order #{{2}} has been updated. Current Order Status: {{3}} ..." */
-export const sendWhatsappOrderStatus = ({ phone, name, orderId, status }) =>
+export const sendWhatsappOrderStatus = ({ phone, name, orderId, status, template }) =>
     callBhash({
         phone,
-        template: config.whatsapp.orderTemplate,
+        template: template || config.whatsapp.orderTemplate,
         params: [name || 'Customer', orderId, status],
         stype: 'normal',
     });
