@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { createPortal } from "react-dom"
 import { motion } from "framer-motion"
@@ -20,6 +21,9 @@ import PanelCard from "@food/components/restaurant/panel/PanelCard"
 import useRestaurantDashboardData from "@food/hooks/useRestaurantDashboardData"
 import { RESTAURANT_BASE } from "@food/utils/restaurantNavConfig"
 import { ENABLE_DINING } from "@/shared/featureFlags"
+import { restaurantAPI } from "@food/api"
+import { Switch } from "@food/components/ui/switch"
+import { toast } from "sonner"
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-IN", {
@@ -42,6 +46,26 @@ function MetricPill({ label, value, sublabel, active, onClick }) {
       <p className="mt-0.5 text-base sm:mt-1 sm:text-lg font-bold text-gray-900 leading-tight">{value}</p>
       {sublabel ? <p className="mt-0.5 text-[10px] sm:text-[11px] text-gray-400">{sublabel}</p> : null}
     </button>
+  )
+}
+
+// Same switch as Outlet timings -> Online status; the backend enforces the approval/review rules.
+function AcceptingOrdersToggle({ checked, busy, onChange, className = "" }) {
+  return (
+    <label
+      className={`inline-flex items-center gap-2 rounded-xl border border-[var(--rt-border)] bg-white px-2.5 py-1.5 shadow-sm ${className}`}
+    >
+      <span className="whitespace-nowrap text-[11px] font-semibold text-gray-700 sm:text-xs">
+        {checked ? "Accepting orders" : "Not accepting"}
+      </span>
+      <Switch
+        checked={checked}
+        disabled={busy}
+        onCheckedChange={onChange}
+        aria-label="Accepting orders"
+        className="data-[state=checked]:bg-[var(--rt-primary-strong)] data-[state=unchecked]:bg-gray-300 disabled:opacity-60"
+      />
+    </label>
   )
 }
 
@@ -89,6 +113,28 @@ export default function Dashboard() {
     refresh,
   } = useRestaurantDashboardData()
 
+  const [online, setOnline] = useState(Boolean(isOnline))
+  const [togglingOnline, setTogglingOnline] = useState(false)
+  useEffect(() => setOnline(Boolean(isOnline)), [isOnline])
+
+  const handleOnlineChange = async (checked) => {
+    const previous = online
+    setOnline(checked)
+    setTogglingOnline(true)
+    try {
+      await restaurantAPI.updateAcceptingOrders(checked)
+      try {
+        localStorage.setItem("restaurant_online_status", JSON.stringify(checked))
+      } catch {}
+      window.dispatchEvent(new CustomEvent("restaurantStatusChanged", { detail: { isOnline: checked } }))
+    } catch (err) {
+      setOnline(previous)
+      toast.error(err?.response?.data?.message || "Could not update online status")
+    } finally {
+      setTogglingOnline(false)
+    }
+  }
+
   const restaurantName =
     restaurant?.restaurantName ||
     restaurant?.name ||
@@ -116,7 +162,7 @@ export default function Dashboard() {
       <div className="hidden lg:block">
         <RestaurantPanelHeader
           title={restaurantName}
-          subtitle={isOnline ? "Accepting orders" : "Currently offline"}
+          subtitle={online ? "Accepting orders" : "Currently offline"}
           showSearch
         />
       </div>
@@ -128,23 +174,26 @@ export default function Dashboard() {
             <h1 className="text-2xl font-bold text-gray-900">{restaurantName}</h1>
             <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-[var(--rt-border)] bg-white px-3 py-1 text-sm">
               <span
-                className={`h-2.5 w-2.5 rounded-full ${isOnline ? "bg-[var(--rt-primary-strong)]" : "bg-gray-400"}`}
+                className={`h-2.5 w-2.5 rounded-full ${online ? "bg-[var(--rt-primary-strong)]" : "bg-gray-400"}`}
               />
               <span className="font-medium text-gray-700">
-                {isOnline ? "Accepting orders" : "Currently offline"}
+                {online ? "Accepting orders" : "Currently offline"}
               </span>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--rt-border)] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 shadow-sm disabled:opacity-60 sm:text-xs"
-            aria-label="Refresh dashboard"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={refreshing}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--rt-border)] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 shadow-sm disabled:opacity-60 sm:text-xs"
+              aria-label="Refresh dashboard"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+            <AcceptingOrdersToggle checked={online} busy={togglingOnline} onChange={handleOnlineChange} />
+          </div>
         </div>
 
         {loading ? (
@@ -162,15 +211,18 @@ export default function Dashboard() {
             <section>
               <div className="mb-2 sm:mb-3 flex items-center justify-between">
                 <h2 className="text-sm sm:text-base font-bold text-gray-900">Today at a glance</h2>
-                <button
-                  type="button"
-                  onClick={refresh}
-                  disabled={refreshing}
-                  className="hidden items-center gap-1 rounded-xl px-2 py-1 text-sm text-gray-500 hover:bg-white lg:inline-flex"
-                >
-                  <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-                  Refresh
-                </button>
+                <div className="hidden items-center gap-3 lg:flex">
+                  <AcceptingOrdersToggle checked={online} busy={togglingOnline} onChange={handleOnlineChange} />
+                  <button
+                    type="button"
+                    onClick={refresh}
+                    disabled={refreshing}
+                    className="inline-flex items-center gap-1 rounded-xl px-2 py-1 text-sm text-gray-500 hover:bg-white"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                    Refresh
+                  </button>
+                </div>
               </div>
               <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-0.5 scrollbar-hide">
                 <MetricPill
