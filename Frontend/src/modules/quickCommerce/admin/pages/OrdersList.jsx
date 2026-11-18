@@ -496,6 +496,7 @@ const OrdersList = () => {
                                 <th className="px-4 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer</th>
                                 <th className="px-4 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Seller</th>
                                 <th className="px-4 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                                <th className="px-4 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Payment</th>
                                 <th className="px-4 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
                                 <th className="px-4 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                             </tr>
@@ -503,7 +504,7 @@ const OrdersList = () => {
                         <tbody className="divide-y divide-slate-50">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan="6" className="px-4 py-20 text-center">
+                                    <td colSpan="7" className="px-4 py-20 text-center">
                                         <div className="flex justify-center flex-col items-center gap-2">
                                             <div className="h-8 w-8 border-4 border-fuchsia-600 border-t-transparent rounded-full animate-spin"></div>
                                             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading Orders...</p>
@@ -574,20 +575,23 @@ const OrdersList = () => {
                                         </div>
                                         {(() => {
                                             const cancel = getCancelInfo(order);
+                                            return cancel?.who ? (
+                                                <p className="mt-1 text-[10px] font-bold text-rose-500" title={cancel.reason || undefined}>
+                                                    by {cancel.who}
+                                                </p>
+                                            ) : null;
+                                        })()}
+                                    </td>
+                                    <td className="px-4 py-5">
+                                        {(() => {
                                             const pay = getPaymentInfo(order);
                                             return (
-                                                <div className="mt-1.5 flex max-w-[220px] flex-col items-start gap-1">
-                                                    {cancel ? (
-                                                        <span className="text-[10px] font-bold text-rose-600" title={cancel.reason}>
-                                                            Cancelled{cancel.who ? ` by ${cancel.who}` : ''}
-                                                            {cancel.reason ? <span className="font-medium text-slate-400"> · {cancel.reason.length > 48 ? `${cancel.reason.slice(0, 48)}…` : cancel.reason}</span> : null}
-                                                        </span>
-                                                    ) : null}
-                                                    <span className={cn("rounded-md border px-2 py-0.5 text-[10px] font-bold", pay.cls)}>
+                                                <div className="flex flex-col items-start gap-1">
+                                                    <span className={cn("rounded-md border px-2 py-1 text-[10px] font-bold", pay.cls)}>
                                                         {pay.label}
                                                     </span>
                                                     {order.paymentMethod ? (
-                                                        <span className="text-[10px] font-bold uppercase text-slate-400">via {order.paymentMethod}</span>
+                                                        <span className="text-[10px] font-bold uppercase text-slate-400">{order.paymentMethod}</span>
                                                     ) : null}
                                                 </div>
                                             );
@@ -623,7 +627,7 @@ const OrdersList = () => {
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan="6" className="px-4 py-20 text-center">
+                                    <td colSpan="7" className="px-4 py-20 text-center">
                                         <div className="flex flex-col items-center gap-4">
                                             <div className="h-20 w-20 bg-slate-50 rounded-full flex items-center justify-center">
                                                 <Search className="h-10 w-10 text-slate-200" />
