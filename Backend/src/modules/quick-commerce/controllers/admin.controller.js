@@ -971,6 +971,7 @@ const buildQuickAdminOrderResponse = (order, sellerMap = {}, sellerOrderMap = {}
         }
       : null,
     cancellationReason: resolveQuickOrderCancellationReason(order, sellerOrder),
+    cancelledBy: order.cancelledBy || '',
     statusHistory: Array.isArray(order.statusHistory) ? order.statusHistory : [],
     address,
   };

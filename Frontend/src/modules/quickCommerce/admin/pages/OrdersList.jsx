@@ -147,6 +147,10 @@ const OrdersList = () => {
                     date: formatOrderTimestamp(o.createdAt),
                     payment: o.payment?.method === 'cod' || o.payment?.method === 'cash' ? 'COD' : 'Digital',
                     paymentMethod: String(o.payment?.method || '').toLowerCase(),
+                    paymentStatus: String(o.payment?.status || '').toLowerCase(),
+                    refund: o.payment?.refund || null,
+                    cancelledBy: String(o.cancelledBy || '').toLowerCase(),
+                    cancellationReason: String(o.cancellationReason || ''),
                 }));
                 setOrders(formatted);
                 formatted.forEach((row) => {
@@ -262,6 +266,35 @@ const OrdersList = () => {
             return matchesSearch && matchesStatus && matchesDate && matchesPayment;
         });
     }, [safeOrders, searchTerm, status, dateRangeId, paymentFilter]);
+
+    // Plain-language "what happened" lines shown under the status pill.
+    const CANCEL_WHO = { admin: 'Admin', user: 'Customer', customer: 'Customer', seller: 'Seller', restaurant: 'Seller', system: 'System' };
+    const getCancelInfo = (order) => {
+        if (String(order.status).toLowerCase() !== 'cancelled' && !String(order.rawStatus).startsWith('cancelled')) return null;
+        const fromRaw = String(order.rawStatus || '').replace(/^cancelled_?by_?/, '');
+        const who = CANCEL_WHO[order.cancelledBy] || CANCEL_WHO[fromRaw] || '';
+        return { who, reason: order.cancellationReason || order.refund?.reason || '' };
+    };
+
+    const money = (n) => `₹${Number(n || 0).toLocaleString()}`;
+    const getPaymentInfo = (order) => {
+        const st = order.paymentStatus;
+        const refundStatus = String(order.refund?.status || '').toLowerCase();
+        const dest = String(order.refund?.processedMethod || order.refund?.requestedMethod || '').toLowerCase();
+        const destLabel = dest === 'wallet' ? 'to Wallet' : dest ? 'to source' : '';
+        const amt = order.refund?.amount || order.amount;
+        if (st === 'refunded' || refundStatus === 'processed') {
+            return { label: `Refunded ${money(amt)} ${destLabel}`.trim(), cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+        }
+        if (['requested', 'pending', 'initiated', 'processing'].includes(refundStatus)) {
+            return { label: `Refund pending ${money(amt)}`, cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+        }
+        if (refundStatus === 'failed') return { label: 'Refund failed', cls: 'bg-rose-50 text-rose-700 border-rose-200' };
+        if (st === 'completed' || st === 'paid') return { label: 'Paid', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+        if (st === 'failed') return { label: 'Payment failed', cls: 'bg-rose-50 text-rose-700 border-rose-200' };
+        if (st === 'cod_pending') return { label: 'COD – to collect', cls: 'bg-slate-50 text-slate-600 border-slate-200' };
+        return { label: 'Payment pending', cls: 'bg-amber-50 text-amber-700 border-amber-200' };
+    };
 
     const getStatusStyles = (status) => {
         switch (status.toLowerCase()) {
@@ -539,6 +572,26 @@ const OrdersList = () => {
                                             {getStatusIcon(order.status)}
                                             <span>{order.status.replace(/_/g, ' ')}</span>
                                         </div>
+                                        {(() => {
+                                            const cancel = getCancelInfo(order);
+                                            const pay = getPaymentInfo(order);
+                                            return (
+                                                <div className="mt-1.5 flex max-w-[220px] flex-col items-start gap-1">
+                                                    {cancel ? (
+                                                        <span className="text-[10px] font-bold text-rose-600" title={cancel.reason}>
+                                                            Cancelled{cancel.who ? ` by ${cancel.who}` : ''}
+                                                            {cancel.reason ? <span className="font-medium text-slate-400"> · {cancel.reason.length > 48 ? `${cancel.reason.slice(0, 48)}…` : cancel.reason}</span> : null}
+                                                        </span>
+                                                    ) : null}
+                                                    <span className={cn("rounded-md border px-2 py-0.5 text-[10px] font-bold", pay.cls)}>
+                                                        {pay.label}
+                                                    </span>
+                                                    {order.paymentMethod ? (
+                                                        <span className="text-[10px] font-bold uppercase text-slate-400">via {order.paymentMethod}</span>
+                                                    ) : null}
+                                                </div>
+                                            );
+                                        })()}
                                     </td>
                                     <td className="px-4 py-5 text-right">
                                         <div className="flex flex-col items-end">
