@@ -107,11 +107,11 @@ export default function AdminDashboard() {
       }
 
       setHasError(true);
-      toast.error('Failed to load quick commerce dashboard');
+      toast.error('Failed to load marketplace dashboard');
     } catch (error) {
       console.error('Quick dashboard fetch error:', error);
       setHasError(true);
-      toast.error('Failed to load quick commerce dashboard');
+      toast.error('Failed to load marketplace dashboard');
     } finally {
       setIsLoading(false);
     }
@@ -237,7 +237,7 @@ export default function AdminDashboard() {
       <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
         <div className="space-y-6">
           <PageHeader
-            eyebrow="Quick Commerce"
+            eyebrow="Marketplace"
             title="Operations Command"
             description={`${periodLabel} marketplace performance for orders, sellers, products, and inventory`}
             actions={
@@ -286,7 +286,7 @@ export default function AdminDashboard() {
 
           {hasError && (
             <div className="flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
-              <span>Couldn't refresh the quick commerce dashboard. Showing the last available values.</span>
+              <span>Couldn't refresh the marketplace dashboard. Showing the last available values.</span>
               <button
                 type="button"
                 onClick={fetchDashboard}
@@ -604,7 +604,7 @@ export default function AdminDashboard() {
                           </div>
                           <p className="mt-1 truncate text-sm text-foreground">{order.customer}</p>
                           <p className="truncate text-xs text-muted-foreground">
-                            {order.seller || 'Quick Commerce'} · {formatNumber(order.itemCount)} items
+                            {order.seller || 'Marketplace'} · {formatNumber(order.itemCount)} items
                           </p>
                         </div>
                         <div className="shrink-0 text-right">

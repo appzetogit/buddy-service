@@ -145,7 +145,7 @@ const normalizeProduct = (product = {}, fallback = {}) => {
       source.categoryName ||
       source.categoryId?.name ||
       source.subcategoryId?.name ||
-      "Quick Commerce",
+      "Marketplace",
     price,
     salePrice: rawSale,
     mrp: originalPrice,
@@ -308,14 +308,14 @@ const ProductDetailPage = () => {
   }, [product, selectedVariant]);
 
   const categoryLabel = useMemo(() => {
-    if (!product) return "Quick Commerce";
+    if (!product) return "Marketplace";
     const subId = String(product.subcategoryId?._id || product.subcategoryId || "");
     const catId = String(product.categoryId?._id || product.categoryId || "");
     return (
       categoryFullMap[subId]?.name ||
       categoryFullMap[catId]?.name ||
       product.category ||
-      "Quick Commerce"
+      "Marketplace"
     );
   }, [product, categoryFullMap]);
 

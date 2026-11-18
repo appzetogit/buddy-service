@@ -231,7 +231,7 @@ const ShopByStorePage = () => {
           </button>
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/75">
-              Quick Commerce
+              Marketplace
             </p>
             <h1 className="truncate text-lg font-bold tracking-tight text-white">
               Shop by Store

@@ -117,7 +117,7 @@ function VehicleBlock({ title, vehicle, icon: Icon }) {
 
 const SERVICE_LABELS = {
   food: "Food",
-  quickCommerce: "Quick Commerce",
+  quickCommerce: "Marketplace",
   taxi: "Taxi",
 };
 

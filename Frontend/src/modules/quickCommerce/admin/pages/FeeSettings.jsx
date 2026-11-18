@@ -365,7 +365,7 @@ export default function FeeSettings() {
                   className={inputClass}
                   placeholder="0"
                 />
-                <p className="text-xs text-slate-500">Flat fee added to every Quick Commerce order total</p>
+                <p className="text-xs text-slate-500">Flat fee added to every Marketplace order total</p>
               </div>
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-slate-700">Free Delivery Threshold (₹)</label>

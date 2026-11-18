@@ -317,7 +317,7 @@ const PendingSellers = () => {
                         "text-xs font-bold px-2.5 py-1 rounded-md",
                         "bg-emerald-50 text-emerald-600"
                       )}>
-                        Quick Commerce
+                        Marketplace
                       </span>
                     </td>
                     <td className="px-6 py-4">

@@ -142,7 +142,7 @@ const TransactionReport = () => {
                     <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
                         Transaction Report
                     </h1>
-                    <p className="text-sm font-medium text-slate-500 mt-1">Detailed breakdown of all quick commerce order transactions</p>
+                    <p className="text-sm font-medium text-slate-500 mt-1">Detailed breakdown of all marketplace order transactions</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button

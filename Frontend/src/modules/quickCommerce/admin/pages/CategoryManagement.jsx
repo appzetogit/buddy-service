@@ -751,12 +751,12 @@ const CategoryManagement = () => {
                                                     onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
                                                     className="w-full px-4 py-2.5 bg-slate-100/50 border-none rounded-xl text-xs font-bold outline-none appearance-none cursor-pointer"
                                                 >
-                                                    <option value="quick_commerce">Quick Commerce</option>
+                                                    <option value="quick_commerce">Marketplace</option>
                                                 </select>
                                                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                                             </div>
                                             <p className="text-[9px] text-slate-400 font-medium ml-1">
-                                                Quick Commerce = QC sellers only.
+                                                Marketplace = QC sellers only.
                                             </p>
                                         </div>
                                     )}

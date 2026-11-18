@@ -214,7 +214,7 @@ export default function Coupons() {
             Manage Coupons
           </h1>
           <p className="text-xs font-normal text-slate-500 mt-0.5">
-            Configure promo codes and discounts for Quick Commerce customers.
+            Configure promo codes and discounts for Marketplace customers.
           </p>
         </div>
         <button

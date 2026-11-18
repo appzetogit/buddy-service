@@ -41,7 +41,7 @@ const AboutPage = () => {
                         <h3 className="text-base font-semibold text-slate-800">Our Mission</h3>
                     </div>
                     <p className="text-slate-600 leading-relaxed text-sm">
-                        To revolutionize quick commerce by providing the fastest, most reliable delivery of daily essentials, ensuring quality and convenience for every household.
+                        To revolutionize marketplace by providing the fastest, most reliable delivery of daily essentials, ensuring quality and convenience for every household.
                     </p>
                 </div>
 

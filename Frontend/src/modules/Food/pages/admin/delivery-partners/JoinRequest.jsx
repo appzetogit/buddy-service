@@ -12,7 +12,7 @@ const debugError = (...args) => {}
 
 const SERVICE_TABS = [
   { value: "food", label: "Food" },
-  { value: "quickCommerce", label: "Quick Commerce" },
+  { value: "quickCommerce", label: "Marketplace" },
   { value: "taxi", label: "Taxi" },
 ]
 
@@ -356,7 +356,7 @@ export default function JoinRequest() {
           </div>
 
           {/* Service tabs — each service has its own pending/denied queue; a driver who applied
-              for Food + Quick Commerce + Taxi shows up on all three until each is approved. */}
+              for Food + Marketplace + Taxi shows up on all three until each is approved. */}
           <div className="flex items-center gap-2 mb-6">
             {SERVICE_TABS.map((svc) => (
               <button

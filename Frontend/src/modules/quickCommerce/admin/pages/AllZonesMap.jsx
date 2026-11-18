@@ -94,7 +94,7 @@ export default function AllZonesMap() {
         []
       setQuickCommerces(Array.isArray(sellers) ? sellers : [])
     } catch (error) {
-      debugError("Error fetching quick commerces:", error)
+      debugError("Error fetching marketplaces:", error)
       setQuickCommerces([])
     }
   }
@@ -318,7 +318,7 @@ export default function AllZonesMap() {
         position: { lat, lng },
         map: map,
         icon: quickCommerceIcon,
-        title: quickCommerce.name || quickCommerce.shopName || "quick commerce",
+        title: quickCommerce.name || quickCommerce.shopName || "marketplace",
         zIndex: 1000, // Show above zones
       })
 
@@ -327,7 +327,7 @@ export default function AllZonesMap() {
         content: `
           <div style="padding: 12px; min-width: 200px;">
             <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1e293b;">
-              ${quickCommerce.name || quickCommerce.shopName || 'Unnamed quick commerce'}
+              ${quickCommerce.name || quickCommerce.shopName || 'Unnamed marketplace'}
             </h3>
             <div style="font-size: 13px; color: #64748b; line-height: 1.6;">
               ${quickCommerce.location?.formattedAddress || quickCommerce.location?.address || quickCommerce.location?.area || 'Location not specified'}
@@ -373,7 +373,7 @@ export default function AllZonesMap() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-900">All Zones Map</h1>
-              <p className="text-sm text-slate-600">View all quick commerce delivery zones on map</p>
+              <p className="text-sm text-slate-600">View all marketplace delivery zones on map</p>
             </div>
           </div>
         </div>
@@ -456,7 +456,7 @@ export default function AllZonesMap() {
                 )}
                 {quickCommerces.length > 0 && (
                   <p>
-                    Click on any <span className="font-semibold text-red-600">red marker</span> to view quick commerce name and details. Total quick commerces: <strong>{quickCommerces.length}</strong>
+                    Click on any <span className="font-semibold text-red-600">red marker</span> to view marketplace name and details. Total marketplaces: <strong>{quickCommerces.length}</strong>
                   </p>
                 )}
               </div>

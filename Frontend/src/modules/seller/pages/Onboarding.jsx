@@ -1301,7 +1301,7 @@ export default function SellerOnboarding() {
                     <SelectContent>
                       {businessTypes.map((item) => (
                         <SelectItem key={item} value={item}>
-                          {item}
+                          {item === "Quick Commerce" ? "Marketplace" : item}
                         </SelectItem>
                       ))}
                     </SelectContent>

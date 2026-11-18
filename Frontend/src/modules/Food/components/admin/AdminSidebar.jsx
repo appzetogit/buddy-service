@@ -675,7 +675,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                 )}
               >
                 <Package className="w-3.5 h-3.5" />
-                Quick Commerce
+                Marketplace
               </Link>
               <Link
                 to="/admin/taxi/dashboard"

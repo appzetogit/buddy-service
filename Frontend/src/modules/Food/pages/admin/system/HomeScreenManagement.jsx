@@ -11,11 +11,11 @@ import { Label } from "@food/components/ui/label"
 // from GET /api/v1/common/home-config.
 const SECTIONS = [
   { key: "hero_banner", label: "Hero Banners", hint: "Top carousel. Add as many as you like.", image: true, subtitle: false, title: "optional" },
-  { key: "service_card", label: "Service Cards", hint: "The 'Choose a service' cards (Quick Commerce, Food, Taxi).", image: true, subtitle: true, title: "optional" },
+  { key: "service_card", label: "Service Cards", hint: "The 'Choose a service' cards (Marketplace, Food, Taxi).", image: true, subtitle: true, title: "optional" },
   { key: "feature", label: "Bottom Options", hint: "Small icon + text options at the bottom (4 recommended).", image: false, subtitle: true, title: "required" },
 ]
 const SERVICES = [
-  { value: "quick_commerce", label: "Quick Commerce" },
+  { value: "quick_commerce", label: "Marketplace" },
   { value: "food", label: "Food" },
   { value: "taxi", label: "Taxi" },
   { value: "parcel", label: "Parcel Delivery" },

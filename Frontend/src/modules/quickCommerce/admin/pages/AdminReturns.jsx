@@ -417,7 +417,7 @@ const AdminReturns = () => {
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-start gap-2">
                       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                       <p>
-                        Return pickup rider fee is ₹0. Configure the pickup fee in Quick Commerce
+                        Return pickup rider fee is ₹0. Configure the pickup fee in Marketplace
                         billing (this is the rider charge, not the Header Category return policy).
                       </p>
                     </div>

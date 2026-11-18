@@ -162,7 +162,7 @@ const getQuickStoreName = (product) =>
   product?.storeId?.name ||
   product?.seller?.name ||
   product?.sellerId?.name ||
-  "Quick Commerce";
+  "Marketplace";
 
 const getQuickStoreId = (product) =>
   resolveQuickSellerId(product) || QUICK_COMMERCE_PLACEHOLDER_SELLER;

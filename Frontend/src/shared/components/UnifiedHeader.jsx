@@ -114,7 +114,7 @@ export default function UnifiedHeader({
 
   const services = [
     { id: "food", label: "Food", icon: "/super-app/food.png", isImage: true, color: "bg-[#F0F9F9]", activeBg: "bg-[#E0F2F1]", path: "/food/user" },
-    { id: "quick", label: "Quick Commerce", icon: "/super-app/grocery.png", isImage: true, color: "bg-[#FFF7E6]", activeBg: "bg-[#FFE8C2]", path: "/quick" },
+    { id: "quick", label: "Marketplace", icon: "/super-app/grocery.png", isImage: true, color: "bg-[#FFF7E6]", activeBg: "bg-[#FFE8C2]", path: "/quick" },
     { id: "taxi", label: "Taxi", icon: "/super-app/taxi.png", isImage: true, color: "bg-[#EEF4FF]", activeBg: "bg-[#DCE8FF]", path: "/taxi/user" },
   ];
 

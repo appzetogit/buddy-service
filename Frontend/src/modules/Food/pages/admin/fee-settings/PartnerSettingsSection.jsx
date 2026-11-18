@@ -161,7 +161,7 @@ export default function PartnerSettingsSection({
           />
           <p className="text-xs text-slate-500 mt-1">
             Allowed range: {MAX_CONCURRENT_ORDERS_MIN}–{MAX_CONCURRENT_ORDERS_MAX}. Counts Food
-            and Quick Commerce jobs together. Set to 1 to go back to one trip at a time.
+            and Marketplace jobs together. Set to 1 to go back to one trip at a time.
           </p>
         </div>
       </div>

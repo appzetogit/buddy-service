@@ -480,7 +480,7 @@ const HeaderCategories = () => {
                       )}
                     </td>
                     <td className="py-3 px-4 text-gray-500 text-sm">
-                      {cat.businessType === 'food' ? 'Food' : 'Quick Commerce'}
+                      {cat.businessType === 'food' ? 'Food' : 'Marketplace'}
                     </td>
                     <td className="py-3 px-4 text-right space-x-2">
                       {canEdit && (
@@ -788,10 +788,10 @@ const HeaderCategories = () => {
                       setFormData({ ...formData, businessType: e.target.value })
                     }
                     className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-                    <option value="quick_commerce">Quick Commerce (Products)</option>
+                    <option value="quick_commerce">Marketplace (Products)</option>
                   </select>
                   <p className="text-xs text-gray-400">
-                    Quick Commerce headers are visible only to Quick Commerce sellers.
+                    Marketplace headers are visible only to Marketplace sellers.
                   </p>
                 </div>
               </div>

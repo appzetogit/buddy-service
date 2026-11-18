@@ -349,7 +349,7 @@ export default function DriverHome() {
               <div className="flex items-center gap-2 mt-2">
                 {[
                   { id: "food", label: "Food" },
-                  { id: "quickCommerce", label: "Quick Commerce" },
+                  { id: "quickCommerce", label: "Marketplace" },
                   { id: "taxi", label: "Taxi" },
                 ].map((svc) => {
                   // No saved choice yet = taking Food and Quick Commerce, so show those as on.
@@ -387,7 +387,7 @@ export default function DriverHome() {
                 })}
               </div>
               <div className="text-gray-400 text-[11px] mt-2">
-                Quick Commerce needs its own admin approval. Taxi sends you ride and parcel requests while you are online.
+                Marketplace needs its own admin approval. Taxi sends you ride and parcel requests while you are online.
               </div>
             </div>
           )}
