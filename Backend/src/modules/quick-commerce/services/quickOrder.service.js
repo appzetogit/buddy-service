@@ -307,7 +307,7 @@ export const updateSellerOrderStatus = async (sellerOrderId, sellerId, nextStatu
         {
           title: isCancelledUpdate ? 'Order Cancelled' : `Order Update: ${nextStatus.replace(/_/g, ' ')}`,
           body: isCancelledUpdate
-            ? `Your order #${parentOrder.orderId} was cancelled by the store. Any prepaid amount will be refunded to your original payment method.`
+            ? `Your order #${parentOrder.orderId} was cancelled by the store. Any prepaid amount will be refunded to your Buddy wallet.`
             : `Your order #${parentOrder.orderId} from ${sellerOrder.items?.[0]?.name || 'the store'} is now ${nextStatus.replace(/_/g, ' ')}.`,
           data: {
             type: 'order_status_update',

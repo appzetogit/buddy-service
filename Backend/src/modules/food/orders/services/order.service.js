@@ -1968,7 +1968,7 @@ export async function cancelOrder(orderId, userId, reason, refundDestination = "
   const refundDetail = isOnlinePaid
     ? settledRefundDestination === "wallet"
       ? ` Your refund of ₹${order.pricing.total} has been credited to your wallet.`
-      : ` Your refund of ₹${order.pricing.total} is being processed and will be credited to your original payment method within 5-7 working days.`
+      : ` Your refund of ₹${order.pricing.total} is being processed to your Buddy wallet.`
     : "";
 
   await notifyOwnersSafely(
@@ -2831,7 +2831,12 @@ export async function updateOrderStatusRestaurant(
       : `The restaurant has rejected the order. Reason: ${note || "Not specified"}. Your order has been cancelled and a refund initiated where applicable.`;
   } else if (String(statusForMessage).includes("cancel") || String(finalStatus).includes("cancel")) {
     const isOnlinePaid = order.payment.method === "razorpay" && (order.payment.status === "paid" || order.payment.status === "refunded");
-    const refundDetail = isOnlinePaid ? ` Your refund of ₹${order.pricing.total} is being processed and will be credited to your original payment method within 5-7 working days.` : "";
+    // Every refund goes to the Buddy wallet.
+    const refundDetail = isOnlinePaid
+      ? order.payment?.refund?.status === "processed"
+        ? ` Your refund of ₹${order.pricing.total} has been credited to your Buddy wallet.`
+        : ` Your refund of ₹${order.pricing.total} is being processed to your Buddy wallet.`
+      : "";
 
     title = "Order Cancelled ❌";
     body = `Unfortunately, your order has been cancelled by the restaurant.${refundDetail}`;
