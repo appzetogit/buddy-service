@@ -21,7 +21,7 @@ const orderItemSchema = new mongoose.Schema(
 
 const deliveryAddressSchema = new mongoose.Schema(
     {
-        label: { type: String, enum: ['Home', 'Office', 'Other'], default: 'Home' },
+        label: { type: String, enum: ['Home', 'Office', 'Other', 'Current Location'], default: 'Home' },
         name: { type: String, default: '', trim: true },
         fullName: { type: String, default: '', trim: true },
         street: { type: String, required: true, trim: true },

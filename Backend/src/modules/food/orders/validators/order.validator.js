@@ -16,7 +16,7 @@ const orderItemSchema = z.object({
 });
 
 const addressSchema = z.object({
-    label: z.enum(['Home', 'Office', 'Other']).optional(),
+    label: z.enum(['Home', 'Office', 'Other', 'Current Location']).optional(),
     name: z.string().optional(),
     fullName: z.string().optional(),
     street: z.string().min(1, 'Street required'),

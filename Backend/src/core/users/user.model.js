@@ -5,7 +5,9 @@ const userAddressSchema = new mongoose.Schema(
     {
         label: {
             type: String,
-            enum: ['Home', 'Office', 'Other'],
+            // 'Current Location': the web Marketplace saves addresses with it;
+            // without it here, every save of such a user failed validation.
+            enum: ['Home', 'Office', 'Other', 'Current Location'],
             default: 'Home',
             index: true
         },
