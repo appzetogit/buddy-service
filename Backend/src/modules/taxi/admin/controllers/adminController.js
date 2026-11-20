@@ -391,8 +391,8 @@ export const deleteVehicleType = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
-export const getDashboardData = asyncHandler(async (_req, res) =>
-  ok(res, await adminService.getDashboardData()),
+export const getDashboardData = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getDashboardData({ zoneId: req.query?.zoneId })),
 );
 export const getOverallEarnings = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getOverallEarnings()),

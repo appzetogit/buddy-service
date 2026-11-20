@@ -135,7 +135,7 @@ export const adminService = {
    * Dashboard Stats & Data (New Parity Routes)
    */
   getDashboardPage: () => api.get('/admin/dashboard/page'),
-  getDashboardData: () => api.get('/admin/dashboard/data'),
+  getDashboardData: (params = {}) => api.get('/admin/dashboard/data', { params }),
   getAdminEarnings: (params = {}) => api.get('/admin/dashboard/admin-earnings', { params }),
   getTodayEarnings: () => api.get('/admin/dashboard/today-earnings'),
   getOverallEarnings: () => api.get('/admin/dashboard/overall-earnings'),

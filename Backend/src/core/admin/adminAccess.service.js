@@ -80,6 +80,13 @@ export const resolveAdminAccess = async (adminId) => {
                 const docs = await TaxiZone.find({ _id: { $in: taxiIds.map(toId) } }).select('geometry').lean();
                 taxiGeometries = docs.map((d) => d.geometry).filter((g) => g?.type === 'Polygon' && g.coordinates?.length);
             }
+            let quickSellerIds = [];
+            if (zones.quick.length) {
+                // Raw collection: the Seller model's own zone filter must not apply to this lookup.
+                const rows = await mongoose.connection.db.collection('quick_sellers')
+                    .find({ 'shopInfo.zoneId': { $in: zones.quick.map(toId) } }, { projection: { _id: 1 } }).toArray();
+                quickSellerIds = rows.map((r) => String(r._id));
+            }
             value = {
                 kind: 'employee',
                 roleId: String(role._id),
@@ -90,6 +97,7 @@ export const resolveAdminAccess = async (adminId) => {
                 scope: {
                     zones: Object.fromEntries(ACCESS_MODULES.map((m) => [m, zones[m].map(toId)])),
                     geometries: { taxi: taxiGeometries },
+                    quickSellerIds,
                 },
             };
         }

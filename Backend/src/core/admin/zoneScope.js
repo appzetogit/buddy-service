@@ -38,6 +38,31 @@ export const byGeo = (module, field) => () => {
     return { $or: polygons.map((geometry) => ({ [field]: { $geoWithin: { $geometry: geometry } } })) };
 };
 
+/**
+ * Marketplace orders carry no zone of their own (zoneId is empty): an order belongs to a zone through
+ * the seller it was bought from. The scope holds the ids of the sellers in the employee's zones.
+ */
+export const byQuickOrders = () => {
+    const ids = idsFor('quick');
+    if (!ids) return null;
+    const sellers = getScope()?.quickSellerIds || [];
+    return { $or: [{ zoneId: { $in: ids } }, { 'items.sourceId': { $in: sellers } }] };
+};
+
+/** Taxi drivers: most have no zone saved, so a driver also belongs to the zone their location is in. */
+export const byDriverZones = () => {
+    const ids = idsFor('taxi');
+    if (!ids) return null;
+    const polygons = getScope()?.geometries?.taxi || [];
+    return {
+        $or: [
+            { zoneId: { $in: ids } },
+            { zone: { $in: ids } },
+            ...polygons.map((geometry) => ({ location: { $geoWithin: { $geometry: geometry } } })),
+        ],
+    };
+};
+
 const QUERY_HOOKS = [
     'find', 'findOne', 'countDocuments', 'distinct',
     'findOneAndUpdate', 'findOneAndDelete', 'findOneAndReplace',

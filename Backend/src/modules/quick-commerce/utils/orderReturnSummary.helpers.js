@@ -236,11 +236,13 @@ export const attachReturnSummaryToOrder = (order, returnDocs = []) => {
   };
 };
 
-export const getCompletedReturnRefundTotals = async () => {
+// sellerIds (optional): only returns of those sellers - the zone filter of the dashboard.
+export const getCompletedReturnRefundTotals = async ({ sellerIds = null } = {}) => {
   const rows = await SellerReturn.aggregate([
     {
       $match: {
         refundStatus: REFUND_STATUSES.COMPLETED,
+        ...(Array.isArray(sellerIds) ? { sellerId: { $in: sellerIds } } : {}),
       },
     },
     {

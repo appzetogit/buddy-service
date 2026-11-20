@@ -1,4 +1,5 @@
-import mongoose from 'mongoose';
+import mongoose from 'mongoose';
+import { idsFor } from '../../../core/admin/zoneScope.js';
 import { FoodUser } from '../../../core/users/user.model.js';
 import { FoodDeliveryPartner } from '../../food/delivery/models/deliveryPartner.model.js';
 import { QuickCategory } from '../models/category.model.js';
@@ -1104,6 +1105,9 @@ export const getAdminStats = async (req, res) => {
     accountStatus: { $ne: 'deleted' },
   };
   if (zoneId) sellerBaseFilter['shopInfo.zoneId'] = zoneId;
+  // A zone (picked here, or an employee's own zones) with no approved seller must show nothing - an
+  // empty seller list used to mean "no restriction" and the whole marketplace came back.
+  const zoneRestricted = Boolean(zoneId) || Boolean(idsFor('quick'));
 
   const pendingSellerFilter = {};
   if (zoneId) pendingSellerFilter['shopInfo.zoneId'] = zoneId;
@@ -1120,7 +1124,7 @@ export const getAdminStats = async (req, res) => {
   const orderMatch = {
     orderType: { $in: ['quick', 'mixed'] },
     items: {
-      $elemMatch: sellerIdStrings.length > 0
+      $elemMatch: sellerIdStrings.length > 0 || zoneRestricted
         ? { type: 'quick', sourceId: { $in: sellerIdStrings } }
         : { type: 'quick' },
     },
@@ -1133,7 +1137,7 @@ export const getAdminStats = async (req, res) => {
     ? {
         orderType: { $in: ['quick', 'mixed'] },
         items: {
-          $elemMatch: sellerIdStrings.length > 0
+          $elemMatch: sellerIdStrings.length > 0 || zoneRestricted
             ? { type: 'quick', sourceId: { $in: sellerIdStrings } }
             : { type: 'quick' },
         },
@@ -1142,7 +1146,7 @@ export const getAdminStats = async (req, res) => {
     : null;
 
   const productMatch = {
-    sellerId: sellerIds.length > 0 ? { $in: sellerIds } : { $exists: true, $ne: null },
+    sellerId: sellerIds.length > 0 || zoneRestricted ? { $in: sellerIds } : { $exists: true, $ne: null },
     approvalStatus: 'approved',
   };
 
@@ -1304,7 +1308,7 @@ export const getAdminStats = async (req, res) => {
       { $match: orderMatch },
       { $unwind: '$items' },
       {
-        $match: sellerIdStrings.length > 0
+        $match: sellerIdStrings.length > 0 || zoneRestricted
           ? { 'items.type': 'quick', 'items.sourceId': { $in: sellerIdStrings } }
           : { 'items.type': 'quick' },
       },
@@ -1331,7 +1335,7 @@ export const getAdminStats = async (req, res) => {
       { $match: orderMatch },
       { $unwind: '$items' },
       {
-        $match: sellerIdStrings.length > 0
+        $match: sellerIdStrings.length > 0 || zoneRestricted
           ? { 'items.type': 'quick', 'items.sourceId': { $in: sellerIdStrings } }
           : { 'items.type': 'quick' },
       },
@@ -1388,7 +1392,7 @@ export const getAdminStats = async (req, res) => {
       { $match: orderMatch },
       { $unwind: '$items' },
       {
-        $match: sellerIdStrings.length > 0
+        $match: sellerIdStrings.length > 0 || zoneRestricted
           ? { 'items.type': 'quick', 'items.sourceId': { $in: sellerIdStrings } }
           : { 'items.type': 'quick' },
       },
@@ -1449,7 +1453,7 @@ export const getAdminStats = async (req, res) => {
   });
 
   const totalRevenueRaw = Number(orderSummary.totalRevenue || 0);
-  const returnTotals = await getCompletedReturnRefundTotals().catch(() => ({
+  const returnTotals = await getCompletedReturnRefundTotals(zoneRestricted ? { sellerIds } : {}).catch(() => ({
     refundedAmount: 0,
     refundedTax: 0,
     count: 0,

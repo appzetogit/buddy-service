@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { zoneScopePlugin, byFields } from '../../../../core/admin/zoneScope.js';
+import { zoneScopePlugin, byDriverZones } from '../../../../core/admin/zoneScope.js';
 
 /**
  * The rider (driver) a taxi ride is given to.
@@ -70,5 +70,5 @@ driverSchema.virtual('vehicleColor').get(function vehicleColor() {
   return '';
 });
 
-driverSchema.plugin(zoneScopePlugin, { filter: byFields('taxi', 'zoneId', 'zone') });
+driverSchema.plugin(zoneScopePlugin, { filter: byDriverZones });
 export const Driver = mongoose.models.TaxiDriver || mongoose.model('TaxiDriver', driverSchema);

@@ -25,6 +25,7 @@ import { ServiceLocation } from '../models/ServiceLocation.js';
 import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../../driver/models/Driver.js';
 import { Zone } from '../../driver/models/Zone.js';
+import { getScope, idsFor, runWithScope } from '../../../../core/admin/zoneScope.js';
 import { Ride } from '../../user/models/Ride.js';
 import { AppLanguage } from '../models/AppLanguage.js';
 import { RideModule } from '../models/RideModule.js';
@@ -71,10 +72,9 @@ let publicVehicleCatalogCache = {
   value: null,
 };
 const DASHBOARD_CACHE_TTL_MS = 60 * 1000;
-let dashboardCache = {
-  expiresAt: 0,
-  value: null,
-};
+// One snapshot per zone view (an employee's or a picked zone's numbers must never be served to someone else).
+const dashboardCaches = new Map();
+const dashboardCacheKey = () => (idsFor('taxi') || []).map(String).sort().join(',') || 'all';
 
 const deepMerge = (target, source) => {
   const result = { ...target };
@@ -6690,15 +6690,48 @@ const getLiveDashboardStats = async () => {
   };
 };
 
-export const getDashboardData = async () => {
-  const live = await getLiveDashboardStats();
+/**
+ * Dashboard for one taxi zone (optional). Rides are matched by pickup inside the zone's area and
+ * drivers by their zone, through the request's zone scope; the admin picks the zone, or an employee's
+ * own zones already apply. A zone the employee may not see shows nothing.
+ */
+export const getDashboardData = async ({ zoneId } = {}) => {
+  const id = mongoose.isValidObjectId(zoneId) ? String(zoneId) : '';
+  if (!id) return buildDashboardData();
 
-  if (dashboardCache.value && dashboardCache.expiresAt > Date.now()) {
-    return { ...dashboardCache.value, live };
+  const allowed = idsFor('taxi');
+  const current = getScope();
+  let zones;
+  let geometries;
+  if (allowed && !allowed.some((z) => String(z) === id)) {
+    zones = [new mongoose.Types.ObjectId()]; // not theirs: matches nothing
+    geometries = [];
+  } else {
+    const zone = await Zone.findById(id).select('geometry').lean();
+    zones = [new mongoose.Types.ObjectId(id)];
+    geometries = zone?.geometry ? [zone.geometry] : [];
+  }
+  const scope = {
+    ...(current || {}),
+    zones: { ...(current?.zones || {}), taxi: zones },
+    geometries: { ...(current?.geometries || {}), taxi: geometries },
+  };
+  return runWithScope(scope, buildDashboardData);
+};
+
+const buildDashboardData = async () => {
+  const live = await getLiveDashboardStats();
+  const scoped = Boolean(idsFor('taxi'));
+  const cacheKey = dashboardCacheKey();
+  const cached = dashboardCaches.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return { ...cached.value, live };
   }
 
   const [totalUsers, totalDrivers, approvedDrivers, rides, recentRides, supportTicketStats] = await Promise.all([
-    User.countDocuments(),
+    // Customers have no zone: for a zone, count the riders who actually booked from it.
+    scoped ? Ride.distinct('userId', {}).then((ids) => ids.length) : User.countDocuments(),
     Driver.countDocuments(),
     Driver.countDocuments({ approve: true }),
     Ride.find()
@@ -7068,10 +7101,7 @@ export const getDashboardData = async () => {
       : 0,
   };
 
-  dashboardCache = {
-    expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
-    value: snapshot,
-  };
+  dashboardCaches.set(cacheKey, { expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS, value: snapshot });
 
   return { ...snapshot, live };
 };

@@ -65,6 +65,9 @@ const MainDashboard = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [dashboardError, setDashboardError] = useState('');
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  // Zone filter: every card, the service hubs and the map follow the selected zone.
+  const [zones, setZones] = useState([]);
+  const [selectedZone, setSelectedZone] = useState('all');
 
   // Timeframe filter state
   const [timeframe, setTimeframe] = useState('Today'); // Today, Week, Month, Year
@@ -80,7 +83,7 @@ const MainDashboard = () => {
   const fetchData = async (silent = false) => {
     try {
       silent ? setIsRefreshing(true) : setIsLoading(true);
-      const res = await adminService.getDashboardData();
+      const res = await adminService.getDashboardData(selectedZone !== 'all' ? { zoneId: selectedZone } : {});
       setDashboard(res?.data || res || {});
       setDashboardError('');
       setLastUpdatedAt(new Date());
@@ -93,10 +96,21 @@ const MainDashboard = () => {
   };
 
   useEffect(() => {
+    adminService
+      .getZones()
+      .then((res) => {
+        const raw = res?.data?.results || res?.data || res?.results || [];
+        setZones(Array.isArray(raw) ? raw : []);
+      })
+      .catch(() => setZones([]));
+  }, []);
+
+  useEffect(() => {
     fetchData();
     const interval = setInterval(() => fetchData(true), DASHBOARD_REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedZone]);
 
   // Backend Mapped Variables
   const totalUsers = dashboard?.totalUsers || 0;
@@ -251,6 +265,19 @@ const MainDashboard = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 text-xs">
+            <select
+              value={selectedZone}
+              onChange={(e) => setSelectedZone(e.target.value)}
+              aria-label="Filter by zone"
+              className="px-3 py-2 bg-white border border-slate-200/80 rounded-xl shadow-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-100"
+            >
+              <option value="all">All zones</option>
+              {zones.map((zone) => (
+                <option key={zone._id || zone.id} value={zone._id || zone.id}>
+                  {zone.name || zone.zone_name || 'Unnamed zone'}
+                </option>
+              ))}
+            </select>
             <div className="flex items-center gap-2 px-3.5 py-2 bg-white rounded-xl border border-slate-200/80 shadow-sm">
               <Clock size={14} className="text-slate-400" />
               <span className="font-semibold text-slate-700">
