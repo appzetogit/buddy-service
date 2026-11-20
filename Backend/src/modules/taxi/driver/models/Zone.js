@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { zoneScopePlugin, byFields } from '../../../../core/admin/zoneScope.js';
 
 const zoneSchema = new mongoose.Schema(
   {
@@ -93,4 +94,5 @@ const zoneSchema = new mongoose.Schema(
 
 zoneSchema.index({ geometry: '2dsphere' });
 
+zoneSchema.plugin(zoneScopePlugin, { filter: byFields('taxi', '_id') });
 export const Zone = mongoose.models.TaxiZone || mongoose.model('TaxiZone', zoneSchema);

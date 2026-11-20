@@ -6,6 +6,7 @@ import {
   findOverlappingZone,
   ZONE_OVERLAP_MESSAGE,
 } from '../../../utils/zoneOverlap.js';
+import { zoneScopePlugin, byFields } from '../../../core/admin/zoneScope.js';
 
 const coordinateSchema = new mongoose.Schema(
   {
@@ -108,4 +109,5 @@ quickZoneSchema.pre('save', async function saveZoneGeometryAndValidateOverlap(ne
   }
 });
 
+quickZoneSchema.plugin(zoneScopePlugin, { filter: byFields('quick', '_id') });
 export const QuickZone = mongoose.models.quick_zone || mongoose.model('quick_zone', quickZoneSchema, 'quick_zones');

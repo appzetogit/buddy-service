@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { zoneScopePlugin, byFields } from '../../../../core/admin/zoneScope.js';
 
 const coordinateSchema = new mongoose.Schema(
     {
@@ -62,4 +63,6 @@ const zoneSchema = new mongoose.Schema(
 zoneSchema.index({ isActive: 1, name: 1 });
 zoneSchema.index({ country: 1, name: 1 });
 
+// An employee's zone list (and every zone picker) shows only the zones of their role.
+zoneSchema.plugin(zoneScopePlugin, { filter: byFields('food', '_id') });
 export const FoodZone = mongoose.model('FoodZone', zoneSchema);
