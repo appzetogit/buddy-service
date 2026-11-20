@@ -1,4 +1,5 @@
-import mongoose from 'mongoose';
+import mongoose from 'mongoose';
+import { idsFor } from '../../../../core/admin/zoneScope.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { isRestaurantBanned, LEGACY_ADMIN_BAN_REASON } from '../../restaurant/utils/restaurantBan.util.js';
@@ -511,10 +512,13 @@ export async function getDashboardStats(query = {}) {
         restaurantMatch.zoneId = zoneId;
     }
 
-    const zoneRestaurantIds = zoneId
-        ? await FoodRestaurant.find({ zoneId }).distinct('_id')
+    // A picked zone, or an employee's own zones (the restaurant query is already limited to them):
+    // foods, addons and customers then follow the zone's restaurants / orders.
+    const zoneRestricted = Boolean(zoneId) || Boolean(idsFor('food'));
+    const zoneRestaurantIds = zoneRestricted
+        ? await FoodRestaurant.find(zoneId ? { zoneId } : {}).distinct('_id')
         : null;
-    const zoneScopedRestaurantMatch = zoneId
+    const zoneScopedRestaurantMatch = zoneRestricted
         ? { restaurantId: { $in: zoneRestaurantIds || [] } }
         : {};
 
@@ -659,7 +663,7 @@ export async function getDashboardStats(query = {}) {
         FoodDeliveryPartner.countDocuments({ status: 'pending' }),
         FoodItem.countDocuments({ approvalStatus: 'approved', ...zoneScopedRestaurantMatch }),
         FoodAddon.countDocuments({ approvalStatus: 'approved', isDeleted: { $ne: true }, ...zoneScopedRestaurantMatch }),
-        zoneId
+        zoneRestricted
             ? FoodOrder.distinct('userId', { ...orderMatch, userId: { $ne: null } }).then((ids) => ids.length)
             : FoodUser.countDocuments({}),
         FoodRestaurant.find({ ...restaurantMatch, status: 'pending' }).sort({ createdAt: -1 }).limit(5).select('restaurantName createdAt').lean(),
@@ -673,7 +677,7 @@ export async function getDashboardStats(query = {}) {
             ...orderMatch,
             orderStatus: { $in: CANCELLED_ORDER_STATUSES },
         }).sort({ updatedAt: -1 }).limit(5).select('orderId updatedAt').lean(),
-        zoneId
+        zoneRestricted
             ? FoodOrder.aggregate([
                 { $match: { ...orderMatch, userId: { $ne: null } } },
                 { $sort: { createdAt: -1 } },
