@@ -10,6 +10,9 @@ import {
 } from '../modules/food/dining/controllers/diningPublic.controller.js';
 import uploadRoutes from '../modules/uploads/routes/upload.routes.js';
 import restaurantAdminRoutes from '../modules/food/admin/routes/admin.routes.js';
+import adminAccessRoutes from '../core/admin/adminAccess.routes.js';
+import { adminAccessGuard } from '../core/admin/adminAccess.middleware.js';
+import { loginRoles as adminLoginRolesController } from '../core/admin/adminAccess.controller.js';
 import quickCommerceAdminRoutes from '../modules/quick-commerce/routes/admin.routes.js';
 import quickCommerceRoutes from '../modules/quick-commerce/routes/quick-commerce.routes.js';
 import quickCommerceSellerRoutes from '../modules/quick-commerce/seller/routes/seller.routes.js';
@@ -78,8 +81,11 @@ router.get('/v1/food/admin/business-settings/public', businessSettingsController
 router.get('/v1/food/tips/config', getFoodTipsConfig);
 router.get('/v1/food/offer-banners/public', getOfferBannersPublic);
 
-router.use('/v1/food/admin', authMiddleware, requireRoles('ADMIN'), restaurantAdminRoutes);
-router.use('/v1/quick-commerce/admin', authMiddleware, requireRoles('ADMIN'), quickCommerceAdminRoutes);
+// Employee / role management (main admin only) and the page-based access guard on every admin API.
+router.get('/v1/auth/admin/login-roles', adminLoginRolesController);
+router.use('/v1/common/admin/access', authMiddleware, requireRoles('ADMIN'), adminAccessRoutes);
+router.use('/v1/food/admin', authMiddleware, requireRoles('ADMIN'), adminAccessGuard, restaurantAdminRoutes);
+router.use('/v1/quick-commerce/admin', authMiddleware, requireRoles('ADMIN'), adminAccessGuard, quickCommerceAdminRoutes);
 router.use('/v1/quick-commerce/delivery', quickCommerceDeliveryRoutes);
 // Must be mounted before the generic '/v1/quick-commerce' router below, or that router's own
 // unmatched-path handling would intercept /v1/quick-commerce/chat/* requests first.
@@ -89,7 +95,7 @@ router.use('/v1/seller', quickCommerceSellerRoutes);
 router.use('/v1/common/onboarding-fees', commonOnboardingFeeRoutes);
 router.use('/v1/common/maps', commonMapsRoutes);
 router.use('/v1/common/home-config', homeConfigPublicRouter);
-router.use('/v1/common/admin/home-config', authMiddleware, requireRoles('ADMIN'), homeConfigAdminRouter);
+router.use('/v1/common/admin/home-config', authMiddleware, requireRoles('ADMIN'), adminAccessGuard, homeConfigAdminRouter);
 // Taxi (riders + admin): /api/v1/taxi/*. Own router and own error handler. Loaded defensively: a
 // problem inside the taxi module must never stop Food / Quick Commerce from starting.
 try {
@@ -114,6 +120,6 @@ router.use('/fcm-tokens', fcmRoutes);
 // router.get('/v1/env/public', getPublicEnvController);
 // router.get('/env/public', getPublicEnvController);
 
-router.get('/v1/admin/queues', authMiddleware, requireRoles('ADMIN'), getQueuesController);
+router.get('/v1/admin/queues', authMiddleware, requireRoles('ADMIN'), adminAccessGuard, getQueuesController);
 
 export default router;

@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { buildLocationSchema } from "../../../../core/location/location.schema.js";
+import { zoneScopePlugin, byFields } from '../../../../core/admin/zoneScope.js';
 
 const normalizeRatingValue = (value) => {
   const numeric = Number(value);
@@ -461,6 +462,7 @@ restaurantSchema.index({ status: 1, restaurantName: 1 });
 restaurantSchema.index({ restaurantName: 'text', cuisines: 'text' }, { weights: { restaurantName: 10, cuisines: 3 } });
 restaurantSchema.index({ status: 1, "location.city": 1, createdAt: -1 });
 
+restaurantSchema.plugin(zoneScopePlugin, { filter: byFields('food', 'zoneId') });
 export const FoodRestaurant = mongoose.model(
   "FoodRestaurant",
   restaurantSchema,

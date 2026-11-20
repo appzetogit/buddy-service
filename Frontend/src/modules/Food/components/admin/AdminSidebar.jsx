@@ -68,6 +68,7 @@ import { Input } from "@food/components/ui/input"
 import { adminSidebarMenu } from "@food/utils/adminSidebarMenu"
 import { quickAdminSidebarMenu } from "@food/utils/quickAdminSidebarMenu"
 import { taxiAdminSidebarMenu } from "@food/utils/taxiAdminSidebarMenu"
+import { canAccessModule, filterMenuByAccess, isEmployeeAdmin } from "@food/utils/adminAccess"
 import BusinessLogo from "@food/components/BusinessLogo"
 import { toast } from "sonner"
 const debugLog = (...args) => {}
@@ -137,11 +138,27 @@ const iconMap = {
   Star,
 }
 
+// Roles & employees live in their own tab (main admin only).
+const accessAdminSidebarMenu = [
+  {
+    type: "section",
+    label: "ACCESS CONTROL",
+    items: [
+      { type: "link", label: "Roles & Permissions", path: "/admin/access/roles", icon: "ShieldCheck" },
+      { type: "link", label: "Employees", path: "/admin/access/employees", icon: "UserCog" },
+    ],
+  },
+]
+
 export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange }) {
   const location = useLocation()
   const isQuickCommerce = location.pathname.startsWith("/admin/quick-commerce")
   const isTaxi = location.pathname.startsWith("/admin/taxi")
-  const activeMenu = isTaxi ? taxiAdminSidebarMenu : isQuickCommerce ? quickAdminSidebarMenu : adminSidebarMenu
+  const isAccess = location.pathname.startsWith("/admin/access")
+  const employee = isEmployeeAdmin()
+  const baseMenu = isAccess ? accessAdminSidebarMenu : isTaxi ? taxiAdminSidebarMenu : isQuickCommerce ? quickAdminSidebarMenu : adminSidebarMenu
+  // Employees only see the pages their role grants (the main admin sees everything).
+  const activeMenu = useMemo(() => filterMenuByAccess(baseMenu), [baseMenu, location.pathname])
   const [searchQuery, setSearchQuery] = useState("")
   const [badges, setBadges] = useState({})
 
@@ -654,41 +671,34 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
             </div>
           )}
 
-          {/* Food / Quick Commerce / Taxi module switcher — swaps the whole menu below */}
-          {!isCollapsed && (
-            <div className="mb-3 grid grid-cols-2 items-center gap-1 rounded-xl border border-neutral-800 bg-neutral-900 p-1 animate-[slideIn_0.4s_ease-out_0.15s_both]">
-              <Link
-                to="/admin/food"
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide transition-all",
-                  !isQuickCommerce && !isTaxi ? "bg-white text-neutral-900 shadow" : "text-neutral-400 hover:text-white"
-                )}
-              >
-                <UtensilsCrossed className="w-3.5 h-3.5" />
-                Food
-              </Link>
-              <Link
-                to="/admin/quick-commerce"
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide transition-all",
-                  isQuickCommerce ? "bg-white text-neutral-900 shadow" : "text-neutral-400 hover:text-white"
-                )}
-              >
-                <Package className="w-3.5 h-3.5" />
-                Marketplace
-              </Link>
-              <Link
-                to="/admin/taxi/dashboard"
-                className={cn(
-                  "col-span-2 flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide transition-all",
-                  isTaxi ? "bg-white text-neutral-900 shadow" : "text-neutral-400 hover:text-white"
-                )}
-              >
-                <Car className="w-3.5 h-3.5" />
-                Taxi
-              </Link>
-            </div>
-          )}
+          {/* Food / Marketplace / Taxi / Access module switcher — swaps the whole menu below */}
+          {!isCollapsed && (() => {
+            const food = !isQuickCommerce && !isTaxi && !isAccess
+            const tabs = [
+              { key: "food", to: "/admin/food", label: "Food", Icon: UtensilsCrossed, active: food },
+              { key: "quick", to: "/admin/quick-commerce", label: "Marketplace", Icon: Package, active: isQuickCommerce },
+              { key: "taxi", to: "/admin/taxi/dashboard", label: "Taxi", Icon: Car, active: isTaxi },
+            ].filter((tab) => canAccessModule(tab.key))
+            if (!employee) tabs.push({ key: "access", to: "/admin/access/roles", label: "Access", Icon: ShieldCheck, active: isAccess })
+            return (
+              <div className="mb-3 grid grid-cols-2 items-center gap-1 rounded-xl border border-neutral-800 bg-neutral-900 p-1 animate-[slideIn_0.4s_ease-out_0.15s_both]">
+                {tabs.map(({ key, to, label, Icon, active }, idx) => (
+                  <Link
+                    key={key}
+                    to={to}
+                    className={cn(
+                      "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wide transition-all",
+                      tabs.length % 2 === 1 && idx === tabs.length - 1 && "col-span-2",
+                      active ? "bg-white text-neutral-900 shadow" : "text-neutral-400 hover:text-white"
+                    )}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            )
+          })()}
 
             {/* Search Bar */}
           {!isCollapsed && (

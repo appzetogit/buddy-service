@@ -34,13 +34,6 @@ export const ADMIN_SIDEBAR_SECTIONS = [
   {
     title: 'Home',
     items: [
-      {
-        icon: UserCog,
-        label: 'Admin Management',
-        subItems: [
-          { label: 'Admins', path: '/admin/management/admins', permission: 'subadmins.manage' },
-        ],
-      },
       { icon: Home, label: 'Dashboard', path: '/admin/dashboard', permission: 'dashboard.view' },
       { icon: IndianRupee, label: 'Admin Earnings', path: '/admin/earnings', permission: 'earnings.view' },
       { icon: Receipt, label: 'Payments', path: '/admin/payments', permission: 'earnings.view' },

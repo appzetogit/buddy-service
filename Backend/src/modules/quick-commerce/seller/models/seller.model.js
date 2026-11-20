@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { zoneScopePlugin, byFields } from '../../../../core/admin/zoneScope.js';
 
 const sellerLocationSchema = new mongoose.Schema(
   {
@@ -337,4 +338,5 @@ sellerSchema.index({ approvalStatus: 1, createdAt: -1 });
 // Sellers are resolved by delivery zone in fanout/zone flows.
 sellerSchema.index({ "shopInfo.zoneId": 1 });
 
+sellerSchema.plugin(zoneScopePlugin, { filter: byFields('quick', 'shopInfo.zoneId') });
 export const Seller = mongoose.model('Seller', sellerSchema, 'quick_sellers');

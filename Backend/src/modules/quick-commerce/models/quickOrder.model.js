@@ -6,6 +6,7 @@
  */
 import mongoose from 'mongoose';
 import { whatsappOrderStatusPlugin } from '../../../core/notifications/whatsappOrderStatus.plugin.js';
+import { zoneScopePlugin, byFields } from '../../../core/admin/zoneScope.js';
 
 const geoPointSchema = new mongoose.Schema(
     {
@@ -725,4 +726,5 @@ orderSchema.plugin(whatsappOrderStatusPlugin, {
     pushRefund: true,
 });
 
+orderSchema.plugin(zoneScopePlugin, { filter: byFields('quick', 'zoneId') });
 export const QuickOrder = mongoose.model('QuickOrder', orderSchema, 'quick_orders');

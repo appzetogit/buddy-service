@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { whatsappOrderStatusPlugin } from '../../../../core/notifications/whatsappOrderStatus.plugin.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
+import { zoneScopePlugin, byGeo } from '../../../../core/admin/zoneScope.js';
 
 const rideSchema = new mongoose.Schema(
   {
@@ -755,4 +756,5 @@ rideSchema.plugin(whatsappOrderStatusPlugin, {
   kindOf: (r) => (r.serviceType === 'parcel' ? 'parcel' : 'ride'),
 });
 
+rideSchema.plugin(zoneScopePlugin, { filter: byGeo('taxi', 'pickupLocation') });
 export const Ride = mongoose.models.TaxiRide || mongoose.model('TaxiRide', rideSchema);

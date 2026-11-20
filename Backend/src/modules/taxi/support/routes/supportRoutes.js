@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../../../utils/asyncHandler.js';
 import { authenticate } from '../../middlewares/authMiddleware.js';
+import { adminAccessGuard } from '../../../../core/admin/adminAccess.middleware.js';
 import {
   adminCreateSupportTitle,
   adminDeleteSupportTitle,
@@ -48,47 +49,47 @@ supportRouter.post(
 
 supportRouter.get(
   '/admin/support/titles',
-  authenticate(['admin']),
+  authenticate(['admin']), adminAccessGuard,
   asyncHandler(adminListSupportTitles),
 );
 supportRouter.post(
   '/admin/support/titles',
-  authenticate(['admin']),
+  authenticate(['admin']), adminAccessGuard,
   asyncHandler(adminCreateSupportTitle),
 );
 supportRouter.patch(
   '/admin/support/titles/:titleId',
-  authenticate(['admin']),
+  authenticate(['admin']), adminAccessGuard,
   asyncHandler(adminUpdateSupportTitle),
 );
 supportRouter.delete(
   '/admin/support/titles/:titleId',
-  authenticate(['admin']),
+  authenticate(['admin']), adminAccessGuard,
   asyncHandler(adminDeleteSupportTitle),
 );
 
 supportRouter.get(
   '/admin/support/tickets/stats',
-  authenticate(['admin']),
+  authenticate(['admin']), adminAccessGuard,
   asyncHandler(adminSupportTicketStats),
 );
 supportRouter.get(
   '/admin/support/tickets',
-  authenticate(['admin']),
+  authenticate(['admin']), adminAccessGuard,
   asyncHandler(adminListSupportTickets),
 );
 supportRouter.get(
   '/admin/support/tickets/:ticketCode',
-  authenticate(['admin']),
+  authenticate(['admin']), adminAccessGuard,
   asyncHandler(adminGetSupportTicketDetail),
 );
 supportRouter.patch(
   '/admin/support/tickets/:ticketCode',
-  authenticate(['admin']),
+  authenticate(['admin']), adminAccessGuard,
   asyncHandler(adminUpdateSupportTicket),
 );
 supportRouter.post(
   '/admin/support/tickets/:ticketCode/reply',
-  authenticate(['admin']),
+  authenticate(['admin']), adminAccessGuard,
   asyncHandler(adminReplySupportTicket),
 );

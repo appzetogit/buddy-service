@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { buildLocationSchema } from '../../../../core/location/location.schema.js';
+import { zoneScopePlugin, byFields } from '../../../../core/admin/zoneScope.js';
 
 const normalizeRatingValue = (value) => {
     const numeric = Number(value);
@@ -250,6 +251,7 @@ deliveryPartnerSchema.index({ currentLocation: '2dsphere' });
 deliveryPartnerSchema.index({ lastLocation: '2dsphere' });
 deliveryPartnerSchema.index({ location: '2dsphere' });
 
+deliveryPartnerSchema.plugin(zoneScopePlugin, { filter: byFields('food', 'zone') });
 export const FoodDeliveryPartner = mongoose.model('FoodDeliveryPartner', deliveryPartnerSchema);
 
 /** Mongo filter for partners who take `service` jobs (no saved choice = all). */

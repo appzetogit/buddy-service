@@ -22,6 +22,7 @@ import { ValidationError, AuthError } from "./errors.js";
 import { config } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
 import { sendAdminResetOtpEmail } from "../../utils/email.js";
+import { resolveAdminAccess, buildAccessProfile } from "../admin/adminAccess.service.js";
 import mongoose from "mongoose";
 import {
   creditUserReferral,
@@ -248,7 +249,7 @@ export const verifyUserOtpAndLogin = async (
   };
 };
 
-export const adminLogin = async (email, password) => {
+export const adminLogin = async (email, password, { loginAs } = {}) => {
   if (!email || !password) {
     throw new ValidationError("Email and password are required");
   }
@@ -272,6 +273,22 @@ export const adminLogin = async (email, password) => {
     throw new AuthError("Invalid credentials");
   }
 
+  // The login page asks "sign in as": the main admin or one of the employee roles.
+  const wanted = String(loginAs || "").trim();
+  const isEmployee = Boolean(admin.adminRoleId);
+  if (wanted === "main" && isEmployee) {
+    throw new AuthError("This is an employee account. Select your role to sign in.");
+  }
+  if (wanted && wanted !== "main" && (!isEmployee || String(admin.adminRoleId) !== wanted)) {
+    throw new AuthError("This account does not have the selected role.");
+  }
+  if (isEmployee) {
+    const access = await resolveAdminAccess(admin._id);
+    if (access.kind !== "employee") {
+      throw new AuthError("Your role is inactive. Contact the administrator.");
+    }
+  }
+
   const payload = {
     userId: admin._id.toString(),
     role: admin.role,
@@ -293,6 +310,8 @@ export const adminLogin = async (email, password) => {
 
   const userObj = admin.toObject();
   delete userObj.password;
+  // Employees carry their role, pages and zones so the app can show only what they may use.
+  userObj.access = await buildAccessProfile(admin._id);
   return { accessToken, refreshToken, user: userObj };
 };
 

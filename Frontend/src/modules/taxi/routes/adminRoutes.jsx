@@ -2,8 +2,6 @@ import { FileText } from 'lucide-react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from '../shared/router';
 import TaxiAdminFrame from '../modules/admin/TaxiAdminFrame';
 import {
-  AdminAdminCreate,
-  AdminAdmins,
   AdminAirportManagement,
   AdminAppModules,
   AdminBannerImage,
@@ -150,9 +148,7 @@ export default function TaxiAdminRoutes() {
       <Route path="promotions/banner-image" element={<AdminBannerImage />} />
       <Route path="promotions/banner-image/create" element={<AdminBannerImage />} />
 
-      <Route path="management/admins" element={<AdminAdmins />} />
-      <Route path="management/admins/create" element={<AdminAdminCreate />} />
-      <Route path="management/admins/edit/:id" element={<AdminAdminCreate />} />
+      {/* Admin Management removed from Taxi: employees and roles are created in the platform Access tab. */}
 
       <Route path="geo/heatmap" element={<AdminHeatMap />} />
       <Route path="geo/gods-eye" element={<AdminGodsEye />} />

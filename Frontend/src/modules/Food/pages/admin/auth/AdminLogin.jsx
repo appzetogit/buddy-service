@@ -1,8 +1,9 @@
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { motion } from "framer-motion"
 import { adminAPI } from "@food/api"
 import { setAuthData } from "@food/utils/auth"
+import { firstAllowedPath } from "@food/utils/adminAccess"
 import {
   ShieldCheck,
   ArrowRight,
@@ -24,6 +25,16 @@ export default function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const submitting = useRef(false)
+  // "Sign in as": the main admin or one of the employee roles (names come from the backend).
+  const [roles, setRoles] = useState([])
+  const [loginAs, setLoginAs] = useState("main")
+
+  useEffect(() => {
+    adminAPI
+      .getLoginRoles()
+      .then((res) => setRoles(res?.data?.data?.roles || []))
+      .catch(() => {})
+  }, [])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -36,7 +47,7 @@ export default function AdminLogin() {
     setLoading(true)
 
     try {
-      const response = await adminAPI.login(email.trim(), password)
+      const response = await adminAPI.login(email.trim(), password, loginAs)
       const data = response?.data?.data || response?.data || {}
 
       const accessToken = data.accessToken
@@ -48,8 +59,9 @@ export default function AdminLogin() {
       }
 
       setAuthData("admin", accessToken, adminUser, refreshToken)
-      toast.success("Welcome, Administrator")
-      navigate("/admin/food", { replace: true })
+      toast.success(adminUser?.access?.isEmployee ? `Welcome, ${adminUser.name || "team member"}` : "Welcome, Administrator")
+      // An employee lands on the first page their role allows.
+      navigate(firstAllowedPath() || "/admin/food", { replace: true })
     } catch (err) {
       const msg =
         err?.response?.data?.message || err?.message || "Login failed. Check your credentials."
@@ -133,6 +145,28 @@ export default function AdminLogin() {
             </p>
 
             <form onSubmit={handleLogin} className="space-y-5">
+              <div className="space-y-2">
+                <label htmlFor="admin-login-as" className="text-sm font-semibold text-foreground">
+                  Sign in as
+                </label>
+                <div className="relative flex items-center h-12 sm:h-14 rounded-xl border border-border bg-white focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/40 transition-all">
+                  <UserCog className="absolute left-4 h-5 w-5 text-muted-foreground pointer-events-none" />
+                  <select
+                    id="admin-login-as"
+                    value={loginAs}
+                    onChange={(e) => setLoginAs(e.target.value)}
+                    className="w-full h-full pl-12 pr-4 bg-transparent text-sm sm:text-base font-medium text-foreground outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="main">Main Admin</option>
+                    {roles.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label htmlFor="admin-email" className="text-sm font-semibold text-foreground">
                   Email address

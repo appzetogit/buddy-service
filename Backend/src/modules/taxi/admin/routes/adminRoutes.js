@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../../middlewares/authMiddleware.js';
+import { adminAccessGuard } from '../../../../core/admin/adminAccess.middleware.js';
 import {
   loginRateLimit,
   otpSendRateLimit,
@@ -148,7 +149,7 @@ adminRouter.get('/admin/status', getAdminStatus);
 // Public route for app branding/settings
 adminRouter.get('/admin/general-settings/:category', getGeneralSettingsCategory);
 
-adminRouter.use('/admin', authenticate(['admin']));
+adminRouter.use('/admin', authenticate(['admin']), adminAccessGuard);
 
 adminRouter.get('/admin/permissions', getAdminPermissions);
 adminRouter.get('/admin/admin-management/admins', getAdmins);

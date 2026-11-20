@@ -2,6 +2,7 @@ import axiosInstance from "@core/api/axios";
 import { adminSidebarMenu } from "@food/utils/adminSidebarMenu";
 import { quickAdminSidebarMenu } from "@food/utils/quickAdminSidebarMenu";
 import { commonAdminSidebarMenu } from "@food/utils/commonAdminSidebarMenu";
+import { canDoOnPath, isEmployeeAdmin } from "@food/utils/adminAccess";
 
 const rolePermissionCache = new Map();
 
@@ -15,6 +16,7 @@ const normalizePermissions = (permissions) => {
 // with no sub-admin role attached is the root admin. Without this, screens that read the context
 // user (e.g. Quick Commerce Zone Setup) hid Add / Edit / Delete from the main admin.
 const isRootAdminRole = (user) => {
+  if (user?.access?.isEmployee || isEmployeeAdmin()) return false;
   const role = String(user?.role || "").toUpperCase();
   if (role === "ADMIN") return true;
   if (String(user?.admin_type || "").toLowerCase() === "superadmin") return true;
@@ -257,6 +259,11 @@ export const inferAdminActionFromPath = (pathname, match) => {
 
 export const canPerformAdminPermissionAction = (user, permissions, permissionKey, action = "view") => {
   if (!user || isRootAdminRole(user)) return true;
+
+  // Employees: the role grants pages, so the page they are on decides what they may do on it.
+  if (isEmployeeAdmin() && typeof window !== "undefined") {
+    return canDoOnPath(window.location.pathname, action);
+  }
 
   const rootKey = String(permissionKey || "").split("::")[0];
   if (!rootKey || !hasAnyRootAccess(permissions, rootKey)) return false;

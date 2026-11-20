@@ -69,6 +69,16 @@ const adminSchema = new mongoose.Schema(
             ],
             default: [],
         },
+        /** Set for employees: the role (AdminRole) that decides what they can see and do. */
+        adminRoleId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'AdminRole',
+            default: null,
+        },
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            default: null,
+        },
         active: {
             type: Boolean,
             default: true,
@@ -101,6 +111,7 @@ const adminSchema = new mongoose.Schema(
 
 adminSchema.index({ servicesAccess: 1 });
 adminSchema.index({ admin_type: 1, active: 1 });
+adminSchema.index({ adminRoleId: 1 });
 
 adminSchema.pre('save', async function (next) {
     if (!this.isModified('password')) {

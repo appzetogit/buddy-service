@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../../../middlewares/authMiddleware.js';
+import { adminAccessGuard } from '../../../../../core/admin/adminAccess.middleware.js';
 import {
   createBanner,
   createPromoCode,
@@ -21,7 +22,7 @@ import {
 
 export const promotionsRouter = Router();
 
-promotionsRouter.use('/admin', authenticate(['admin']));
+promotionsRouter.use('/admin', authenticate(['admin']), adminAccessGuard);
 
 promotionsRouter.get('/admin/promotions/bootstrap', getPromotionsBootstrap);
 promotionsRouter.get('/admin/promos', getPromoCodes);

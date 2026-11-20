@@ -86,6 +86,9 @@ const WithdrawMethod = lazy(() => import("@food/pages/admin/transactions/Withdra
 const EmployeeRole = lazy(() => import("@food/pages/admin/employees/EmployeeRole"));
 const AddEmployee = lazy(() => import("@food/pages/admin/employees/AddEmployee"));
 const EmployeeList = lazy(() => import("@food/pages/admin/employees/EmployeeList"));
+// Admin access (roles + employees with per-section permissions and zones) - main admin only
+const AccessRoles = lazy(() => import("@food/pages/admin/access/AccessRoles"));
+const AccessEmployees = lazy(() => import("@food/pages/admin/access/AccessEmployees"));
 // Business Settings
 const BusinessSetup = lazy(() => import("@food/pages/admin/settings/BusinessSetup"));
 const EmailTemplate = lazy(() => import("@food/pages/admin/settings/EmailTemplate"));
@@ -147,6 +150,9 @@ export default function AdminRouter() {
             </ProtectedRoute>
           }
         >
+          <Route path="access" element={<Navigate to="roles" replace />} />
+          <Route path="access/roles" element={<AccessRoles />} />
+          <Route path="access/employees" element={<AccessEmployees />} />
           <Route path="coupons" element={<Navigate to="food/coupons" replace />} />
           <Route path="coupons/:id/analytics" element={<CouponAnalytics mode="admin" />} />
 

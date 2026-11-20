@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { whatsappOrderStatusPlugin } from '../../../../core/notifications/whatsappOrderStatus.plugin.js';
 import { buildLocationSchema } from '../../../../core/location/location.schema.js';
+import { zoneScopePlugin, byFields } from '../../../../core/admin/zoneScope.js';
 
 const orderItemSchema = new mongoose.Schema(
     {
@@ -613,6 +614,8 @@ orderSchema.plugin(whatsappOrderStatusPlugin, {
     orderIdOf: (o) => o.order_id || o.orderId,
 });
 
+// Zone-restricted employees only ever see orders of their zones (no effect on any other request).
+orderSchema.plugin(zoneScopePlugin, { filter: byFields('food', 'zoneId') });
 export const FoodOrder = mongoose.model('FoodOrder', orderSchema);
 
 const settingsSchema = new mongoose.Schema(

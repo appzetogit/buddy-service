@@ -68,6 +68,89 @@ export async function sendAdminResetOtpEmail(to, otp) {
     }
 }
 
+const escapeHtml = (v) =>
+    String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/**
+ * Login details for a new (or password-reset) admin employee. The password is the one the main
+ * admin set; the employee is asked to change it after the first sign-in.
+ * @returns {Promise<boolean>} true if sent
+ */
+export async function sendEmployeeCredentialsEmail({ to, name, roleName, password, loginUrl, isReset = false }) {
+    const trans = getTransporter();
+    if (!trans) {
+        logger.warn('Employee credentials email skipped: SMTP not configured');
+        return false;
+    }
+    const from = config.emailFrom || config.emailUser;
+    const subject = isReset
+        ? 'Your Buddy Services admin password was reset'
+        : 'Welcome to Buddy Services - your admin panel login';
+    const safe = { name: escapeHtml(name || 'there'), role: escapeHtml(roleName), email: escapeHtml(to), pw: escapeHtml(password), url: escapeHtml(loginUrl) };
+    const row = (label, value, mono = false) =>
+        `<tr><td style="padding:10px 14px;color:#6b7280;font-size:13px;width:34%;border-bottom:1px solid #eef2f7;">${label}</td>` +
+        `<td style="padding:10px 14px;font-size:15px;font-weight:600;color:#111827;border-bottom:1px solid #eef2f7;${mono ? 'font-family:Consolas,Menlo,monospace;letter-spacing:.5px;' : ''}">${value}</td></tr>`;
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px;"><tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e5e7eb;">
+      <tr><td style="background:linear-gradient(135deg,#16a34a,#0f172a);padding:26px 28px;color:#ffffff;">
+        <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;opacity:.85;">Buddy Services</div>
+        <div style="font-size:22px;font-weight:700;margin-top:6px;">${isReset ? 'Password reset' : 'Welcome aboard'}</div>
+      </td></tr>
+      <tr><td style="padding:26px 28px;">
+        <p style="margin:0 0 12px;font-size:16px;">Hi ${safe.name},</p>
+        <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#374151;">
+          ${isReset ? 'Your admin panel password was reset by an administrator.' : 'You have been added to the Buddy Services admin panel.'}
+          Use the details below to sign in.
+        </p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #eef2f7;border-radius:12px;overflow:hidden;">
+          ${row('Login ID (email)', safe.email)}
+          ${row('Password', safe.pw, true)}
+          ${row('Role', safe.role)}
+        </table>
+        <div style="text-align:center;margin:24px 0 8px;">
+          <a href="${safe.url}" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 30px;border-radius:10px;">Open admin login</a>
+        </div>
+        <p style="margin:14px 0 0;font-size:12px;color:#6b7280;text-align:center;word-break:break-all;">${safe.url}</p>
+        <div style="margin-top:22px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;font-size:13px;color:#92400e;line-height:1.5;">
+          On the login page choose your role (<b>${safe.role}</b>), then sign in. For your security, change this password after your first login and do not share it with anyone.
+        </div>
+      </td></tr>
+      <tr><td style="padding:16px 28px;background:#f9fafb;border-top:1px solid #eef2f7;font-size:12px;color:#9ca3af;text-align:center;">
+        This is an automated message from Buddy Services. If you were not expecting it, please contact your administrator.
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`;
+    const text = [
+        `Hi ${name || 'there'},`,
+        isReset ? 'Your admin panel password was reset by an administrator.' : 'You have been added to the Buddy Services admin panel.',
+        '',
+        `Login URL: ${loginUrl}`,
+        `Login ID (email): ${to}`,
+        `Password: ${password}`,
+        `Role: ${roleName}`,
+        '',
+        'On the login page choose your role, then sign in. Please change your password after your first login.',
+    ].join('\n');
+    try {
+        await trans.sendMail({
+            from: typeof from === 'string' && from.includes('<') ? from : `Buddy Services <${from}>`,
+            to,
+            subject,
+            text,
+            html,
+        });
+        logger.info(`Employee credentials email sent to ${to}`);
+        return true;
+    } catch (err) {
+        logger.error(`Failed to send employee credentials email to ${to}: ${err.message}`);
+        return false;
+    }
+}
+
 function asSafeText(value, fallback = "there") {
     const text = String(value || "").trim();
     return text || fallback;

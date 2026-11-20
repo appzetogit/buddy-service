@@ -230,7 +230,31 @@ export const notificationAPI = {
 export const adminAPI = {
   getSidebarBadges: () =>
     apiClient.get("/food/admin/sidebar-badges", { contextModule: "admin" }),
-  login: (email, password) => authService.adminLogin(email, password),
+  login: (email, password, loginAs) => authService.adminLogin(email, password, loginAs),
+  /** Public: the roles shown on the admin login page ("sign in as"). */
+  getLoginRoles: () => apiClient.get("/auth/admin/login-roles"),
+  /** Signed-in admin's own access (employees: role, pages, zones). */
+  getMyAccess: () => apiClient.get("/common/admin/access/me", { contextModule: "admin" }),
+  // Roles & employees (main admin only)
+  accessZones: () => apiClient.get("/common/admin/access/zones", { contextModule: "admin" }),
+  accessGeneratePassword: () =>
+    apiClient.get("/common/admin/access/generate-password", { contextModule: "admin" }),
+  accessRoles: () => apiClient.get("/common/admin/access/roles", { contextModule: "admin" }),
+  accessCreateRole: (body) =>
+    apiClient.post("/common/admin/access/roles", body, { contextModule: "admin" }),
+  accessUpdateRole: (id, body) =>
+    apiClient.patch(`/common/admin/access/roles/${id}`, body, { contextModule: "admin" }),
+  accessDeleteRole: (id) =>
+    apiClient.delete(`/common/admin/access/roles/${id}`, { contextModule: "admin" }),
+  accessEmployees: () => apiClient.get("/common/admin/access/employees", { contextModule: "admin" }),
+  accessCreateEmployee: (body) =>
+    apiClient.post("/common/admin/access/employees", body, { contextModule: "admin" }),
+  accessUpdateEmployee: (id, body) =>
+    apiClient.patch(`/common/admin/access/employees/${id}`, body, { contextModule: "admin" }),
+  accessDeleteEmployee: (id) =>
+    apiClient.delete(`/common/admin/access/employees/${id}`, { contextModule: "admin" }),
+  accessResendCredentials: (id) =>
+    apiClient.post(`/common/admin/access/employees/${id}/resend-credentials`, {}, { contextModule: "admin" }),
   /** POST /auth/admin/forgot-password/request-otp – only accepts registered admin email */
   requestForgotPasswordOtp: (email) =>
     apiClient.post("/auth/admin/forgot-password/request-otp", {
