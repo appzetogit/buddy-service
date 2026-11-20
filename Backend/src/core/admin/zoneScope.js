@@ -47,6 +47,8 @@ const QUERY_HOOKS = [
 /** schema.plugin(zoneScopePlugin, { filter: byFields('food', 'zoneId') }) */
 export const zoneScopePlugin = (schema, { filter }) => {
     schema.pre(QUERY_HOOKS, function applyZoneScope() {
+        // deleteOne / updateOne also run for document calls (doc.deleteOne()), which have no query to narrow.
+        if (typeof this.and !== 'function') return;
         const f = filter();
         if (f) this.and([f]);
     });
