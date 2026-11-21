@@ -1158,7 +1158,7 @@ const parkScheduledRideForAdmin = async (ride, reason) => {
   }
 };
 
-const closeRideAsUnmatched = async (rideId, { force = false } = {}) => {
+export const closeRideAsUnmatched = async (rideId, { force = false } = {}) => {
   const dispatchState = getDispatchState(rideId);
   if (!force) {
     const pending = await Ride.findOne({ _id: rideId, status: RIDE_STATUS.SEARCHING, driverId: null }).select('scheduledAt').lean();

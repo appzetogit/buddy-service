@@ -164,12 +164,13 @@ export default function AdminHome() {
                     `This ${selectedPeriod}'s`
 
   const activityFeed = dashboardData?.liveSignals || []
+  const gigPayoutsTotal = dashboardData?.gigPayouts?.total || 0
   const totalRevenueHelper = [
     `Comm: ${formatCurrency(commissionTotal)}`,
     `Platform: ${formatCurrency(platformFeeTotal)}`,
     `Delivery Net: ${formatCurrency(deliveryProfit)}`,
     `GST: ${formatCurrency(gstTotal)}`,
-  ].join(" + ")
+  ].join(" + ") + (gigPayoutsTotal > 0 ? ` - Gig payouts: ${formatCurrency(gigPayoutsTotal)}` : "")
 
   return (
     <div className="px-4 pb-10 lg:px-6 pt-4">

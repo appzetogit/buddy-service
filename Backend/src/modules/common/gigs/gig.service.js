@@ -462,6 +462,20 @@ export const recordGigEarning = async ({ partnerId, service, orderRef, at = new 
       amount: booking.extraPerOrder,
       reference: `Gig extra: ${booking.slotName} ${hhmm(booking.startMin)}-${hhmm(booking.endMin)} (${service} order ${orderRef})`,
     });
+    // Tell the rider: the extra is already in their wallet, this makes it visible right away.
+    try {
+      const { notifyOwnerSafely } = await import('../../food/orders/services/order.helpers.js');
+      void notifyOwnerSafely(
+        { ownerType: 'DELIVERY_PARTNER', ownerId: String(booking.partnerId) },
+        {
+          title: 'Gig bonus added',
+          body: `Rs ${booking.extraPerOrder} extra added for your ${booking.slotName} gig order.`,
+          data: { type: 'gig_bonus', amount: String(booking.extraPerOrder), orderRef: String(orderRef) },
+        },
+      ).catch(() => {});
+    } catch {
+      /* the push is a nicety; the money is already credited */
+    }
     return earning.toObject();
   } catch (err) {
     logger.warn(`[Gigs] could not record gig earning for ${service} ${orderRef}: ${err?.message || err}`);
