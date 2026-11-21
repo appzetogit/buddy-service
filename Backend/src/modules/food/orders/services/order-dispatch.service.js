@@ -23,6 +23,7 @@ import {
 } from './order.helpers.js';
 import { fetchRoadDistancesKm } from '../utils/googleMaps.js';
 import { filterPartnersByOrderCapacity } from './rider-capacity.service.js';
+import { filterPartnersByGig } from '../../../common/gigs/gig.service.js';
 import { ensureRestaurantCoordinates } from './restaurant-geo.service.js';
 
 /**
@@ -202,8 +203,12 @@ export async function listNearbyOnlineDeliveryPartners(
   // list below, so a full rider never even sees the offer. `excludeOrderId` keeps the order
   // being dispatched out of the tally, which matters on re-dispatch of an order the rider
   // already holds. Fails open - see rider-capacity.service.js.
-  const withFreeSlot = (partners) =>
-    filterPartnersByOrderCapacity(partners, { excludeOrderId });
+  // Riders with a gig booked today only receive jobs inside their booked hours (see gig.service.js).
+  const withFreeSlot = async (partners) =>
+    filterPartnersByGig(
+      await filterPartnersByOrderCapacity(partners, { excludeOrderId }),
+      service === 'quickCommerce' ? 'quickCommerce' : 'food',
+    );
 
   // Riders who opted out of this kind of job (food vs quick commerce) never see it.
   const serviceFilter = service ? takesDeliveryService(service) : {};

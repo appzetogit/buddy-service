@@ -70,6 +70,7 @@ import {
   claimExceedsStackingLimit,
   getRiderCapacity,
 } from './rider-capacity.service.js';
+import { assertGigAllowsService, recordGigEarning } from '../../../common/gigs/gig.service.js';
 
 /**
  * Server-side anti-spoof geofence for "reached pickup" / "reached drop".
@@ -783,6 +784,9 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
   if (!identity) throw new ValidationError('Order id required');
 
   const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
+
+  // A rider with a gig booked today only takes jobs inside the booked hours.
+  await assertGigAllowsService(deliveryPartnerId, 'food');
 
   const existingOrder = await FoodOrder.findOne(identity)
     .select('pricing payment dispatch orderStatus riderEarning platformProfit settlementBreakdown')
@@ -2248,6 +2252,9 @@ export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
     `Delivered via ${finalPayMethod}; primary ₹${Number(order.riderEarning) || 0}, shared ₹${Number(order.sharedRiderEarning) || 0}`,
   );
   await order.save();
+
+  // Gig extra for this order when the rider has a gig booked for this hour (never throws).
+  void recordGigEarning({ partnerId: deliveryPartnerId, service: 'food', orderRef: String(order.orderId || order._id) });
 
   // 5. Update Financial Ledger (FoodTransaction)
   // This triggers the sync back to FoodOrder.payment.method which updates the Rider's Cash Limit (if cash) or Pocket (always).

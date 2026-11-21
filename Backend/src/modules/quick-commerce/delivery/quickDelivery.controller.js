@@ -167,6 +167,7 @@ export const acceptQuickOrderController = async (req, res) => {
 
     const result = await acceptQuickOrder(req.params.orderId, partnerId);
     if (!result.ok) {
+      if (result.reason === 'GIG_BLOCKED') return sendError(res, 409, result.message);
       if (result.reason === 'AT_CAPACITY') {
         return sendError(res, 409, result.message || CAPACITY_REACHED_MESSAGE);
       }

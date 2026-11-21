@@ -29,6 +29,7 @@ export const PocketV2 = () => {
   const [balance, setBalance] = useState(0);
   const [earnings, setEarnings] = useState(0);
   const [ordersCount, setOrdersCount] = useState(0);
+  const [gigExtra, setGigExtra] = useState({ amount: 0, orders: 0 });
   const [trips, setTrips] = useState([]);
   const [tripsPage, setTripsPage] = useState(1);
   const [tripsTotal, setTripsTotal] = useState(0);
@@ -80,6 +81,14 @@ export const PocketV2 = () => {
     };
 
     fetchWallet();
+    // Gig extra earned on gig orders (already part of the balance above; shown separately here).
+    deliveryAPI
+      .getMyGigBookings()
+      .then((res) => {
+        const d = res?.data?.data || {};
+        if (!cancelled) setGigExtra({ amount: Number(d.totalGigEarnings) || 0, orders: Number(d.totalGigOrders) || 0 });
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -295,6 +304,12 @@ export const PocketV2 = () => {
                 <IndianRupee className="w-5 h-5" />
               </div>
             </div>
+            {gigExtra.amount > 0 && (
+              <div className="mt-4 flex items-center justify-between rounded-xl bg-green-50 px-3 py-2 text-[12px] font-semibold text-green-800">
+                <span>Gig extra earned (all time, {gigExtra.orders} {gigExtra.orders === 1 ? 'order' : 'orders'})</span>
+                <span className="font-extrabold">+{formatCurrency(gigExtra.amount)}</span>
+              </div>
+            )}
 
             <div className="h-px bg-gray-100 my-6" />
 

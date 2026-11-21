@@ -12,6 +12,7 @@ import uploadRoutes from '../modules/uploads/routes/upload.routes.js';
 import restaurantAdminRoutes from '../modules/food/admin/routes/admin.routes.js';
 import adminAccessRoutes from '../core/admin/adminAccess.routes.js';
 import { adminAccessGuard } from '../core/admin/adminAccess.middleware.js';
+import { gigAdminRouter, gigRiderRouter } from '../modules/common/gigs/gig.routes.js';
 import { loginRoles as adminLoginRolesController } from '../core/admin/adminAccess.controller.js';
 import quickCommerceAdminRoutes from '../modules/quick-commerce/routes/admin.routes.js';
 import quickCommerceRoutes from '../modules/quick-commerce/routes/quick-commerce.routes.js';
@@ -84,6 +85,8 @@ router.get('/v1/food/offer-banners/public', getOfferBannersPublic);
 // Employee / role management (main admin only) and the page-based access guard on every admin API.
 router.get('/v1/auth/admin/login-roles', adminLoginRolesController);
 router.use('/v1/common/admin/access', authMiddleware, requireRoles('ADMIN'), adminAccessRoutes);
+router.use('/v1/gigs/admin', gigAdminRouter);
+router.use('/v1/gigs/rider', gigRiderRouter);
 router.use('/v1/food/admin', authMiddleware, requireRoles('ADMIN'), adminAccessGuard, restaurantAdminRoutes);
 router.use('/v1/quick-commerce/admin', authMiddleware, requireRoles('ADMIN'), adminAccessGuard, quickCommerceAdminRoutes);
 router.use('/v1/quick-commerce/delivery', quickCommerceDeliveryRoutes);

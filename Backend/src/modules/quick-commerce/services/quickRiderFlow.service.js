@@ -9,6 +9,7 @@
  *
  * The controller stays thin; everything that decides state lives here.
  */
+import { recordGigEarning } from '../../common/gigs/gig.service.js';
 import mongoose from 'mongoose';
 import { QuickOrder } from '../models/order.model.js';
 import { FoodDeliveryPartner } from '../../food/delivery/models/deliveryPartner.model.js';
@@ -341,6 +342,7 @@ export async function completeDelivery(orderId, partnerId, { otp = '' } = {}) {
     if (!areAllLegsDelivered(order)) {
       pushHistory(order, partnerId, order.orderStatus, order.orderStatus, `Leg ${leg.legIndex} delivered. Waiting for the other partner to finish.`);
       await order.save();
+      void recordGigEarning({ partnerId, service: 'quickCommerce', orderRef: `${order.orderId || order._id}:${partnerId}` });
       await emitQuickOrderUpdate(order, 'order_update');
       return { order, finished: false, waitingForPartner: true };
     }
@@ -428,6 +430,8 @@ export async function completeDelivery(orderId, partnerId, { otp = '' } = {}) {
     order.riderEarning = Number(order.riderEarning || 0) + tip;
   }
   await order.save();
+  // Gig extra for this order when the rider has a gig booked for this hour (never throws).
+  void recordGigEarning({ partnerId, service: 'quickCommerce', orderRef: `${order.orderId || order._id}:${partnerId}` });
 
   await syncSellerOrderFromDelivery(order._id, 'delivered').catch((err) =>
     logger.warn(`[QuickRider] seller sync (delivered) failed: ${err.message}`),

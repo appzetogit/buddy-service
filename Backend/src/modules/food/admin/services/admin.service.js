@@ -1,4 +1,5 @@
-import mongoose from 'mongoose';
+import mongoose from 'mongoose';
+
 import { idsFor } from '../../../../core/admin/zoneScope.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
@@ -14,6 +15,7 @@ import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model
 import { BuddyIdentity } from '../../../../core/identity/buddyIdentity.model.js';
 import { DeliverySupportTicket } from '../../delivery/models/supportTicket.model.js';
 import { FoodZone } from '../models/zone.model.js';
+import { gigPayoutTotal } from '../../../common/gigs/gig.service.js';
 import { FoodOfferBanner } from '../models/offerBanner.model.js';
 import { FoodOrderRejectionReason } from '../models/orderRejectionReason.model.js';
 import { FoodCategory } from '../models/category.model.js';
@@ -778,6 +780,7 @@ export async function getDashboardStats(query = {}) {
     const totals = orderTotalsAgg?.[0] || {};
 
     const now = new Date();
+    const gigPayoutsFood = zoneRestricted ? 0 : await gigPayoutTotal('food', periodRange);
     const monthlyMap = new Map(
         (monthlyAgg || []).map((row) => {
             const key = `${row._id?.year}-${row._id?.month}`;
@@ -814,7 +817,9 @@ export async function getDashboardStats(query = {}) {
         platformFee: { total: Number(totals.platformFeeTotal || 0) },
         deliveryFee: { total: Number(totals.deliveryFeeTotal || 0) },
         gst: { total: Number(totals.gstTotal || 0) },
-        totalAdminEarnings: Number(totals.adminNetProfit || 0) + Number(totals.gstTotal || 0),
+        // Gig extras paid to riders on Food orders come out of the admin earning (the gig payouts have no zone, so a zone view leaves them out).
+        totalAdminEarnings: Number(totals.adminNetProfit || 0) + Number(totals.gstTotal || 0) - gigPayoutsFood,
+        gigPayouts: { total: gigPayoutsFood },
         deliveryProfit: Number(totals.adminNetProfit || 0) - Number(totals.commissionTotal || 0) - Number(totals.platformFeeTotal || 0),
         platformSubsidy: { total: Number(totals.platformSubsidyTotal || 0) },
         riderPayout: { total: Number(totals.riderPayoutTotal || 0) },

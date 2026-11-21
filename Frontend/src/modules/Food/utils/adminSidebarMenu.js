@@ -169,6 +169,14 @@ export const adminSidebarMenu = [
   },
   {
     type: "section",
+    label: "GIGS (RIDER SLOTS)",
+    items: [
+      { type: "link", label: "Gig Slots", path: "/admin/food/gigs/slots", icon: "Zap" },
+      { type: "link", label: "Gig Bookings & Payouts", path: "/admin/food/gigs/bookings", icon: "Clock" },
+    ],
+  },
+  {
+    type: "section",
     label: "HELP & SUPPORT",
     items: [
       { type: "link", label: "User Feedback", path: "/admin/food/contact-messages", icon: "Mail" },

@@ -896,6 +896,14 @@ export const adminAPI = {
       { contextModule: "admin" },
     ),
 
+  /** Gigs (admin): slot templates, bookings and payouts - shared by Food, Marketplace and Taxi */
+  getGigSlots: () => apiClient.get("/gigs/admin/slots", { contextModule: "admin" }),
+  createGigSlot: (body) => apiClient.post("/gigs/admin/slots", body ?? {}, { contextModule: "admin" }),
+  updateGigSlot: (id, body) => apiClient.put(`/gigs/admin/slots/${String(id)}`, body ?? {}, { contextModule: "admin" }),
+  deleteGigSlot: (id) => apiClient.delete(`/gigs/admin/slots/${String(id)}`, { contextModule: "admin" }),
+  getGigBookings: (params = {}) => apiClient.get("/gigs/admin/bookings", { params, contextModule: "admin" }),
+  getGigEarnings: (params = {}) => apiClient.get("/gigs/admin/earnings", { params, contextModule: "admin" }),
+
   /** Earning Addon Offers (admin) */
   getEarningAddons: (params = {}) =>
     apiClient.get("/food/admin/delivery/earning-addons", {
@@ -2561,6 +2569,12 @@ export const deliveryAPI = {
       params: params ?? {},
       contextModule: "delivery",
     }),
+  /** Gigs (rider): browse days/slots, book, cancel */
+  getGigDays: () => apiClient.get("/gigs/rider/days", { contextModule: "delivery" }),
+  getGigDay: (date) => apiClient.get(`/gigs/rider/days/${String(date)}`, { contextModule: "delivery" }),
+  getMyGigBookings: (params = {}) => apiClient.get("/gigs/rider/bookings", { params, contextModule: "delivery" }),
+  bookGig: (body) => apiClient.post("/gigs/rider/book", body ?? {}, { contextModule: "delivery" }),
+  cancelGigBooking: (id) => apiClient.delete(`/gigs/rider/bookings/${String(id)}`, { contextModule: "delivery" }),
   /** GET /food/delivery/emergency-help - admin-set emergency numbers for delivery partner */
   getEmergencyHelp: () =>
     apiClient.get("/food/delivery/emergency-help", {

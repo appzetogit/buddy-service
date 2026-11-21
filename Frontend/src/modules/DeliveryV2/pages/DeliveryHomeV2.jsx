@@ -29,11 +29,12 @@ import ActionSlider from '@/modules/DeliveryV2/components/ui/ActionSlider';
 // Sub Pages
 import PocketV2 from '@/modules/DeliveryV2/pages/PocketV2';
 import HistoryV2 from '@/modules/DeliveryV2/pages/HistoryV2';
+import GigsV2 from '@/modules/DeliveryV2/pages/GigsV2';
 
 // Icons
 import {
   Bell, HelpCircle, AlertTriangle,
-  Wallet, History, User as UserIcon, LayoutGrid,
+  Wallet, History, User as UserIcon, LayoutGrid, Zap,
   Plus, Minus, Navigation2, Target, Play, CheckCircle2, Clock, ChevronDown,
   Contact, Package, Loader2
 } from 'lucide-react';
@@ -1665,6 +1666,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           </div>
         ) : currentTab === 'pocket' ? (
           <PocketV2 />
+        ) : currentTab === 'gigs' ? (
+          <GigsV2 />
         ) : currentTab === 'history' ? (
           <HistoryV2 />
         ) : null}
@@ -2046,6 +2049,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           {[
             { id: 'feed', label: 'Delivery', icon: LayoutGrid, path: '/food/delivery/feed' },
             { id: 'pocket', label: 'Pocket', icon: Wallet, path: '/food/delivery/pocket' },
+            { id: 'gigs', label: 'Gigs', icon: Zap, path: '/food/delivery/gigs' },
             { id: 'history', label: 'History', icon: History, path: '/food/delivery/history' },
             { id: 'profile', label: 'Profile', icon: UserIcon, path: '/driver/profile' },
           ].map((item) => {

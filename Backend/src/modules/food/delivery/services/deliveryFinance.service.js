@@ -177,7 +177,9 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
             { $group: { _id: null, total: { $sum: '$amount' } } }
         ]),
         DeliveryBonusTransaction.aggregate([
-            { $match: { deliveryPartnerId: partnerId, status: 'credited' } },
+            // The model has no `status` field, so the old `status: 'credited'` filter matched nothing and
+            // bonuses (admin bonus, earning addons, gig extras) never reached the pocket balance.
+            { $match: { deliveryPartnerId: partnerId } },
             { $group: { _id: null, total: { $sum: '$amount' } } }
         ]),
         FoodDeliveryWithdrawal.aggregate([

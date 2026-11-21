@@ -23,6 +23,7 @@ import { getIO, rooms } from '../../../config/socket.js';
 import { getQuickDeliverySettings } from './quickDeliverySettings.service.js';
 import { getNextPickup } from '../../food/orders/services/order-lifecycle.policy.js';
 import { logger } from '../../../utils/logger.js';
+import { eligiblePartnerIds, GIG_BLOCKED_MESSAGE } from '../../common/gigs/gig.service.js';
 
 /** Default offer window; the live value comes from the admin delivery settings. */
 export const QUICK_OFFER_TIMEOUT_MS = 60 * 1000;
@@ -384,6 +385,10 @@ export async function acceptQuickOrder(orderId, partnerId) {
   if (!mongoose.Types.ObjectId.isValid(String(orderId))) {
     return { ok: false, reason: 'INVALID_ORDER' };
   }
+
+  // A rider with a gig booked today only takes jobs inside the booked hours (fails open on error).
+  const gigOk = await eligiblePartnerIds([partnerId], 'quickCommerce').then((s) => s.has(String(partnerId))).catch(() => true);
+  if (!gigOk) return { ok: false, reason: 'GIG_BLOCKED', message: GIG_BLOCKED_MESSAGE };
 
   // Order stacking is shared with Food: a rider already holding their maximum (counting both
   // verticals) cannot take this job, however they got hold of the offer card.

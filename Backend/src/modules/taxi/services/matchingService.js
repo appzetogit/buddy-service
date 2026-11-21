@@ -7,6 +7,7 @@ import { Vehicle } from '../admin/models/Vehicle.js';
 import { Driver } from '../driver/models/Driver.js';
 import { Zone } from '../driver/models/Zone.js';
 import { getRiderActiveLoadMap } from '../../food/orders/services/rider-capacity.service.js';
+import { filterPartnersByGig } from '../../common/gigs/gig.service.js';
 import { getDriverIdsBlockedByUpcomingScheduledRides } from './rideService.js';
 
 const EARTH_RADIUS_METERS = 6371000;
@@ -368,7 +369,9 @@ const findDriversForZone = async ({
 
   // A rider already carrying Food / Quick Commerce work is not free for a passenger.
   const loadMap = await getRiderActiveLoadMap(nearby.map((driver) => driver._id)).catch(() => new Map());
-  const free = nearby.filter((driver) => !(loadMap.get(String(driver._id)) > 0)).slice(0, limit);
+  const notBusy = nearby.filter((driver) => !(loadMap.get(String(driver._id)) > 0));
+  // Riders with a gig booked today only get rides inside their booked hours.
+  const free = (await filterPartnersByGig(notBusy, 'taxi')).slice(0, limit);
 
   // Downstream ranking reads `driver.location`; point it at wherever the partner really is.
   const placed = free.map((driver) => {
