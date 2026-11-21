@@ -345,6 +345,7 @@ const findDriversForZone = async ({
   vehicleTypeKeys,
   serviceType,
   strictZoneOnly = false,
+  scheduledAt = null,
 }) => {
   const commonFilters = buildDriverMatchFilters({ vehicleTypeKeys, serviceType });
   const selectedFields =
@@ -370,8 +371,9 @@ const findDriversForZone = async ({
   // A rider already carrying Food / Quick Commerce work is not free for a passenger.
   const loadMap = await getRiderActiveLoadMap(nearby.map((driver) => driver._id)).catch(() => new Map());
   const notBusy = nearby.filter((driver) => !(loadMap.get(String(driver._id)) > 0));
-  // Riders with a gig booked today only get rides inside their booked hours.
-  const free = (await filterPartnersByGig(notBusy, 'taxi')).slice(0, limit);
+  // Riders with a gig booked today only get rides inside their booked hours. A scheduled ride goes
+  // only to riders who booked the gig covering its pickup time.
+  const free = (await filterPartnersByGig(notBusy, 'taxi', { at: scheduledAt })).slice(0, limit);
 
   // Downstream ranking reads `driver.location`; point it at wherever the partner really is.
   const placed = free.map((driver) => {
@@ -395,6 +397,8 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     strictZoneOnly = false,
     // The kind of ride (ride / intercity / parcel): riders only get the kinds of work they chose.
     serviceType,
+    // Pickup time of a scheduled ride (gig riders only).
+    scheduledAt = null,
   } = options;
   const normalizedVehicleTypeIds = normalizeVehicleTypeIds(vehicleTypeIds, vehicleTypeId);
   const allowedVehicles = normalizedVehicleTypeIds.length
@@ -418,6 +422,7 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     vehicleTypeKeys,
     serviceType,
     strictZoneOnly,
+    scheduledAt,
   });
   drivers = filterDriversForMatchedZone({
     drivers,
@@ -442,6 +447,7 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
       vehicleTypeKeys,
       serviceType,
       strictZoneOnly,
+      scheduledAt,
     });
     drivers = filterDriversForMatchedZone({
       drivers,

@@ -23,7 +23,7 @@ import {
 } from './order.helpers.js';
 import { fetchRoadDistancesKm } from '../utils/googleMaps.js';
 import { filterPartnersByOrderCapacity } from './rider-capacity.service.js';
-import { filterPartnersByGig } from '../../../common/gigs/gig.service.js';
+import { filterPartnersByGig, gigPartnerIdsForTime } from '../../../common/gigs/gig.service.js';
 import { ensureRestaurantCoordinates } from './restaurant-geo.service.js';
 
 /**
@@ -196,6 +196,8 @@ export async function listNearbyOnlineDeliveryPartners(
     allowOverLimitFallback = true,
     service = null,
     excludeOrderId = null,
+    // Scheduled order: only riders who booked the gig covering this time are candidates.
+    gigAt = null,
   } = {},
 ) {
   // Order stacking: a rider may hold up to `maxConcurrentOrders` accepted jobs (default 2)
@@ -208,6 +210,7 @@ export async function listNearbyOnlineDeliveryPartners(
     filterPartnersByGig(
       await filterPartnersByOrderCapacity(partners, { excludeOrderId }),
       service === 'quickCommerce' ? 'quickCommerce' : 'food',
+      { at: gigAt },
     );
 
   // Riders who opted out of this kind of job (food vs quick commerce) never see it.
@@ -397,6 +400,39 @@ export async function updateDispatchSettings(dispatchMode, adminId) {
   return getDispatchSettings();
 }
 
+/**
+ * A scheduled order that no gig rider can take is parked for the admin: it stays active (the
+ * restaurant keeps preparing it) but is neither hunted nor auto-cancelled until an admin assigns a rider.
+ * Admins are told once, when it first parks.
+ */
+export async function parkScheduledOrderForAdmin(order, reason = 'no_gig_rider') {
+  const FoodOrder = mongoose.model('FoodOrder');
+  const alreadyParked = Boolean(order?.dispatch?.needsAdminAssign);
+  await FoodOrder.collection.updateOne(
+    { _id: order._id },
+    {
+      $set: {
+        'dispatch.status': 'unassigned',
+        'dispatch.deliveryPartnerId': null,
+        'dispatch.needsAdminAssign': true,
+        'dispatch.needsAdminAssignReason': reason,
+        ...(alreadyParked ? {} : { 'dispatch.needsAdminAssignAt': new Date() }),
+      },
+    },
+  );
+  if (alreadyParked) return;
+  logger.warn(`[ScheduledOrders] Order ${order._id} has no gig rider for its slot; waiting for admin assignment.`);
+  try {
+    await notifyOwnersSafely([{ ownerType: 'ADMIN', ownerId: 'GLOBAL' }], {
+      title: 'Scheduled order needs a driver',
+      body: `Food order #${order.order_id || order._id} is scheduled and no rider booked a gig for that time. Please assign a driver.`,
+      data: { type: 'scheduled_needs_driver', orderId: String(order._id), service: 'food' },
+    });
+  } catch (err) {
+    logger.warn(`Admin notification failed: ${err.message}`);
+  }
+}
+
 export async function tryAutoAssign(orderId, options = {}) {
   const attempt = options.attempt || 1;
   const lockTimeout = 90000; // 90 seconds lock interval
@@ -458,6 +494,15 @@ export async function tryAutoAssign(orderId, options = {}) {
   }
 
   try {
+    // Scheduled order: only riders who booked the gig covering its time get it. Nobody booked ->
+    // it waits in the admin panel for a manual assignment (never hunted wide, never auto-cancelled).
+    if (order.scheduledAt) {
+      const gigRiders = await gigPartnerIdsForTime('food', order.scheduledAt);
+      if (gigRiders.size === 0) {
+        await parkScheduledOrderForAdmin(order, 'no_gig_rider');
+        return order;
+      }
+    }
     const offeredIds = (order.dispatch?.offeredTo || []).map(o => o.partnerId.toString());
     const paymentMethod = String(order.payment?.method || 'cash').toLowerCase();
     const isCashOrder = paymentMethod === 'cash' || paymentMethod === 'cod';
@@ -483,6 +528,7 @@ export async function tryAutoAssign(orderId, options = {}) {
       service: 'food',
       // This order must not count against a rider's stacking limit while we hunt for them.
       excludeOrderId: order._id,
+      ...(order.scheduledAt ? { gigAt: order.scheduledAt } : {}),
     };
 
     const restaurant = order.restaurantId || {};
@@ -685,7 +731,9 @@ export async function tryAutoAssign(orderId, options = {}) {
       {
         $set: {
           'dispatch.status': 'offered',
-          'dispatch.deliveryPartnerId': null
+          'dispatch.deliveryPartnerId': null,
+          'dispatch.needsAdminAssign': false,
+          'dispatch.assignedByAdmin': false
         },
         $push: {
           'dispatch.offeredTo': { $each: offeredToEntries }

@@ -70,7 +70,7 @@ import {
   claimExceedsStackingLimit,
   getRiderCapacity,
 } from './rider-capacity.service.js';
-import { assertGigAllowsService, recordGigEarning } from '../../../common/gigs/gig.service.js';
+import { assertGigAllowsService, recordGigEarning, riderGigWindows, eligiblePartnerIds } from '../../../common/gigs/gig.service.js';
 
 /**
  * Server-side anti-spoof geofence for "reached pickup" / "reached drop".
@@ -630,13 +630,26 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
   // The rider must always still see the orders they are carrying, which is why the fallback is
   // activeOwnOrderFilter rather than an empty result.
   const canTakeNewWork = partnerCapacity.hasCapacity && orderCapacity.canAcceptMore;
+
+  // Gigs: scheduled orders are listed only to riders who booked a gig covering their time; everyone
+  // else never sees them. A rider with a gig today is also shown nothing new outside the booked hours.
+  const gigWindows = canTakeNewWork ? await riderGigWindows(deliveryPartnerId, 'food').catch(() => []) : [];
+  const gigOpenNow = canTakeNewWork
+    ? await eligiblePartnerIds([deliveryPartnerId], 'food').then((ids) => ids.has(String(deliveryPartnerId))).catch(() => true)
+    : true;
+  const unassignedOr = [
+    ...(gigOpenNow ? [{ scheduledAt: null }, { scheduledAt: { $exists: false } }] : []),
+    ...gigWindows.map((w) => ({ scheduledAt: { $gte: w.startAt, $lt: w.endAt } })),
+  ];
+  const unassignedVisible = {
+    'dispatch.status': 'unassigned',
+    orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup'] },
+    $or: unassignedOr.length ? unassignedOr : [{ _id: null }],
+  };
   const filter = canTakeNewWork
     ? {
       $or: [
-        {
-          'dispatch.status': 'unassigned',
-          orderStatus: { $in: ['confirmed', 'preparing', 'ready_for_pickup'] },
-        },
+        unassignedVisible,
         shareableFilter,
         activeOwnOrderFilter,
       ],
@@ -785,15 +798,18 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
 
   const partnerId = new mongoose.Types.ObjectId(deliveryPartnerId);
 
-  // A rider with a gig booked today only takes jobs inside the booked hours.
-  await assertGigAllowsService(deliveryPartnerId, 'food');
-
   const existingOrder = await FoodOrder.findOne(identity)
-    .select('pricing payment dispatch orderStatus riderEarning platformProfit settlementBreakdown')
+    .select('pricing payment dispatch orderStatus riderEarning platformProfit settlementBreakdown scheduledAt')
     .lean();
 
   if (!existingOrder) {
     throw new NotFoundError('Order not found');
+  }
+
+  // A rider with a gig booked today only takes jobs inside the booked hours. A scheduled order is
+  // judged at its own time (only riders who booked that slot). A rider the admin picked is exempt.
+  if (!existingOrder.dispatch?.assignedByAdmin) {
+    await assertGigAllowsService(deliveryPartnerId, 'food', { at: existingOrder.scheduledAt || null });
   }
 
   const paymentMethod = String(existingOrder?.payment?.method || 'cash').toLowerCase();
@@ -2254,7 +2270,7 @@ export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
   await order.save();
 
   // Gig extra for this order when the rider has a gig booked for this hour (never throws).
-  void recordGigEarning({ partnerId: deliveryPartnerId, service: 'food', orderRef: String(order.orderId || order._id) });
+  void recordGigEarning({ partnerId: deliveryPartnerId, service: 'food', orderRef: String(order.orderId || order._id), at: order.scheduledAt || new Date() });
 
   // 5. Update Financial Ledger (FoodTransaction)
   // This triggers the sync back to FoodOrder.payment.method which updates the Rider's Cash Limit (if cash) or Pocket (always).

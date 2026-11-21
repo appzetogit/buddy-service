@@ -23,7 +23,7 @@ import { getIO, rooms } from '../../../config/socket.js';
 import { getQuickDeliverySettings } from './quickDeliverySettings.service.js';
 import { getNextPickup } from '../../food/orders/services/order-lifecycle.policy.js';
 import { logger } from '../../../utils/logger.js';
-import { eligiblePartnerIds, GIG_BLOCKED_MESSAGE } from '../../common/gigs/gig.service.js';
+import { eligiblePartnerIds, gigPartnerIdsForTime, GIG_BLOCKED_MESSAGE, GIG_SCHEDULED_MESSAGE } from '../../common/gigs/gig.service.js';
 
 /** Default offer window; the live value comes from the admin delivery settings. */
 export const QUICK_OFFER_TIMEOUT_MS = 60 * 1000;
@@ -171,6 +171,30 @@ const emitToRiders = (partnerIds, event, payloadFor) => {
  * Hunt for a rider for one QC order. Safe to call repeatedly: a short-lived lock plus the
  * `offeredTo` history stop two runs from double-offering the same order.
  */
+/** Parks a scheduled order for the admin (see Food's parkScheduledOrderForAdmin). Notifies admins once. */
+export async function parkScheduledQuickOrderForAdmin(order, reason = 'no_gig_rider') {
+  const alreadyParked = Boolean(order?.dispatch?.needsAdminAssign);
+  await QuickOrder.updateOne(
+    { _id: order._id },
+    {
+      $set: {
+        'dispatch.status': 'unassigned',
+        'dispatch.deliveryPartnerId': null,
+        'dispatch.needsAdminAssign': true,
+        'dispatch.needsAdminAssignReason': reason,
+        ...(alreadyParked ? {} : { 'dispatch.needsAdminAssignAt': new Date() }),
+      },
+    },
+  );
+  if (alreadyParked) return;
+  logger.warn(`[QuickDispatch] Scheduled order ${order._id} has no gig rider for its slot; waiting for admin assignment.`);
+  void notifyOwnersSafely([{ ownerType: 'ADMIN', ownerId: 'GLOBAL' }], {
+    title: 'Scheduled order needs a driver',
+    body: `Marketplace order #${order.orderId || order._id} is scheduled and no rider booked a gig for that time. Please assign a driver.`,
+    data: { type: 'scheduled_needs_driver', orderId: String(order._id), service: 'quickCommerce' },
+  }).catch(() => {});
+}
+
 export async function dispatchQuickOrder(orderId, options = {}) {
   const requestedAttempt = Number(options.attempt || 1);
   const settings = await getQuickDeliverySettings();
@@ -185,6 +209,8 @@ export async function dispatchQuickOrder(orderId, options = {}) {
       _id: new mongoose.Types.ObjectId(String(orderId)),
       orderStatus: { $in: DISPATCHABLE_STATUSES },
       'dispatch.acceptedAt': { $exists: false },
+      // Parked for the admin (scheduled, no gig rider): not hunted until someone assigns it.
+      'dispatch.needsAdminAssign': { $ne: true },
       $and: [
         {
           $or: [
@@ -215,6 +241,15 @@ export async function dispatchQuickOrder(orderId, options = {}) {
   const attempt = Math.max(requestedAttempt, Number(order.dispatch?.dispatchAttempt || 0) + 1);
 
   try {
+    // Scheduled order: only riders who booked the gig covering its time get it. Nobody booked ->
+    // it waits in the admin panel for a manual assignment (never hunted wide, never auto-cancelled).
+    if (order.scheduledAt) {
+      const gigRiders = await gigPartnerIdsForTime('quickCommerce', order.scheduledAt);
+      if (gigRiders.size === 0) {
+        await parkScheduledQuickOrderForAdmin(order, 'no_gig_rider');
+        return order;
+      }
+    }
     await QuickOrder.updateOne({ _id: order._id }, { $set: { 'dispatch.dispatchAttempt': attempt } });
     const pickup = resolveQuickPickup(order);
     if (!Number.isFinite(pickup.latitude) || !Number.isFinite(pickup.longitude)) {
@@ -258,6 +293,7 @@ export async function dispatchQuickOrder(orderId, options = {}) {
       // Riders already holding their maximum stacked orders are filtered out by the shared
       // rider selection; this order itself must not count against them while we hunt.
       excludeOrderId: order._id,
+      ...(order.scheduledAt ? { gigAt: order.scheduledAt } : {}),
     });
 
     const alreadyOffered = new Set((order.dispatch?.offeredTo || []).map((o) => String(o.partnerId)));
@@ -310,6 +346,8 @@ export async function dispatchQuickOrder(orderId, options = {}) {
         $set: {
           'dispatch.status': 'offered',
           'dispatch.deliveryPartnerId': null,
+          'dispatch.needsAdminAssign': false,
+          'dispatch.assignedByAdmin': false,
           'dispatch.assignedAt': new Date(),
           'dispatch.offerTimeoutSec': settings.offerTimeoutSec,
         },
@@ -387,8 +425,12 @@ export async function acceptQuickOrder(orderId, partnerId) {
   }
 
   // A rider with a gig booked today only takes jobs inside the booked hours (fails open on error).
-  const gigOk = await eligiblePartnerIds([partnerId], 'quickCommerce').then((s) => s.has(String(partnerId))).catch(() => true);
-  if (!gigOk) return { ok: false, reason: 'GIG_BLOCKED', message: GIG_BLOCKED_MESSAGE };
+  const gigOrder = await QuickOrder.findById(orderId).select('scheduledAt dispatch.assignedByAdmin').lean().catch(() => null);
+  if (!gigOrder?.dispatch?.assignedByAdmin) {
+    const gigAt = gigOrder?.scheduledAt || null;
+    const gigOk = await eligiblePartnerIds([partnerId], 'quickCommerce', new Date(), gigAt).then((s) => s.has(String(partnerId))).catch(() => true);
+    if (!gigOk) return { ok: false, reason: 'GIG_BLOCKED', message: gigAt ? GIG_SCHEDULED_MESSAGE : GIG_BLOCKED_MESSAGE };
+  }
 
   // Order stacking is shared with Food: a rider already holding their maximum (counting both
   // verticals) cannot take this job, however they got hold of the offer card.
@@ -586,6 +628,7 @@ export async function recoverStuckQuickOrders() {
   const stuck = await QuickOrder.find({
     orderStatus: { $in: DISPATCHABLE_STATUSES },
     'dispatch.acceptedAt': { $exists: false },
+    'dispatch.needsAdminAssign': { $ne: true },
     $or: [
       { 'dispatch.status': { $in: ['unassigned', 'rejected'] } },
       { 'dispatch.status': { $in: ['offered', 'assigned'] }, 'dispatch.assignedAt': { $lt: staleOfferBefore } },

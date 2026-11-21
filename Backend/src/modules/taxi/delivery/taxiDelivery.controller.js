@@ -9,7 +9,7 @@
  */
 import mongoose from 'mongoose';
 import { getRiderActiveLoadMap } from '../../food/orders/services/rider-capacity.service.js';
-import { eligiblePartnerIds, GIG_BLOCKED_MESSAGE, recordGigEarning } from '../../common/gigs/gig.service.js';
+import { eligiblePartnerIds, gigPartnerIdsForTime, GIG_BLOCKED_MESSAGE, GIG_SCHEDULED_MESSAGE, recordGigEarning } from '../../common/gigs/gig.service.js';
 import { ApiError } from '../../../utils/ApiError.js';
 import { sendResponse, sendError } from '../../../utils/response.js';
 import { logger } from '../../../utils/logger.js';
@@ -209,6 +209,11 @@ export const listScheduledRides = async (req, res) => {
     const visible = [];
     for (const ride of rides) {
       const isMine = ride.driverId && String(ride.driverId) === String(partnerId);
+      // Gigs: an open scheduled ride is shown only to riders who booked the slot covering its pickup time.
+      if (!isMine) {
+        const gigRiders = await gigPartnerIdsForTime('taxi', ride.scheduledAt).catch(() => null);
+        if (gigRiders && !gigRiders.has(String(partnerId))) continue;
+      }
       if (isMine || (await driverVehicleMatchesRide(ride, partner))) visible.push(ride);
     }
 
@@ -273,8 +278,11 @@ export const acceptRideController = async (req, res) => {
     if (!partnerId) return sendError(res, 403, 'Delivery partner profile not found');
 
     // Gig riders only work inside their booked hours (fails open on error).
-    const gigOk = await eligiblePartnerIds([partnerId], 'taxi').then((ids) => ids.has(String(partnerId))).catch(() => true);
-    if (!gigOk) return sendError(res, 409, GIG_BLOCKED_MESSAGE);
+    // A scheduled ride is judged at its pickup time (only riders who booked that gig slot).
+    const gigRide = await Ride.findById(req.params.rideId).select('scheduledAt').lean().catch(() => null);
+    const gigAt = gigRide?.scheduledAt || null;
+    const gigOk = await eligiblePartnerIds([partnerId], 'taxi', new Date(), gigAt).then((ids) => ids.has(String(partnerId))).catch(() => true);
+    if (!gigOk) return sendError(res, 409, gigAt ? GIG_SCHEDULED_MESSAGE : GIG_BLOCKED_MESSAGE);
 
     // A rider already carrying Food / Quick Commerce orders is not free for a passenger.
     const load = await getRiderActiveLoadMap([partnerId]).catch(() => new Map());
@@ -356,7 +364,7 @@ const transition = (nextStatus, message, { requireOtp = false } = {}) => async (
     }
     await broadcastRideProgress(current._id);
     if (nextStatus === RIDE_LIVE_STATUS.COMPLETED) {
-      void recordGigEarning({ partnerId, service: 'taxi', orderRef: String(current._id) }); // gig extra, if booked
+      void recordGigEarning({ partnerId, service: 'taxi', orderRef: String(current._id), at: current.scheduledAt || new Date() }); // gig extra, if booked
     }
 
     const ride = await loadOwnedRide(current._id, partnerId);

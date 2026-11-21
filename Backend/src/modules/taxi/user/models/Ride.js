@@ -228,6 +228,13 @@ const rideSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    // A scheduled ride no gig driver could take: waits for the admin to pick a driver (never auto-cancelled early).
+    adminAssign: {
+      required: { type: Boolean, default: false },
+      reason: { type: String, default: '' },
+      at: { type: Date, default: null },
+    },
+    assignedByAdmin: { type: Boolean, default: false },
     // Reminders for a ride booked ahead: "head out now" (30 minutes before pickup) and "pickup time".
     // Each is sent once. See services/scheduledRideReminderService.js.
     scheduleReminders: {

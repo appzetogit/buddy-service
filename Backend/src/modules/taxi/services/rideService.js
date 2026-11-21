@@ -1813,6 +1813,52 @@ export const acceptRideAssignment = async ({ rideId, driverId }) => {
   return acceptedRide;
 };
 
+/// Admin picks the driver for a ride (scheduled rides nobody booked a gig for). Unlike a driver accepting,
+/// the driver may be offline right now and is not required to be free at this moment: a scheduled trip
+/// does not occupy them until it is due. Conflicts with their other scheduled trips still apply.
+export const adminAssignRideToDriver = async ({ rideId, driverId }) => {
+  const ride = await Ride.findOne({ _id: rideId, status: RIDE_STATUS.SEARCHING, driverId: null });
+  if (!ride) {
+    throw new ApiError(409, 'This ride is no longer waiting for a driver');
+  }
+  const driver = await Driver.findOne({ _id: driverId, deliveryServices: 'taxi' });
+  if (!driver || driver.status === 'rejected' || driver.status === 'blocked') {
+    throw new ApiError(409, 'This driver is not available for taxi rides');
+  }
+  const conflicting = await findDriverConflictingScheduledRide({ driverId: driver._id, ride, excludeRideId: ride._id });
+  if (conflicting) {
+    throw new ApiError(409, 'Driver already has another scheduled trip in a similar time range');
+  }
+  const occupyDriver = !isRideScheduledForFuture(ride);
+  if (occupyDriver) {
+    const claimed = await Driver.findOneAndUpdate({ _id: driver._id, isOnRide: { $ne: true } }, { $set: { isOnRide: true } }, { new: true });
+    if (!claimed) {
+      throw new ApiError(409, 'Driver is on another trip right now');
+    }
+  }
+  const accepted = await Ride.findOneAndUpdate(
+    { _id: rideId, status: RIDE_STATUS.SEARCHING, driverId: null },
+    {
+      $set: {
+        driverId: driver._id,
+        status: RIDE_STATUS.ACCEPTED,
+        liveStatus: RIDE_LIVE_STATUS.ACCEPTED,
+        acceptedAt: new Date(),
+        assignedByAdmin: true,
+        'adminAssign.required': false,
+        ...driverLocationSeed(driver),
+      },
+    },
+    { new: true },
+  );
+  if (!accepted) {
+    if (occupyDriver) await Driver.updateOne({ _id: driver._id, isOnRide: true }, { $set: { isOnRide: false } }).catch(() => null);
+    throw new ApiError(409, 'Ride is no longer available for assignment');
+  }
+  await syncDeliveryWithRide(accepted);
+  return accepted;
+};
+
 const rideStatusConfig = {
   [RIDE_LIVE_STATUS.ACCEPTED]: {
     persistedStatus: RIDE_STATUS.ACCEPTED,

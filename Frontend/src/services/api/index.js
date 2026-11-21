@@ -903,6 +903,9 @@ export const adminAPI = {
   deleteGigSlot: (id) => apiClient.delete(`/gigs/admin/slots/${String(id)}`, { contextModule: "admin" }),
   getGigBookings: (params = {}) => apiClient.get("/gigs/admin/bookings", { params, contextModule: "admin" }),
   getGigEarnings: (params = {}) => apiClient.get("/gigs/admin/earnings", { params, contextModule: "admin" }),
+  getGigScheduled: (params = {}) => apiClient.get("/gigs/admin/scheduled", { params, contextModule: "admin" }),
+  getGigAssignableDrivers: (params = {}) => apiClient.get("/gigs/admin/scheduled/assignable-drivers", { params, contextModule: "admin" }),
+  assignGigScheduled: (body) => apiClient.post("/gigs/admin/scheduled/assign", body ?? {}, { contextModule: "admin" }),
 
   /** Earning Addon Offers (admin) */
   getEarningAddons: (params = {}) =>

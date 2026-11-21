@@ -6,6 +6,7 @@ import { sendResponse } from '../../../utils/response.js';
 import { ValidationError } from '../../../core/auth/errors.js';
 import { resolvePartnerFromAccountId } from '../../taxi/shared/partner.js';
 import * as gigs from './gig.service.js';
+import * as scheduled from './gig.scheduled.service.js';
 
 const wrap = (fn, status = 200, message = 'OK') => async (req, res, next) => {
   try {
@@ -24,6 +25,10 @@ gigAdminRouter.put('/slots/:id', wrap(async (req) => ({ slot: await gigs.updateS
 gigAdminRouter.delete('/slots/:id', wrap(async (req) => gigs.deleteSlot(req.params.id), 200, 'Gig slot removed'));
 gigAdminRouter.get('/bookings', wrap(async (req) => gigs.listBookings(req.query)));
 gigAdminRouter.get('/earnings', wrap(async (req) => gigs.earningsSummary(req.query)));
+// Scheduled orders / rides: what waits for a manual driver, who can be assigned, and the assignment.
+gigAdminRouter.get('/scheduled', wrap(async (req) => scheduled.listScheduledPending(req.query)));
+gigAdminRouter.get('/scheduled/assignable-drivers', wrap(async (req) => scheduled.listAssignableDrivers(req.query)));
+gigAdminRouter.post('/scheduled/assign', wrap(async (req) => scheduled.adminAssignScheduled(req.body || {}, req.user?.userId), 200, 'Driver assigned'));
 
 /** Mounted at /v1/gigs/rider - the same rider account is used for Food, Marketplace and Taxi. */
 export const gigRiderRouter = express.Router();

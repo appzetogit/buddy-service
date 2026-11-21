@@ -245,6 +245,14 @@ const dispatchSchema = new mongoose.Schema(
         dispatchAttempt: { type: Number, default: 0, min: 0 },
         /** Set once the admin "no rider for a long time" alert has fired. */
         crisisAlertedAt: { type: Date, default: null },
+        /** Scheduled order nobody booked a gig for (or no gig rider could take): waits for the admin to pick a rider. */
+        needsAdminAssign: { type: Boolean, default: false },
+        needsAdminAssignReason: { type: String, default: '' },
+        needsAdminAssignAt: { type: Date, default: null },
+        /** Rider the admin picked before the order activated; assigned the moment it goes live. */
+        preassignedPartnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner', default: null },
+        /** The current rider was chosen by the admin (not hunted): gig rules do not block them. */
+        assignedByAdmin: { type: Boolean, default: false },
         /** Throttle for the "store has not accepted yet" reminder. */
         sellerAckResendAt: { type: Date, default: null },
         sellerAckAlertedAt: { type: Date, default: null },

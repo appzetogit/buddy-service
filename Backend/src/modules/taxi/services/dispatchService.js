@@ -266,6 +266,8 @@ const matchDispatchDrivers = async ({
     vehicleTypeId: ride.vehicleTypeId,
     vehicleTypeIds: dispatchVehicleTypeIds,
     serviceType: ride.serviceType,
+    // Scheduled ride: only gig riders who booked the slot covering its pickup time.
+    scheduledAt: ride.scheduledAt || null,
   };
 
   let result = await matchDrivers(ride.pickupLocation.coordinates, {
@@ -1093,7 +1095,8 @@ export const autoCancelExpiredOutstationRide = async (rideOrId) => {
 export const sweepExpiredOutstationRides = async () => {
   try {
     const cutoff = new Date(Date.now() - OUTSTATION_AUTO_EXPIRE_MS);
-    const leadPickupCutoff = new Date(Date.now() + 30 * 60 * 1000);
+    // A scheduled ride waits for a driver (gig or admin-assigned) until 15 minutes after its pickup time.
+    const leadPickupCutoff = new Date(Date.now() - 15 * 60 * 1000);
 
     const expiredRides = await Ride.find({
       status: RIDE_STATUS.SEARCHING,
@@ -1117,13 +1120,54 @@ export const sweepExpiredOutstationRides = async () => {
     for (const ride of expiredRides) {
       await autoCancelExpiredOutstationRide(ride);
     }
+
+    // Any other scheduled ride still waiting for an admin-assigned driver 15 minutes after its pickup time.
+    const staleParked = await Ride.find({
+      status: RIDE_STATUS.SEARCHING,
+      driverId: null,
+      'adminAssign.required': true,
+      scheduledAt: { $lte: leadPickupCutoff, $ne: null },
+    }).select('_id').lean();
+    for (const ride of staleParked) {
+      await closeRideAsUnmatched(ride._id, { force: true });
+    }
   } catch (error) {
     console.error('Failed to sweep expired outstation rides', error);
   }
 };
 
-const closeRideAsUnmatched = async (rideId) => {
+/// A scheduled ride no gig driver took is parked for the admin instead of being cancelled: it stays
+/// SEARCHING and the admin assigns a driver (see assignRideByAdmin). It is only cancelled if still
+/// unassigned 15 minutes after its pickup time (sweepExpiredOutstationRides).
+const parkScheduledRideForAdmin = async (ride, reason) => {
+  const fresh = await Ride.findOneAndUpdate(
+    { _id: ride._id, status: RIDE_STATUS.SEARCHING, driverId: null, 'adminAssign.required': { $ne: true } },
+    { $set: { 'adminAssign.required': true, 'adminAssign.reason': reason, 'adminAssign.at': new Date() } },
+    { new: true },
+  );
+  if (!fresh) return;
+  try {
+    const { notifyOwnersSafely } = await import('../../food/orders/services/order.helpers.js');
+    await notifyOwnersSafely([{ ownerType: 'ADMIN', ownerId: 'GLOBAL' }], {
+      title: 'Scheduled ride needs a driver',
+      body: `A scheduled ride for ${new Date(fresh.scheduledAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} has no driver. Please assign one.`,
+      data: { type: 'scheduled_needs_driver', rideId: String(fresh._id), service: 'taxi' },
+    });
+  } catch (error) {
+    console.error('Failed to notify admin of a ride needing a driver', error);
+  }
+};
+
+const closeRideAsUnmatched = async (rideId, { force = false } = {}) => {
   const dispatchState = getDispatchState(rideId);
+  if (!force) {
+    const pending = await Ride.findOne({ _id: rideId, status: RIDE_STATUS.SEARCHING, driverId: null }).select('scheduledAt').lean();
+    if (pending?.scheduledAt) {
+      stopDispatchFlow(rideId);
+      await parkScheduledRideForAdmin(pending, 'no_gig_driver');
+      return;
+    }
+  }
   const ride = await Ride.findOneAndUpdate(
     { _id: rideId, status: RIDE_STATUS.SEARCHING },
     {
@@ -1994,6 +2038,7 @@ export const announceScheduledRide = async (ride) => {
     serviceType: ride.serviceType || '',
     maxDistance: SCHEDULED_ANNOUNCE_RADIUS_METERS,
     allowCrossZoneFallback: false,
+    scheduledAt: ride.scheduledAt || null,
   });
   const driverIds = drivers.map((driver) => String(driver._id || driver.id || '')).filter(Boolean);
   if (driverIds.length === 0) {

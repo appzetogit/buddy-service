@@ -173,6 +173,7 @@ export const adminSidebarMenu = [
     items: [
       { type: "link", label: "Gig Slots", path: "/admin/food/gigs/slots", icon: "Zap" },
       { type: "link", label: "Gig Bookings & Payouts", path: "/admin/food/gigs/bookings", icon: "Clock" },
+      { type: "link", label: "Scheduled — Assign Driver", path: "/admin/food/gigs/scheduled", icon: "Clock" },
     ],
   },
   {

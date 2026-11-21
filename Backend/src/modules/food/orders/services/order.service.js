@@ -1191,6 +1191,13 @@ export async function cancelOrderNoDriverFound(orderId) {
   });
   if (!order) return null;
 
+  // A scheduled order is never auto-cancelled for lack of a rider: it waits for the admin to assign one.
+  if (order.scheduledAt) {
+    const { parkScheduledOrderForAdmin } = await import('./order-dispatch.service.js');
+    await parkScheduledOrderForAdmin(order, 'no_rider_available');
+    return null;
+  }
+
   const from = order.orderStatus;
   const cancelNote = 'No delivery partner found. Order cancelled and refund initiated where applicable.';
   order.orderStatus = 'cancelled_by_admin';
@@ -3638,6 +3645,9 @@ export async function assignDeliveryPartnerAdmin(
   order.dispatch.deliveryPartnerId = new mongoose.Types.ObjectId(
     deliveryPartnerId,
   );
+  order.dispatch.needsAdminAssign = false;
+  order.dispatch.assignedByAdmin = true;
+  order.dispatch.preassignedPartnerId = null;
   order.dispatch.assignedAt = assignedAt;
   // New driver has not accepted yet
   order.dispatch.acceptedAt = undefined;
@@ -4770,6 +4780,16 @@ export async function processScheduledOrderAlerts() {
           logger.error(`[ScheduledOrders] Pickup notify failed for ${order._id}: ${err.message}`);
         }
         continue;
+      }
+
+      // The admin already picked a rider for this scheduled order: hand it over now instead of hunting.
+      if (order.dispatch?.preassignedPartnerId) {
+        try {
+          await assignDeliveryPartnerAdmin(order._id.toString(), String(order.dispatch.preassignedPartnerId), null);
+          continue;
+        } catch (assignErr) {
+          logger.warn(`[ScheduledOrders] Pre-assigned rider could not be set for ${order._id}: ${assignErr.message}`);
+        }
       }
 
       // Trigger automatic rider assignment

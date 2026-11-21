@@ -349,8 +349,13 @@ export const riderBookings = async (partnerId, { upcomingOnly = false } = {}) =>
  * services of that slot. A rider with no booking today is not restricted at all.
  * Returns the Set of partner ids (as strings) that may take a `service` job right now.
  */
-export const eligiblePartnerIds = async (partnerIds = [], service = 'food', now = new Date()) => {
+export const eligiblePartnerIds = async (partnerIds = [], service = 'food', now = new Date(), at = null) => {
   const ids = partnerIds.map((p) => String(p)).filter((p) => mongoose.Types.ObjectId.isValid(p));
+  // A scheduled job is for riders who booked the gig that covers its scheduled time - only them.
+  if (at) {
+    const booked = await gigPartnerIdsForTime(service, at);
+    return new Set(ids.filter((id) => booked.has(id)));
+  }
   const rows = ids.length
     ? await GigBooking.find({ partnerId: { $in: ids.map(toId) }, date: istDate(now), status: 'booked' })
         .select('partnerId services startAt endAt')
@@ -365,11 +370,30 @@ export const eligiblePartnerIds = async (partnerIds = [], service = 'food', now 
   return new Set(ids.filter((id) => !restricted.has(id) || restricted.get(id)));
 };
 
+/** Riders (ids, as strings) who booked a gig that covers `at` for `service`. */
+export const gigPartnerIdsForTime = async (service, at) => {
+  const when = new Date(at);
+  if (Number.isNaN(when.getTime())) return new Set();
+  const rows = await GigBooking.find({ status: 'booked', services: service, startAt: { $lte: when }, endAt: { $gt: when } })
+    .select('partnerId')
+    .lean();
+  return new Set(rows.map((r) => String(r.partnerId)));
+};
+
+/** The windows (from now on) a rider booked for a service - used to list only the scheduled jobs they may take. */
+export const riderGigWindows = async (partnerId, service) => {
+  if (!mongoose.Types.ObjectId.isValid(String(partnerId))) return [];
+  const rows = await GigBooking.find({ partnerId: toId(partnerId), status: 'booked', services: service, endAt: { $gte: new Date() } })
+    .select('startAt endAt')
+    .lean();
+  return rows.map((r) => ({ startAt: r.startAt, endAt: r.endAt }));
+};
+
 /** Dispatch-path filter (same shape-preserving contract as the order-capacity filter). Fails open. */
-export const filterPartnersByGig = async (partners = [], service = 'food') => {
+export const filterPartnersByGig = async (partners = [], service = 'food', { at = null } = {}) => {
   if (!Array.isArray(partners) || partners.length === 0) return partners;
   try {
-    const allowed = await eligiblePartnerIds(partners.map((p) => p?.partnerId || p?._id), service);
+    const allowed = await eligiblePartnerIds(partners.map((p) => p?.partnerId || p?._id), service, new Date(), at);
     return partners.filter((p) => allowed.has(String(p?.partnerId || p?._id)));
   } catch (err) {
     logger.warn(`[Gigs] gig filter failed, passing candidates through: ${err?.message || err}`);
@@ -377,17 +401,18 @@ export const filterPartnersByGig = async (partners = [], service = 'food') => {
   }
 };
 
+export const GIG_SCHEDULED_MESSAGE = 'This scheduled order is only for riders who booked the gig slot that covers its time.';
 export const GIG_BLOCKED_MESSAGE = 'You have a gig booked today. You can take orders only during your booked time slots.';
 
 /** Accept-path guard; throws when a gig rider tries to take a job outside the booked window. Fails open. */
-export const assertGigAllowsService = async (partnerId, service = 'food') => {
+export const assertGigAllowsService = async (partnerId, service = 'food', { at = null } = {}) => {
   let allowed = true;
   try {
-    allowed = (await eligiblePartnerIds([partnerId], service)).has(String(partnerId));
+    allowed = (await eligiblePartnerIds([partnerId], service, new Date(), at)).has(String(partnerId));
   } catch (err) {
     logger.warn(`[Gigs] gig guard failed, allowing: ${err?.message || err}`);
   }
-  if (!allowed) throw new ValidationError(GIG_BLOCKED_MESSAGE);
+  if (!allowed) throw new ValidationError(at ? GIG_SCHEDULED_MESSAGE : GIG_BLOCKED_MESSAGE);
 };
 
 // ---------- earnings ---------------------------------------------------------------------------

@@ -299,6 +299,13 @@ export async function cancelQuickOrderNoDriverFound(orderId) {
   if (!['placed', 'created', 'scheduled'].includes(order.orderStatus)) return null;
   if (order.dispatch?.acceptedAt) return null;
 
+  // A scheduled order is never auto-cancelled for lack of a rider: it waits for the admin to assign one.
+  if (order.scheduledAt) {
+    const { parkScheduledQuickOrderForAdmin } = await import('./quickDispatch.service.js');
+    await parkScheduledQuickOrderForAdmin(order, 'no_rider_available');
+    return null;
+  }
+
   try {
     const result = await finalizeQuickCancellation(order, {
       toStatus: 'cancelled_by_admin',
@@ -432,6 +439,9 @@ export async function adminAssignQuickRider(orderId, partnerId, adminId) {
       $set: {
         'dispatch.status': 'assigned',
         'dispatch.deliveryPartnerId': new mongoose.Types.ObjectId(String(partnerId)),
+        'dispatch.needsAdminAssign': false,
+        'dispatch.assignedByAdmin': true,
+        'dispatch.preassignedPartnerId': null,
         'dispatch.assignedAt': now,
         'dispatch.sharedPartnerId': null,
         'dispatch.isShared': false,
@@ -882,6 +892,15 @@ export async function activateDueScheduledQuickOrders() {
         ).catch(() => {});
       }
       await emitQuickCommerceStatusUpdate(order, { message: 'Your scheduled order is now active.' }).catch(() => {});
+      if (order.dispatch?.preassignedPartnerId) {
+        // The admin already picked a rider for this scheduled order: hand it over now instead of hunting.
+        try {
+          await adminAssignQuickRider(order._id, String(order.dispatch.preassignedPartnerId), null);
+          continue;
+        } catch (assignErr) {
+          logger.warn(`[QuickFlows] pre-assigned rider could not be set for ${order._id}: ${assignErr.message}`);
+        }
+      }
       void dispatchQuickOrder(order._id).catch((err) =>
         logger.warn(`[QuickFlows] dispatch after activation failed for ${order._id}: ${err.message}`),
       );

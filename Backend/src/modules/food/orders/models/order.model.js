@@ -207,7 +207,15 @@ const dispatchSchema = new mongoose.Schema(
         shareOpenedAt: { type: Date, default: null },
         /** When the driver-first restaurant-acknowledgement nudge was last resent (escalation throttle). */
         restaurantAckResendAt: { type: Date, default: null },
-        dispatchingAt: { type: Date }
+        dispatchingAt: { type: Date },
+        /** Scheduled order nobody booked a gig for (or no gig rider could take): waits for the admin to pick a rider. */
+        needsAdminAssign: { type: Boolean, default: false },
+        needsAdminAssignReason: { type: String, default: '' },
+        needsAdminAssignAt: { type: Date, default: null },
+        /** Rider the admin picked before the order activated; assigned the moment it goes live. */
+        preassignedPartnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'FoodDeliveryPartner', default: null },
+        /** The current rider was chosen by the admin (not hunted): gig rules do not block them. */
+        assignedByAdmin: { type: Boolean, default: false }
     },
     { _id: false }
 );

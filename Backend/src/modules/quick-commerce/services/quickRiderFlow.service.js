@@ -342,7 +342,7 @@ export async function completeDelivery(orderId, partnerId, { otp = '' } = {}) {
     if (!areAllLegsDelivered(order)) {
       pushHistory(order, partnerId, order.orderStatus, order.orderStatus, `Leg ${leg.legIndex} delivered. Waiting for the other partner to finish.`);
       await order.save();
-      void recordGigEarning({ partnerId, service: 'quickCommerce', orderRef: `${order.orderId || order._id}:${partnerId}` });
+      void recordGigEarning({ partnerId, service: 'quickCommerce', orderRef: `${order.orderId || order._id}:${partnerId}`, at: order.scheduledAt || new Date() });
       await emitQuickOrderUpdate(order, 'order_update');
       return { order, finished: false, waitingForPartner: true };
     }
@@ -431,7 +431,7 @@ export async function completeDelivery(orderId, partnerId, { otp = '' } = {}) {
   }
   await order.save();
   // Gig extra for this order when the rider has a gig booked for this hour (never throws).
-  void recordGigEarning({ partnerId, service: 'quickCommerce', orderRef: `${order.orderId || order._id}:${partnerId}` });
+  void recordGigEarning({ partnerId, service: 'quickCommerce', orderRef: `${order.orderId || order._id}:${partnerId}`, at: order.scheduledAt || new Date() });
 
   await syncSellerOrderFromDelivery(order._id, 'delivered').catch((err) =>
     logger.warn(`[QuickRider] seller sync (delivered) failed: ${err.message}`),
