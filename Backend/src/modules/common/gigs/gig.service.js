@@ -448,7 +448,8 @@ export const recordGigEarning = async ({ partnerId, service, orderRef, at = new 
 export const gigPayoutTotal = async (service, range = null) => {
   try {
     const match = { service };
-    if (range?.start && range?.end) match.createdAt = { $gte: range.start, $lte: range.end };
+    if (range?.start) match.createdAt = { ...match.createdAt, $gte: new Date(range.start) };
+    if (range?.end) match.createdAt = { ...match.createdAt, $lte: new Date(range.end) };
     const rows = await GigEarning.aggregate([{ $match: match }, { $group: { _id: null, amount: { $sum: '$amount' } } }]);
     return Number(rows[0]?.amount || 0);
   } catch (err) {

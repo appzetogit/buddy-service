@@ -80,14 +80,18 @@ export default function GigSlots() {
       return { ...f, timeSlots: [...f.timeSlots, { start, end, extraPerOrder: last?.extraPerOrder ?? "", maxDrivers: last?.maxDrivers ?? 10 }] }
     })
 
-  // One row per hour between "from" and "to" - the usual way a slot like "Lunch" is made.
+  // One row per full hour between "from" and "to" (minutes kept: 10:30 to 12:30 -> 10:30-11:30, 11:30-12:30).
   const generateHourly = () => {
-    const [fh] = gen.from.split(":").map(Number)
-    const [th] = gen.to.split(":").map(Number)
-    if (!(th > fh)) return toast.error("'To' must be later than 'From'")
+    const toMin = (v) => {
+      const [h, m] = String(v).split(":").map(Number)
+      return h * 60 + (m || 0)
+    }
+    const from = toMin(gen.from)
+    const to = toMin(gen.to)
+    if (!(to - from >= 60)) return toast.error("'To' must be at least one hour after 'From'")
     const rows = []
-    for (let h = fh; h < th; h += 1) {
-      rows.push({ start: `${String(h).padStart(2, "0")}:00`, end: `${String(h + 1).padStart(2, "0")}:00`, extraPerOrder: "", maxDrivers: 10 })
+    for (let m = from; m + 60 <= to; m += 60) {
+      rows.push({ start: toHHMM(m), end: toHHMM(m + 60), extraPerOrder: "", maxDrivers: 10 })
     }
     setForm((f) => ({ ...f, timeSlots: rows }))
   }

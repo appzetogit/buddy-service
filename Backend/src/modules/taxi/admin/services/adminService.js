@@ -58,6 +58,7 @@ import { DEFAULT_PROFILE, getSurgeProfiles, listActiveSurges, resetVehicleSurgeS
 import { getBidRideSettings } from '../../services/transportSettingsService.js';
 import { resolveCatalogDispatchType } from '../../services/biddingPolicyService.js';
 import { PriceHike } from '../models/PriceHike.js';
+import { gigPayoutTotal } from '../../../common/gigs/gig.service.js';
 import {
   ADMIN_PERMISSIONS,
   SUPERADMIN_PERMISSION,
@@ -6556,7 +6557,9 @@ export const getAdminEarnings = async (query = {}) => {
   // The cards that were estimates in the browser (5% / 1.5% / 8% of other
   // figures) now come from the records themselves.
   const extras = await getAdminEarningExtras({ startDate, endDate });
-  const netPlatformRevenue = roundedTotals.adminCommission - extras.refunds;
+  // Gig extras paid to riders on Taxi rides come out of the platform revenue.
+  const gigPayouts = await gigPayoutTotal('taxi', { start: startDate, end: endDate });
+  const netPlatformRevenue = roundedTotals.adminCommission - extras.refunds - gigPayouts;
 
   return {
     summary: {
@@ -6564,6 +6567,7 @@ export const getAdminEarnings = async (query = {}) => {
       averageCommission: rows.length ? Number((totals.adminCommission / rows.length).toFixed(2)) : 0,
       refunds: extras.refunds,
       refundCount: extras.refundCount,
+      gigPayouts: Number(gigPayouts.toFixed(2)),
       netPlatformRevenue: Number(netPlatformRevenue.toFixed(2)),
       pendingSettlements: extras.pendingSettlements,
       pendingSettlementCount: extras.pendingSettlementCount,

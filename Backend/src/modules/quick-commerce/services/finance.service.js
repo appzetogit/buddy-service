@@ -13,6 +13,7 @@ import { getDeliveryPartnerWalletEnhanced } from "../../food/delivery/services/d
 import { recoverNegativeBalanceOnSettlement } from "./sellerLedger.service.js";
 import { PAGINATION_DEFAULTS, buildPaginationOptions } from "../../../utils/helpers.js";
 import { resolveSellerReceivable } from "../utils/sellerReceivable.helpers.js";
+import { gigPayoutTotal } from "../../common/gigs/gig.service.js";
 
 const ACTIVE_ORDER_FILTER = {
   orderType: { $in: ["quick", "mixed"] },
@@ -331,11 +332,14 @@ export async function getQuickCommerceFinanceSummary() {
   const totalReturnPickupFees = num(completedReturnAgg?.[0]?.pickupFeesSeller);
   const totalReturnPickupPaidByAdmin = num(completedReturnAgg?.[0]?.pickupFeesAdmin);
 
+  // Gig extras paid to riders on Marketplace orders come out of the admin earning.
+  const totalGigPayouts = await gigPayoutTotal('quickCommerce');
   const totalAdminEarning =
     num(adminEarningAgg?.[0]?.total) +
     num(sellerCommissionAgg?.[0]?.total) -
     refundedTax -
-    totalReturnPickupPaidByAdmin;
+    totalReturnPickupPaidByAdmin -
+    totalGigPayouts;
   const totalSellerCommission = num(sellerCommissionAgg?.[0]?.total);
   const totalCodCollected = num(codVolumeAgg?.[0]?.total);
   const walletFloat = num(walletFloatAgg?.[0]?.float);
@@ -351,6 +355,7 @@ export async function getQuickCommerceFinanceSummary() {
     totalPlatformEarning: Math.max(0, num(orderVolumeAgg?.[0]?.total) - refundedToCustomers),
     totalPackingFee,
     totalAdminEarning,
+    totalGigPayouts,
     totalSellerCommission,
     totalAdminCouponDiscount,
     totalSellerCouponDiscount,
