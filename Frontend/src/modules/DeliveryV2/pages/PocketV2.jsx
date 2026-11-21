@@ -29,7 +29,7 @@ export const PocketV2 = () => {
   const [balance, setBalance] = useState(0);
   const [earnings, setEarnings] = useState(0);
   const [ordersCount, setOrdersCount] = useState(0);
-  const [gigExtra, setGigExtra] = useState({ amount: 0, orders: 0 });
+  const [gigExtra, setGigExtra] = useState({ amount: 0, orders: 0, recent: [] });
   const [trips, setTrips] = useState([]);
   const [tripsPage, setTripsPage] = useState(1);
   const [tripsTotal, setTripsTotal] = useState(0);
@@ -86,7 +86,7 @@ export const PocketV2 = () => {
       .getMyGigBookings()
       .then((res) => {
         const d = res?.data?.data || {};
-        if (!cancelled) setGigExtra({ amount: Number(d.totalGigEarnings) || 0, orders: Number(d.totalGigOrders) || 0 });
+        if (!cancelled) setGigExtra({ amount: Number(d.totalGigEarnings) || 0, orders: Number(d.totalGigOrders) || 0, recent: Array.isArray(d.recentEarnings) ? d.recentEarnings : [] });
       })
       .catch(() => {});
     return () => {
@@ -308,6 +308,16 @@ export const PocketV2 = () => {
               <div className="mt-4 flex items-center justify-between rounded-xl bg-green-50 px-3 py-2 text-[12px] font-semibold text-green-800">
                 <span>Gig extra earned (all time, {gigExtra.orders} {gigExtra.orders === 1 ? 'order' : 'orders'})</span>
                 <span className="font-extrabold">+{formatCurrency(gigExtra.amount)}</span>
+              </div>
+            )}
+            {gigExtra.recent.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {gigExtra.recent.slice(0, 5).map((g) => (
+                  <div key={g._id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-[12px]">
+                    <span className="text-gray-600">Gig bonus · {g.slotName} · {g.service === 'quickCommerce' ? 'Marketplace' : g.service === 'taxi' ? 'Taxi' : 'Food'} · {new Date(g.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span>
+                    <span className="font-bold text-green-700">+{formatCurrency(g.amount)}</span>
+                  </div>
+                ))}
               </div>
             )}
 

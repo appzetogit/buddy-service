@@ -29,12 +29,14 @@ export default function GigsV2() {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState([]);
   const [mine, setMine] = useState({ bookings: [], totalGigEarnings: 0 });
+  const [today, setToday] = useState('');
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       const [d, b] = await Promise.all([deliveryAPI.getGigDays(), deliveryAPI.getMyGigBookings({ upcoming: true })]);
       setDays(d?.data?.data?.days || []);
+      setToday(d?.data?.data?.today || '');
       setMine(b?.data?.data || { bookings: [], totalGigEarnings: 0 });
     } catch (e) {
       toast.error(e?.response?.data?.message || 'Could not load gigs');
@@ -80,7 +82,11 @@ export default function GigsV2() {
                   <div className="text-xs text-slate-500">{niceDate(b.date)} · {fmt12(b.startMin)} - {fmt12(b.endMin)}</div>
                   <div className="text-[11px] font-semibold text-green-700">₹{b.extraPerOrder} extra / order · {(b.services || []).map((s) => SERVICE_LABEL[s] || s).join(', ')}</div>
                 </div>
-                <button onClick={() => cancel(b._id)} className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-600">Cancel</button>
+                {today && b.date > today ? (
+                  <button onClick={() => cancel(b._id)} className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-600">Cancel</button>
+                ) : (
+                  <span className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700">{b.date === today ? 'Today' : 'Done'}</span>
+                )}
               </div>
             ))}
           </div>

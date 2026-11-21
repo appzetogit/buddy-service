@@ -332,11 +332,13 @@ export const riderCancel = async (partnerId, bookingId) => {
 
 export const riderBookings = async (partnerId, { upcomingOnly = false } = {}) => {
   const filter = { partnerId, status: 'booked', ...(upcomingOnly ? { date: { $gte: istDate() } } : {}) };
-  const [bookings, earned] = await Promise.all([
+  const [bookings, earned, recent] = await Promise.all([
     GigBooking.find(filter).sort({ date: -1, startMin: 1 }).limit(100).lean(),
     GigEarning.aggregate([{ $match: { partnerId: toId(partnerId) } }, { $group: { _id: null, amount: { $sum: '$amount' }, orders: { $sum: 1 } } }]),
+    GigEarning.find({ partnerId: toId(partnerId) }).sort({ createdAt: -1 }).limit(10).select('service amount slotName orderRef createdAt').lean(),
   ]);
   return {
+    recentEarnings: recent,
     bookings: bookings.map((b) => ({ ...b, start: hhmm(b.startMin), end: hhmm(b.endMin) })),
     totalGigEarnings: earned[0]?.amount || 0,
     totalGigOrders: earned[0]?.orders || 0,

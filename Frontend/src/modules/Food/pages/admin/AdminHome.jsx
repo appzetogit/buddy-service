@@ -288,6 +288,14 @@ export default function AdminHome() {
               path="/admin/food/tax-report"
             />
             <MetricCard
+              title="Gig Payouts"
+              value={formatCurrency(gigPayoutsTotal, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              helper="Rider gig extras on Food orders, deducted from Platform Total"
+              icon={<DollarSign className="h-5 w-5 text-rose-600" />}
+              accent="bg-rose-200/40"
+              path="/admin/food/gigs/bookings"
+            />
+            <MetricCard
               title="Total restaurants"
               value={totalRestaurants.toLocaleString("en-IN")}
               helper="Approved restaurants"
