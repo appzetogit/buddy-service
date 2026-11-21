@@ -16,6 +16,10 @@ const parts = (date) => {
   const [y, m, d] = date.split('-').map(Number);
   return { y, m: m - 1, d };
 };
+const niceDate = (date) => {
+  const { y, m, d } = parts(date);
+  return `${DAYS[new Date(y, m, d).getDay()]}, ${d} ${MONTHS[m].slice(0, 3)[0]}${MONTHS[m].slice(1, 3).toLowerCase()}`;
+};
 const dayStyle = (status) =>
   status === 'open' ? 'bg-green-600 text-white' : status === 'full' ? 'bg-amber-500 text-white' : 'bg-slate-400 text-white';
 
@@ -73,7 +77,7 @@ export default function GigsV2() {
               <div key={b._id} className="flex items-center justify-between rounded-2xl bg-white p-3 shadow-sm">
                 <div>
                   <div className="text-sm font-bold text-slate-900">{b.slotName}</div>
-                  <div className="text-xs text-slate-500">{b.date} · {fmt12(b.startMin)} - {fmt12(b.endMin)}</div>
+                  <div className="text-xs text-slate-500">{niceDate(b.date)} · {fmt12(b.startMin)} - {fmt12(b.endMin)}</div>
                   <div className="text-[11px] font-semibold text-green-700">₹{b.extraPerOrder} extra / order · {(b.services || []).map((s) => SERVICE_LABEL[s] || s).join(', ')}</div>
                 </div>
                 <button onClick={() => cancel(b._id)} className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-600">Cancel</button>
@@ -121,8 +125,8 @@ export default function GigsV2() {
                         {day.status === 'full' && 'Try another day'}
                         {day.status === 'closed' && 'Gigs must be booked a day before'}
                         {day.status === 'none' && 'Nothing scheduled for you'}
-                        {day.myBookingCount > 0 && <span className="ml-1 font-bold text-green-700">· {day.myBookingCount} booked by you</span>}
                       </div>
+                      {day.myBookingCount > 0 && <div className="mt-1 inline-block rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-bold text-green-700">{day.myBookingCount} hour{day.myBookingCount > 1 ? 's' : ''} booked by you</div>}
                     </div>
                     {(day.status === 'closed' || day.status === 'none') && <Lock className="h-4 w-4 shrink-0 text-slate-500" />}
                   </div>
