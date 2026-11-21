@@ -173,6 +173,8 @@ const emitToRiders = (partnerIds, event, payloadFor) => {
  */
 /** Parks a scheduled order for the admin (see Food's parkScheduledOrderForAdmin). Notifies admins once. */
 export async function parkScheduledQuickOrderForAdmin(order, reason = 'no_gig_rider') {
+  // Never undo an admin's pick.
+  if (order?.dispatch?.assignedByAdmin && order?.dispatch?.deliveryPartnerId) return;
   const alreadyParked = Boolean(order?.dispatch?.needsAdminAssign);
   await QuickOrder.updateOne(
     { _id: order._id },
@@ -211,6 +213,8 @@ export async function dispatchQuickOrder(orderId, options = {}) {
       'dispatch.acceptedAt': { $exists: false },
       // Parked for the admin (scheduled, no gig rider): not hunted until someone assigns it.
       'dispatch.needsAdminAssign': { $ne: true },
+      // A scheduled order the admin gave to a rider is theirs until they act on it.
+      $nor: [{ 'dispatch.assignedByAdmin': true, 'dispatch.deliveryPartnerId': { $ne: null }, scheduledAt: { $ne: null } }],
       $and: [
         {
           $or: [
@@ -629,6 +633,7 @@ export async function recoverStuckQuickOrders() {
     orderStatus: { $in: DISPATCHABLE_STATUSES },
     'dispatch.acceptedAt': { $exists: false },
     'dispatch.needsAdminAssign': { $ne: true },
+    $nor: [{ 'dispatch.assignedByAdmin': true, 'dispatch.deliveryPartnerId': { $ne: null }, scheduledAt: { $ne: null } }],
     $or: [
       { 'dispatch.status': { $in: ['unassigned', 'rejected'] } },
       { 'dispatch.status': { $in: ['offered', 'assigned'] }, 'dispatch.assignedAt': { $lt: staleOfferBefore } },

@@ -407,6 +407,8 @@ export async function updateDispatchSettings(dispatchMode, adminId) {
  */
 export async function parkScheduledOrderForAdmin(order, reason = 'no_gig_rider') {
   const FoodOrder = mongoose.model('FoodOrder');
+  // Never undo an admin's pick.
+  if (order?.dispatch?.assignedByAdmin && order?.dispatch?.deliveryPartnerId) return;
   const alreadyParked = Boolean(order?.dispatch?.needsAdminAssign);
   await FoodOrder.collection.updateOne(
     { _id: order._id },
@@ -480,6 +482,8 @@ export async function tryAutoAssign(orderId, options = {}) {
           ],
         },
         lockIsFree,
+        // A scheduled order the admin gave to a rider is theirs until they act on it.
+        { $nor: [{ 'dispatch.assignedByAdmin': true, 'dispatch.deliveryPartnerId': { $ne: null }, scheduledAt: { $ne: null } }] },
       ],
     },
     {

@@ -1562,7 +1562,9 @@ export async function recoverStuckOrders() {
     const stuckCandidates = await FoodOrder.find({
       'dispatch.status': { $in: ['assigned', 'offered'] },
       'dispatch.acceptedAt': { $exists: false },
-      orderStatus: { $nin: ['delivered', 'cancelled_by_user', 'cancelled_by_restaurant'] }
+      orderStatus: { $nin: ['delivered', 'cancelled_by_user', 'cancelled_by_restaurant'] },
+      // A scheduled order the admin gave to a rider is theirs until they act on it.
+      $nor: [{ 'dispatch.assignedByAdmin': true, 'dispatch.deliveryPartnerId': { $ne: null }, scheduledAt: { $ne: null } }],
     });
 
     // 'assigned' carries dispatch.assignedAt; 'offered' does not, so fall back to the newest
