@@ -28,3 +28,10 @@ Response envelope is the usual `{ success, message, data }`.
 ## Behaviour to handle
 - Accept calls for food (`PATCH /food/delivery/orders/:id/accept`), marketplace (`.../quick-commerce/delivery/...accept`) and taxi (`/taxi/delivery/rides/:id/accept`) can now return **409/4xx with the gig message**; show it as a toast.
 - No change to the socket events.
+
+## Scheduled orders / rides and gigs (new)
+- A **scheduled** food / marketplace order or taxi ride is offered **only to riders who booked a gig covering its scheduled time** (for that service). Everyone else never gets the offer, never sees it in `orders/available` (food) or the scheduled-rides list (taxi), and `accept` returns 4xx with "This scheduled order is only for riders who booked the gig slot that covers its time."
+- If nobody booked that time (or no gig rider can take it) the order/ride is **not cancelled**. It waits in the admin panel (Gigs -> Scheduled - Assign Driver) and the admin picks a driver; the order then appears for that driver like any admin-assigned order (accept is allowed even if the driver has no gig).
+- Food / marketplace: an admin pick made before the order goes live is applied when it activates. Taxi: the ride is assigned immediately and follows the normal scheduled-ride reminders.
+- The gig extra for a scheduled job is judged at its scheduled time, so the order pays the extra of the slot it was scheduled in.
+- No app change is needed beyond showing the 4xx message on accept. Optional: show `scheduledAt` on the offer card (already in the payload).
