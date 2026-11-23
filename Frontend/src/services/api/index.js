@@ -904,6 +904,13 @@ export const adminAPI = {
   getGigBookings: (params = {}) => apiClient.get("/gigs/admin/bookings", { params, contextModule: "admin" }),
   getGigEarnings: (params = {}) => apiClient.get("/gigs/admin/earnings", { params, contextModule: "admin" }),
   getCodSettings: () => apiClient.get("/common/admin/cod-settings", { contextModule: "admin" }),
+  /** Rider cash limit (admin): GET/PUT /food/admin/delivery/cash-limit  { deliveryCashLimit, deliveryWithdrawalLimit } */
+  getCashLimitSettings: () => apiClient.get("/food/admin/delivery/cash-limit", { contextModule: "admin" }),
+  updateCashLimitSettings: (body) => apiClient.put("/food/admin/delivery/cash-limit", body ?? {}, { contextModule: "admin" }),
+  /** Rider cash deposits (admin): GET /food/admin/delivery/cash-deposits?partnerId&status&from&to&page&limit */
+  getCashDeposits: (params = {}) => apiClient.get("/food/admin/delivery/cash-deposits", { params, contextModule: "admin" }),
+  /** One rider's cash: summary + byService + recent cash orders + deposits */
+  getRiderCashDetails: (partnerId, params = {}) => apiClient.get(`/food/admin/delivery/wallets/${String(partnerId)}/cash`, { params, contextModule: "admin" }),
   updateCodSettings: (body) => apiClient.put("/common/admin/cod-settings", body ?? {}, { contextModule: "admin" }),
   getGigScheduled: (params = {}) => apiClient.get("/gigs/admin/scheduled", { params, contextModule: "admin" }),
   getGigAssignableDrivers: (params = {}) => apiClient.get("/gigs/admin/scheduled/assignable-drivers", { params, contextModule: "admin" }),
@@ -2574,6 +2581,10 @@ export const deliveryAPI = {
       params: params ?? {},
       contextModule: "delivery",
     }),
+  /** Cash in hand / limit / per-service split: GET /food/delivery/cash-summary */
+  getCashSummary: () => apiClient.get("/food/delivery/cash-summary", { contextModule: "delivery" }),
+  /** The rider's own cash deposit history: GET /food/delivery/wallet/deposits */
+  getCashDeposits: (params = {}) => apiClient.get("/food/delivery/wallet/deposits", { params, contextModule: "delivery" }),
   /** Gigs (rider): browse days/slots, book, cancel */
   getGigDays: () => apiClient.get("/gigs/rider/days", { contextModule: "delivery" }),
   getGigDay: (date) => apiClient.get(`/gigs/rider/days/${String(date)}`, { contextModule: "delivery" }),
