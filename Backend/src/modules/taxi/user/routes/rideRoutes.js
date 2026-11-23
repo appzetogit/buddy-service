@@ -21,6 +21,7 @@ import {
   getRideById,
   listMyRides,
   listAvailableDrivers,
+  listPopularPlaces,
   payRideCompletionWithWallet,
   submitRideReview,
   updateRideBidCeiling,
@@ -40,6 +41,8 @@ rideRouter.get('/', authenticate(['user', 'driver']), asyncHandler(listMyRides))
 rideRouter.get('/app-settings/tip', asyncHandler(getRideAppTipSettings));
 rideRouter.get('/app-settings/bidding', asyncHandler(getRideBiddingSettings));
 rideRouter.get('/available-drivers', availableDriversRateLimit, asyncHandler(listAvailableDrivers));
+// Where-to "Suggested": places many riders go to near the given point.
+rideRouter.get('/popular-places', authenticate(['user']), asyncHandler(listPopularPlaces));
 rideRouter.get('/active/me', authenticate(['user', 'driver']), asyncHandler(getMyActiveRide));
 rideRouter.patch('/:rideId/cancel', authenticate(['user']), asyncHandler(cancelRide));
 rideRouter.get('/:rideId/bids', authenticate(['user']), asyncHandler(getRideBids));

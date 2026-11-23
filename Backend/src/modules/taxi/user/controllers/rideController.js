@@ -1885,3 +1885,47 @@ export const updateRideBidCeiling = async (req, res) => {
     data: ride,
   });
 };
+
+/// "Suggested" places on the app's Where-to screen: drops many different
+/// riders went to near [lat,lng] in the last 30 days. A place is listed only
+/// when at least POPULAR_MIN_PEOPLE different riders went there, so nobody's
+/// own home or office address is shown to others.
+const POPULAR_MIN_PEOPLE = 3;
+const POPULAR_RADIUS_DEG = 0.25; // ~25 km box around the rider
+export const listPopularPlaces = async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    throw new ApiError(400, 'lat and lng are required');
+  }
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  // ponytail: plain scan of the last 30 days' rides in the box; add a
+  // 2dsphere index on dropLocation (or cache this per city) if it gets slow.
+  const rows = await Ride.aggregate([
+    {
+      $match: {
+        createdAt: { $gte: since },
+        status: { $ne: 'cancelled' },
+        dropAddress: { $nin: ['', null] },
+        'dropLocation.coordinates.0': { $gte: lng - POPULAR_RADIUS_DEG, $lte: lng + POPULAR_RADIUS_DEG },
+        'dropLocation.coordinates.1': { $gte: lat - POPULAR_RADIUS_DEG, $lte: lat + POPULAR_RADIUS_DEG },
+      },
+    },
+    {
+      // ~100 m cells, so drops at the same place group together.
+      $group: {
+        _id: {
+          lng: { $round: [{ $arrayElemAt: ['$dropLocation.coordinates', 0] }, 3] },
+          lat: { $round: [{ $arrayElemAt: ['$dropLocation.coordinates', 1] }, 3] },
+        },
+        address: { $last: '$dropAddress' },
+        people: { $addToSet: '$userId' },
+      },
+    },
+    { $project: { _id: 0, lat: '$_id.lat', lng: '$_id.lng', address: 1, people: { $size: '$people' } } },
+    { $match: { people: { $gte: POPULAR_MIN_PEOPLE } } },
+    { $sort: { people: -1 } },
+    { $limit: 8 },
+  ]);
+  res.json({ success: true, data: { results: rows } });
+};
