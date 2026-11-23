@@ -119,7 +119,7 @@ export const adminSidebarMenu = [
       {
         type: "link",
         label: "Global Support Tickets",
-        path: "/admin/support/tickets",
+        path: "/admin/taxi/support/tickets",
         icon: "ShieldCheck",
       },
     ],
