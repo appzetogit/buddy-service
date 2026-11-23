@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldCheck, Phone, MessageCircle, CheckCircle2, AlertTriangle, Star } from 'lucide-react';
 import { GoogleMap, OverlayView, Polyline } from '@react-google-maps/api';
 import api from '../../../../shared/api/axiosInstance';
+import { payCodAdvance, pendingAdvanceOf } from '../../utils/codAdvance';
 import { socketService } from '../../../../shared/api/socket';
 import { getLocalUserToken, userAuthService } from '../../services/authService';
 import { getCurrentRide, isActiveCurrentRide, saveCurrentRide } from '../../services/currentRideService';
@@ -691,7 +692,7 @@ const ParcelSearchingDriver = () => {
         };
 
         const socket = socketService.connect({ role: 'user', token: userToken });
-        const response = await api.post('/deliveries', {
+        let response = await api.post('/deliveries', {
           pickup: resolvedPickupCoords || [75.9048, 22.7039],
           drop: resolvedDropCoords || [75.8937, 22.7533],
           pickupAddress: routeState.pickup || '',
@@ -705,6 +706,24 @@ const ParcelSearchingDriver = () => {
           type: 'parcel',
           parcel: parcelPayload,
         }, rideRequestConfig);
+
+        // Cash on delivery: the delivery is booked only once the advance is paid.
+        const pendingAdvance = pendingAdvanceOf(response);
+        if (pendingAdvance) {
+          let userInfo = {};
+          try {
+            userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+          } catch {
+            userInfo = {};
+          }
+          response = await payCodAdvance({
+            api,
+            pending: pendingAdvance,
+            verifyPath: '/deliveries/cod-advance/verify',
+            config: rideRequestConfig,
+            userInfo,
+          });
+        }
 
         if (disposed) return;
 

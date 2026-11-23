@@ -9,6 +9,7 @@ import { computeDrivingRoute, sumComputedRouteLegs } from '../../../../shared/ut
 import { userService } from '../../services/userService';
 import { useSettings } from '../../../../shared/context/SettingsContext';
 import BikeIcon from '../../../../assets/icons/bike.png';
+import { useTaxiCodOption } from '../../utils/codAdvance';
 import AutoIcon from '../../../../assets/icons/auto.png';
 import CarIcon from '../../../../assets/icons/car.png';
 import PremiumIcon from '../../../../assets/icons/Premium.png';
@@ -415,7 +416,10 @@ const attachDriverMotionMetadata = (drivers = [], previousDrivers = []) => {
 };
 
 const toPaymentStateValue = (methodId) => PAYMENT_OPTIONS.find((option) => option.id === methodId)?.stateValue || 'Cash';
-const normalizeSelectedPaymentState = (value) => String(value || '').trim().toLowerCase() === 'cash' ? 'cash' : 'online';
+const normalizeSelectedPaymentState = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'cash' ? 'cash' : normalized === 'cod' ? 'cod' : 'online';
+};
 const resolveRideTransportType = (...values) => {
   for (const value of values) {
     const normalized = String(value || '').trim().toLowerCase();
@@ -1646,9 +1650,24 @@ const SelectVehicle = () => {
     () => normalizeAllowedPaymentMethods(selectedAvailability?.allowedPaymentMethods),
     [selectedAvailability?.allowedPaymentMethods],
   );
+  // Cash on delivery with an advance: shown only when the admin switched it on for Taxi.
+  const codOption = useTaxiCodOption(Number(selectedVehicle?.price || 0));
   const paymentOptions = useMemo(
-    () => PAYMENT_OPTIONS.filter((option) => allowedPaymentMethods.includes(option.id)),
-    [allowedPaymentMethods],
+    () => [
+      ...PAYMENT_OPTIONS.filter((option) => allowedPaymentMethods.includes(option.id)),
+      ...(codOption.enabled
+        ? [{
+            id: 'cod',
+            stateValue: 'COD',
+            label: 'Cash on Delivery',
+            sub: `Pay Rs ${codOption.advanceAmount} now (${codOption.advancePercent}%), Rs ${codOption.remainingAmount} after the ride`,
+            Icon: Banknote,
+            bg: 'bg-amber-50',
+            color: 'text-amber-600',
+          }]
+        : []),
+    ],
+    [allowedPaymentMethods, codOption.enabled, codOption.advanceAmount, codOption.advancePercent, codOption.remainingAmount],
   );
   const onlineDrivers = selectedAvailability.drivers || [];
 
@@ -2359,7 +2378,7 @@ const SelectVehicle = () => {
               className="flex items-center justify-center gap-2 border-r border-slate-200 px-3 py-2.5 text-[12px] font-medium text-slate-700"
             >
               <Banknote size={15} strokeWidth={2.2} className="text-green-600" />
-              <span>{paymentMethod === 'Cash' ? 'Cash' : 'Online'}</span>
+              <span>{paymentMethod === 'Cash' ? 'Cash' : paymentMethod === 'COD' ? 'COD' : 'Online'}</span>
             </button>
             <button
               type="button"

@@ -19,6 +19,7 @@ const PAYMENT_STYLES = {
   UPI: 'bg-green-50 text-green-600 border border-green-100',
   CARD: 'bg-purple-50 text-purple-600 border border-purple-100',
   WALLET: 'bg-teal-50 text-teal-600 border border-teal-100',
+  COD: 'bg-amber-50 text-amber-700 border border-amber-100',
 };
 
 const formatDate = (dateStr) => {

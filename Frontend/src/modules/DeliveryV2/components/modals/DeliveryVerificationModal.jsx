@@ -216,7 +216,11 @@ const PaymentModal = ({ order, otpString, onComplete, onClose }) => {
 
   const deliveryAPI = isQuickDeliveryOrder(order) ? quickDeliveryAPI : foodDeliveryAPI;
   const orderId = order._id || order.orderId || 'ORD';
-  const amountToCollect = order.pricing?.total || order.amountToCollect || 0;
+  // COD with an advance: the customer already paid the advance online, so the rider collects only the remaining cash.
+  const codInfo = order.payment?.cod?.enabled ? order.payment.cod : null;
+  const amountToCollect = codInfo
+    ? Number(order.payment?.amountDue ?? codInfo.remainingAmount ?? 0)
+    : (order.pricing?.total || order.amountToCollect || 0);
   const isSplitConfirmed = !!order.deliveryState?.isSplitConfirmed || isDualLeg;
 
   // Always show driver earnings (even when customer delivery fee is free / admin-borne)
@@ -458,6 +462,11 @@ const PaymentModal = ({ order, otpString, onComplete, onClose }) => {
                     {isPaid ? "Amount Paid Online" : "Cash to Collect"}
                  </p>
                  <p className="text-amber-950 text-3xl sm:text-4xl font-bold">₹{amountToCollect.toFixed(2)}</p>
+                 {codInfo && (
+                   <p className="text-amber-700 text-[11px] font-semibold mt-1">
+                     Order total ₹{Number(order.pricing?.total || 0).toFixed(2)} · ₹{Number(codInfo.advanceAmount || 0).toFixed(2)} already paid in advance
+                   </p>
+                 )}
                </div>
                {isPaid && <div className="bg-green-500 text-white px-4 py-2 rounded-full text-[10px] font-bold">PAID ✓</div>}
              </div>

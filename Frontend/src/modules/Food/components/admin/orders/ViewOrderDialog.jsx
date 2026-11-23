@@ -901,6 +901,16 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
                   </p>
                 </div>
               )}
+              {data?.payment?.cod?.enabled && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-1">
+                  <p className="font-bold uppercase tracking-wider text-[11px]">Cash on Delivery (advance)</p>
+                  <p>Advance paid: ₹{Number(data.payment.cod.advanceAmount || 0).toFixed(2)} ({data.payment.cod.percent}%) — Wallet ₹{Number(data.payment.cod.advanceWalletAmount || 0).toFixed(2)} + Online ₹{Number(data.payment.cod.advanceOnlineAmount || 0).toFixed(2)}</p>
+                  <p>Remaining on delivery: ₹{Number(data.payment.cod.remainingAmount || 0).toFixed(2)}{data.payment.cod.collectedAt ? ` — collected ₹${Number(data.payment.cod.collectedAmount || 0).toFixed(2)}` : " — not collected yet"}</p>
+                  {data.payment.cod.advanceStatus === "refunded" && (
+                    <p className="font-semibold text-sky-700">Advance ₹{Number(data.payment.cod.refundedAmount || 0).toFixed(2)} refunded to the customer's wallet</p>
+                  )}
+                </div>
+              )}
               <DetailRow
                 label="Payment Method"
                 value={

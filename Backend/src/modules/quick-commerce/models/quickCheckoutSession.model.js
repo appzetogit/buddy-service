@@ -26,6 +26,12 @@ const quickCheckoutSessionSchema = new mongoose.Schema(
     /** Wallet part of a split payment; debited when the order is created after the gateway pays. */
     walletAmount: { type: Number, default: 0, min: 0 },
     currency: { type: String, default: 'INR' },
+    /** COD with advance: snapshot of the split taken when the session was opened (amountDue/walletAmount above pay the advance only). */
+    cod: {
+      percent: { type: Number, default: 0 },
+      advanceAmount: { type: Number, default: 0 },
+      remainingAmount: { type: Number, default: 0 },
+    },
     razorpay: {
       orderId: { type: String, default: '' },
       paymentId: { type: String, default: '' },

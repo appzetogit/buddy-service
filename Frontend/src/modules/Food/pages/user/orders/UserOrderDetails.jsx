@@ -659,9 +659,30 @@ export default function UserOrderDetails() {
               <h4 className="font-semibold text-gray-800 dark:text-gray-200 text-sm">
                 Payment method
               </h4>
-              <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
-                Paid via: {paymentMethod.toUpperCase()}
-              </p>
+              {order.payment?.cod?.enabled ? (
+                <div className="mt-0.5 space-y-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="font-semibold text-gray-700 dark:text-gray-200">Cash on Delivery (advance + cash)</p>
+                  <p>
+                    Paid in advance: ₹{Number(order.payment.cod.advanceAmount || 0).toFixed(2)}
+                    {Number(order.payment.cod.advanceWalletAmount) > 0 || Number(order.payment.cod.advanceOnlineAmount) > 0
+                      ? ` (Wallet ₹${Number(order.payment.cod.advanceWalletAmount || 0).toFixed(2)} + Online ₹${Number(order.payment.cod.advanceOnlineAmount || 0).toFixed(2)})`
+                      : ""}
+                  </p>
+                  {order.payment.cod.advanceStatus === "refunded" ? (
+                    <p className="font-semibold text-emerald-600">
+                      Advance ₹{Number(order.payment.cod.refundedAmount || 0).toFixed(2)} refunded to your wallet
+                    </p>
+                  ) : order.payment.cod.collectedAt || order.payment.status === "paid" ? (
+                    <p className="font-semibold text-emerald-600">Paid in cash on delivery: ₹{Number(order.payment.cod.collectedAmount || order.payment.cod.remainingAmount || 0).toFixed(2)}</p>
+                  ) : (
+                    <p className="font-semibold text-amber-600">To pay in cash on delivery: ₹{Number(order.payment.cod.remainingAmount || 0).toFixed(2)}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
+                  Paid via: {paymentMethod.toUpperCase()}
+                </p>
+              )}
             </div>
           </div>
 

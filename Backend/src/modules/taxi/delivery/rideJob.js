@@ -1,5 +1,6 @@
 import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../constants/index.js';
 import { estimateRideDriverEarnings } from '../driver/services/walletService.js';
+import { serializeCod, rideAmountDue } from '../services/codAdvance.js';
 
 /**
  * A taxi ride, described the way the rider app describes any job.
@@ -71,6 +72,8 @@ export const buildRideJob = async (ride, { riderPosition = null, partnerId = nul
   const rider = raw.userId && typeof raw.userId === 'object' ? raw.userId : {};
   const fare = Number(raw.fare) || 0;
   const isCash = String(raw.paymentMethod || '').toLowerCase() === 'cash';
+  const cod = serializeCod(raw);
+  const amountToCollect = rideAmountDue(raw);
   const settled = raw.driverEarnings !== undefined && raw.driverEarnings !== null && raw.walletSettledAt;
   const estimate = settled
     ? { earnings: Number(raw.driverEarnings) || 0, commission: Number(raw.commissionAmount) || 0 }
@@ -125,8 +128,10 @@ export const buildRideJob = async (ride, { riderPosition = null, partnerId = nul
     paymentMethod: isCash ? 'cash' : 'online',
     // 'paid' once the rider has paid online (during or after the trip).
     paymentStatus: ['paid', 'captured', 'completed'].includes(String(raw.driverPaymentCollection?.status || '')) ? 'paid' : 'pending',
-    payment: { method: isCash ? 'cash' : 'online', amountDue: isCash ? fare : 0 },
-    amountToCollect: isCash ? fare : 0,
+    // COD with an advance: the advance was paid up front, the driver collects only the rest in cash.
+    payment: { method: isCash ? 'cash' : 'online', amountDue: isCash ? amountToCollect : 0, ...(cod ? { cod } : {}) },
+    amountToCollect: isCash ? amountToCollect : 0,
+    cod,
 
     dispatch: {
       status: raw.driverId ? 'accepted' : 'offered',

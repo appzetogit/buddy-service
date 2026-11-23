@@ -22,6 +22,7 @@ import { GoogleMap } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
 import { userAuthService } from '../../services/authService';
 import api from '../../../../shared/api/axiosInstance';
+import { useTaxiCodOption } from '../../utils/codAdvance';
 import { computeDrivingRoute, sumComputedRouteLegs } from '../../../../shared/utils/googleRoutes';
 import { useUserTheme } from '../../../../shared/context/UserThemeContext';
 
@@ -1303,6 +1304,7 @@ const SenderReceiverDetails = () => {
     };
   }, [dropCoords, estimatedDistanceKm, isGoogleMapsLoaded, pickupCoords]);
 
+  const [parcelPayment, setParcelPayment] = useState('Cash');
   const estimatedFare = useMemo(() => {
     if (!drop.trim()) {
       return null;
@@ -1325,6 +1327,8 @@ const SenderReceiverDetails = () => {
       serviceTaxAmount: Number(primaryFare.serviceTaxAmount || 0),
     };
   }, [drop, effectiveDistanceKm, primarySelectedVehicle]);
+  // Cash on delivery with an advance, offered only when the admin switched it on for Taxi.
+  const parcelCod = useTaxiCodOption(Number(estimatedFare?.approx ?? estimatedFare?.min ?? 0));
 
   const validate = () => {
     const nextErrors = {};
@@ -1727,7 +1731,7 @@ const SenderReceiverDetails = () => {
         senderMobile,
         receiverName,
         receiverMobile,
-        paymentMethod: 'Cash',
+        paymentMethod: parcelPayment === 'COD' && parcelCod.enabled ? 'COD' : 'Cash',
         fare: estimatedFare?.approx ?? estimatedFare?.min ?? null,
         estimatedFare,
         estimatedDistanceKm,
@@ -2071,6 +2075,24 @@ const SenderReceiverDetails = () => {
 
       <div className="fixed bottom-0 left-0 right-0 z-30 p-6">
         <div className="mx-auto max-w-lg relative">
+          {parcelCod.enabled ? (
+            <div className="relative mb-3 grid grid-cols-2 gap-2 rounded-[20px] border border-slate-200 bg-white p-1.5 shadow-sm">
+              {[
+                { id: 'Cash', label: 'Cash', sub: 'Pay after delivery' },
+                { id: 'COD', label: 'Cash on Delivery', sub: `Pay Rs ${parcelCod.advanceAmount} now, Rs ${parcelCod.remainingAmount} later` },
+              ].map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setParcelPayment(option.id)}
+                  className={`rounded-[16px] px-3 py-2 text-left transition ${parcelPayment === option.id ? 'bg-slate-900 text-white' : 'text-slate-700'}`}
+                >
+                  <p className="text-[12px] font-black">{option.label}</p>
+                  <p className={`text-[10px] font-semibold ${parcelPayment === option.id ? 'text-slate-300' : 'text-slate-500'}`}>{option.sub}</p>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="absolute inset-x-0 bottom-0 -mb-6 h-32 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none" />
           <motion.button
             whileHover={{ scale: 1.02 }}

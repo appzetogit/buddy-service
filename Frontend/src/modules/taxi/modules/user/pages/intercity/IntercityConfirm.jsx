@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from '@taxi/shared/router';
 import { motion } from 'framer-motion';
 import { Calendar, CheckCircle2, Clock3, LoaderCircle, Navigation } from 'lucide-react';
 import api from '../../../../shared/api/axiosInstance';
+import { payCodAdvance, pendingAdvanceOf } from '../../utils/codAdvance';
 
 const generateIntercityBookingId = () =>
   'IC-' + Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6).padEnd(6, '0');
@@ -71,7 +72,7 @@ const IntercityConfirm = () => {
 
     (async () => {
       try {
-        await api.post('/rides', {
+        const bookingResponse = await api.post('/rides', {
           pickup: state.pickupCoords,
           drop: state.dropCoords,
           pickupAddress: state.pickup,
@@ -99,6 +100,17 @@ const IntercityConfirm = () => {
             vehicleName: state.vehicle?.name || state.vehicle?.id || 'Intercity Cab',
           },
         });
+        // Cash on delivery: the ride is booked only once the advance is paid.
+        const pendingAdvance = pendingAdvanceOf(bookingResponse);
+        if (pendingAdvance) {
+          let userInfo = {};
+          try {
+            userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+          } catch {
+            userInfo = {};
+          }
+          await payCodAdvance({ api, pending: pendingAdvance, verifyPath: '/rides/cod-advance/verify', userInfo });
+        }
         setStatus('scheduled');
       } catch (requestError) {
         setStatus('error');

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from "react"
 import { createPortal } from "react-dom"
 import { Link, useNavigate } from "react-router-dom"
-import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Share2, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles, Zap, CheckCircle2, MessageCircle, Send, Mail, Copy, AlertCircle, Leaf, Bike, Truck, Info } from "lucide-react"
+import { Plus, Minus, ArrowLeft, ChevronRight, Clock, MapPin, Phone, FileText, Utensils, Tag, Percent, Share2, ChevronUp, ChevronDown, X, Check, Settings, CreditCard, Wallet, Building2, Sparkles, Zap, CheckCircle2, MessageCircle, Send, Mail, Copy, AlertCircle, Leaf, Bike, Truck, Info, Banknote } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import confetti from "canvas-confetti"
 
@@ -21,7 +21,7 @@ import { useOrders } from "@food/context/OrdersContext"
 import { useLocation as useUserLocation } from "@food/hooks/useLocation"
 import { useZone } from "@food/hooks/useZone"
 import { useLocationSelector } from "@food/components/user/UserLayout"
-import { orderAPI, restaurantAPI, userAPI, adminAPI } from "@food/api"
+import { orderAPI, restaurantAPI, userAPI, adminAPI, paymentOptionsAPI } from "@food/api"
 import { API_BASE_URL } from "@food/api/config"
 import { initRazorpayPayment } from "@food/utils/razorpay"
 import { toast } from "sonner"
@@ -1494,17 +1494,45 @@ function Cart() {
       items: comparison
     }
   }, [cart, total])
+  // Cash on delivery with an advance (only when an admin switched COD on for Food): the customer
+  // pays the advance now (wallet and/or online) and the rest in cash on delivery.
+  const [codOption, setCodOption] = useState({ enabled: false, advancePercent: 0, split: null })
+  useEffect(() => {
+    let cancelled = false
+    const amount = Math.round(Number(total) || 0)
+    if (!amount) return undefined
+    const timer = setTimeout(async () => {
+      try {
+        const res = await paymentOptionsAPI.get("food", amount)
+        const cod = res?.data?.data?.cod
+        if (!cancelled && cod) setCodOption({ enabled: cod.enabled === true, advancePercent: Number(cod.advancePercent) || 0, split: cod.split || null })
+      } catch {
+        if (!cancelled) setCodOption({ enabled: false, advancePercent: 0, split: null })
+      }
+    }, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [total])
+  const isCodSelected = selectedPaymentMethod === "cod"
+  const codAdvanceAmount = isCodSelected && codOption.split ? Number(codOption.split.advanceAmount) || 0 : 0
+  const codRemainingAmount = isCodSelected && codOption.split ? Number(codOption.split.remainingAmount) || 0 : 0
+  // What has to be paid right now: the whole bill, or just the advance for COD.
+  const payNowAmount = isCodSelected && codOption.split ? codAdvanceAmount : total
   const walletSplitAmount =
-    selectedPaymentMethod === "razorpay" && useWalletSplit && walletBalance > 0
-      ? Math.min(Math.floor(walletBalance * 100) / 100, total)
+    (selectedPaymentMethod === "razorpay" || isCodSelected) && useWalletSplit && walletBalance > 0
+      ? Math.min(Math.floor(walletBalance * 100) / 100, payNowAmount)
       : 0
-  const onlineSplitAmount = Math.max(0, Math.round((total - walletSplitAmount) * 100) / 100)
+  const onlineSplitAmount = Math.max(0, Math.round((payNowAmount - walletSplitAmount) * 100) / 100)
   const selectedPaymentLabel =
     selectedPaymentMethod === "wallet"
       ? "Wallet"
-      : walletSplitAmount > 0
-        ? `Wallet ${RUPEE_SYMBOL}${walletSplitAmount.toFixed(0)} + Online ${RUPEE_SYMBOL}${onlineSplitAmount.toFixed(0)}`
-        : "Online Payment"
+      : isCodSelected
+        ? `Cash on Delivery · Pay ${RUPEE_SYMBOL}${codAdvanceAmount.toFixed(0)} now, ${RUPEE_SYMBOL}${codRemainingAmount.toFixed(0)} on delivery`
+        : walletSplitAmount > 0
+          ? `Wallet ${RUPEE_SYMBOL}${walletSplitAmount.toFixed(0)} + Online ${RUPEE_SYMBOL}${onlineSplitAmount.toFixed(0)}`
+          : "Online Payment"
 
   // Restaurant name from data or cart
   const restaurantName = isMultiRestaurantOrder
@@ -1871,7 +1899,7 @@ function Cart() {
         sendCutlery: sendCutlery !== false,
         paymentMethod: selectedPaymentMethod,
         // Explicit either way: unticked must not fall back to the backend default (auto-use wallet).
-        useWallet: selectedPaymentMethod === "razorpay" && walletBalance > 0 ? walletSplitAmount > 0 : undefined,
+        useWallet: (selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "cod") && walletBalance > 0 ? walletSplitAmount > 0 : undefined,
         // `useZone()` can return `null`. Zod expects string/undefined, not null.
         zoneId: zoneId || undefined,
         scheduledAt: isScheduled ? new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString() : undefined,
@@ -1909,6 +1937,22 @@ function Cart() {
         requiresPayment,
         paymentType,
       } = orderResponse.data.data || {}
+
+      // COD with an advance paid entirely from the wallet (or no advance needed): order is already placed.
+      if (paymentType === "COD" && order) {
+        toast.success("Order placed. Pay the rest in cash on delivery.")
+        finalizeSuccessfulOrder(order)
+        releasePlaceOrderLock()
+        try {
+          const walletResponse = await userAPI.getWallet()
+          if (walletResponse?.data?.success && walletResponse?.data?.data?.wallet) {
+            setWalletBalance(walletResponse.data.data.wallet.balance || 0)
+          }
+        } catch (error) {
+          debugError("Error refreshing wallet balance:", error)
+        }
+        return
+      }
 
       // Wallet flow: order placed with wallet payment (already processed in backend)
       if (selectedPaymentMethod === "wallet" || paymentType === "WALLET") {
@@ -3412,6 +3456,18 @@ function Cart() {
                       disabledText: 'Low Balance',
                       allowAddMoney: !isLoadingWallet && walletBalance < total,
                     },
+                    // Shown only when an admin enabled COD for Food .
+                    ...(codOption.enabled && codOption.split
+                      ? [{
+                        id: 'cod',
+                        name: 'Cash on Delivery',
+                        description: `Pay ${RUPEE_SYMBOL}${Number(codOption.split.advanceAmount).toFixed(0)} now, ${RUPEE_SYMBOL}${Number(codOption.split.remainingAmount).toFixed(0)} in cash on delivery`,
+                        icon: <Banknote className="w-5 h-5" />,
+                        color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
+                        selectedColor: 'bg-amber-500 text-white',
+                        badge: `${codOption.advancePercent}% ADVANCE`,
+                      }]
+                      : []),
                   ].map((option) => (
                     <button
                       key={option.id}

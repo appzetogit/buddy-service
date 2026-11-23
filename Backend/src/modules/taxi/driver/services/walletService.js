@@ -7,6 +7,7 @@ import { Driver } from '../models/Driver.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
 import { Ride } from '../../user/models/Ride.js';
 import { getWalletSettings } from '../../services/appSettingsService.js';
+import { hasCod, codAdvanceApplied, rideAmountDue } from '../../services/codAdvance.js';
 
 /**
  * Which classes of vehicle a driver drives, from the catalog rather than the
@@ -422,9 +423,23 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
     // the earnings a second time on top of that fare.
     const fareAlreadyInWallet = ride.driverPaymentCollection?.source === 'rider_fare_online'
       && String(ride.driverPaymentCollection?.status || '').toLowerCase() === 'paid';
+    const codRide = hasCod(ride);
     const settleAsCash = paymentMethod === 'cash' || fareAlreadyInWallet;
-    const amount = settleAsCash ? -commissionAmount : driverEarnings;
-    const type = settleAsCash ? 'commission_deduction' : 'ride_earning';
+    // COD with an advance: the platform already holds the advance (it covers part of the fare), the driver
+    // holds only the rest in cash (or was credited it when the rider paid it in the app). Either way the
+    // driver nets earnings - cash in hand, which is advance-applied minus commission. A normal ride keeps
+    // its old formula untouched.
+    const codNet = codRide ? Math.round((codAdvanceApplied(ride) - commissionAmount) * 100) / 100 : 0;
+    const amount = codRide ? codNet : (settleAsCash ? -commissionAmount : driverEarnings);
+    const type = codRide
+      ? (codNet >= 0 ? 'ride_earning' : 'commission_deduction')
+      : (settleAsCash ? 'commission_deduction' : 'ride_earning');
+    if (codRide) {
+      // What the driver actually handed over / collected for this ride, for reports.
+      ride.cod.remainingAmount = rideAmountDue(ride);
+      ride.cod.collectedAmount = rideAmountDue(ride);
+      ride.cod.collectedAt = new Date();
+    }
 
     ride.paymentMethod = paymentMethod;
     ride.commissionAmount = commissionAmount;
@@ -445,7 +460,7 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
         amount,
         type,
         rideId: ride._id,
-        description: settleAsCash
+        description: (codRide ? codNet < 0 : settleAsCash)
           ? `Admin commission for trip #${String(ride._id).slice(-8).toUpperCase()}`
           : `Earnings for trip #${String(ride._id).slice(-8).toUpperCase()}`,
         session,

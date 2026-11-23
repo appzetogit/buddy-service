@@ -26,7 +26,7 @@ const ownerFilter = ({ userId = null, sessionId = '' } = {}) => {
 };
 
 /** Create the session + Razorpay order for an online checkout. No QuickOrder yet. */
-export async function createQuickCheckoutSession({ idQuery, requestBody, amountDue, walletAmount = 0 }) {
+export async function createQuickCheckoutSession({ idQuery, requestBody, amountDue, walletAmount = 0, cod = null }) {
   if (!isRazorpayConfigured()) throw new ValidationError('Online payment is not configured');
 
   // Only the part not covered by the wallet goes to the gateway.
@@ -41,6 +41,7 @@ export async function createQuickCheckoutSession({ idQuery, requestBody, amountD
     requestBody,
     amountDue: onlineAmount,
     walletAmount: Number(walletAmount || 0),
+    ...(cod ? { cod: { percent: cod.percent, advanceAmount: cod.advanceAmount, remainingAmount: cod.remainingAmount } } : {}),
     expiresAt: new Date(Date.now() + CHECKOUT_TTL_MS),
   });
 

@@ -15,6 +15,7 @@ import {
 } from '../constants/index.js';
 import { Delivery } from '../user/models/Delivery.js';
 import { getRideRoom, isReservation, resolveSetPriceForRide } from './rideService.js';
+import { hasCod } from './codAdvance.js';
 import { SOCKET_EVENTS } from '../socket/events.js';
 import { resolveTransportDispatchConfig } from './transportSettingsService.js';
 import { sendPushNotificationToEntities } from './pushNotificationService.js';
@@ -939,9 +940,123 @@ export const markDriverRejectedFromDispatch = async (rideId, driverId) => {
   await persistDispatchTrackingProgress({ rideId, rejectedDriverIds: [String(driverId)] });
 };
 
+/**
+ * COD with an advance: give the advance back to the rider's WALLET (never the gateway) when the ride is
+ * cancelled. Idempotent: the ride is flipped to advanceStatus 'refunded' first and the wallet credit carries a
+ * per-ride reference key, so a repeat call (or the safety-net sweep) is a no-op. If the credit itself fails the
+ * flip is undone so the sweep tries again.
+ */
+export const refundCodAdvanceToWallet = async (ride, { feeDeducted = 0 } = {}) => {
+  if (!ride?._id || !hasCod(ride)) {
+    return { refunded: false, reason: 'not_cod', consumedFee: 0 };
+  }
+  const advance = roundMoney(Number(ride.cod.advanceAmount || 0));
+  const fee = Math.max(0, Number(feeDeducted) || 0);
+  const refundable = roundMoney(Math.max(0, advance - fee));
+  const claimed = await Ride.findOneAndUpdate(
+    { _id: ride._id, 'cod.advanceStatus': 'paid' },
+    { $set: { 'cod.advanceStatus': 'refunded', 'cod.refundedAmount': refundable, 'cod.refundedAt': new Date() } },
+    { new: true },
+  );
+  if (!claimed) {
+    return { refunded: ride.cod.advanceStatus === 'refunded', status: 'nothing_to_refund', consumedFee: 0 };
+  }
+  try {
+    if (refundable > 0) {
+      await applyUserWalletAdjustment({
+        userId: ride.userId,
+        amount: refundable,
+        kind: 'credit',
+        title: `Advance refund for cancelled booking ${String(ride._id).slice(-6)}`,
+        referenceKey: `refund:cod-advance:${String(ride._id)}`,
+        walletField: 'balance',
+        provider: 'ride_cod_advance_refund',
+      });
+    }
+  } catch (error) {
+    await Ride.updateOne({ _id: ride._id, 'cod.advanceStatus': 'refunded' }, { $set: { 'cod.advanceStatus': 'paid', 'cod.refundedAmount': 0, 'cod.refundedAt': null } });
+    throw error;
+  }
+  emitToRoom(getUserRoom(ride.userId), 'rideRefundProcessed', {
+    rideId: String(ride._id),
+    amount: refundable,
+    refundMethod: 'wallet',
+    message: `Advance of ₹${refundable.toFixed(0)} credited to your Buddy Wallet.`,
+  });
+  return { refunded: true, amount: refundable, refundMethod: 'wallet', consumedFee: Math.min(fee, advance) };
+};
+
+/// A COD ride that ended cheaper than its advance: the part of the advance above the final fare goes back to the wallet.
+export const refundCodAdvanceExcess = async (rideOrId) => {
+  const ride = rideOrId?._id && rideOrId.cod ? rideOrId : await Ride.findById(rideOrId).lean();
+  if (!ride || !hasCod(ride) || ride.cod.advanceStatus !== 'paid' || Number(ride.cod.refundedAmount || 0) > 0) {
+    return { refunded: false };
+  }
+  const excess = roundMoney(Math.max(0, Number(ride.cod.advanceAmount || 0) - Number(ride.fare || 0)));
+  if (excess <= 0) return { refunded: false };
+  const claimed = await Ride.findOneAndUpdate(
+    { _id: ride._id, 'cod.refundedAmount': { $lte: 0 } },
+    { $set: { 'cod.refundedAmount': excess, 'cod.refundedAt': new Date() } },
+    { new: true },
+  );
+  if (!claimed) return { refunded: false };
+  try {
+    await applyUserWalletAdjustment({
+      userId: ride.userId,
+      amount: excess,
+      kind: 'credit',
+      title: `Advance difference refund for ride ${String(ride._id).slice(-6)}`,
+      referenceKey: `refund:cod-advance-excess:${String(ride._id)}`,
+      walletField: 'balance',
+      provider: 'ride_cod_advance_refund',
+    });
+  } catch (error) {
+    await Ride.updateOne({ _id: ride._id }, { $set: { 'cod.refundedAmount': 0, 'cod.refundedAt': null } });
+    throw error;
+  }
+  emitToRoom(getUserRoom(ride.userId), 'rideRefundProcessed', {
+    rideId: String(ride._id),
+    amount: excess,
+    refundMethod: 'wallet',
+    message: `₹${excess.toFixed(0)} returned to your Buddy Wallet (the fare ended below your advance).`,
+  });
+  return { refunded: true, amount: excess };
+};
+
+/// Safety net for every cancellation path: cancelled COD rides still holding an advance, and completed COD rides
+/// that ended below their advance, get refunded to the wallet.
+export const sweepCodAdvanceRefunds = async () => {
+  try {
+    const cancelled = await Ride.find({ status: RIDE_STATUS.CANCELLED, 'cod.enabled': true, 'cod.advanceStatus': 'paid' }).limit(50);
+    for (const ride of cancelled) {
+      await refundCodAdvanceToWallet(ride).catch((error) => console.error('COD advance refund failed', String(ride._id), error?.message || error));
+    }
+    const cheaper = await Ride.find({
+      status: RIDE_STATUS.COMPLETED,
+      'cod.enabled': true,
+      'cod.advanceStatus': 'paid',
+      'cod.refundedAmount': { $lte: 0 },
+      $expr: { $gt: ['$cod.advanceAmount', '$fare'] },
+    }).limit(50);
+    for (const ride of cheaper) {
+      await refundCodAdvanceExcess(ride).catch((error) => console.error('COD excess refund failed', String(ride._id), error?.message || error));
+    }
+  } catch (error) {
+    console.error('COD advance refund sweep failed', error);
+  }
+};
+
 export const processRideCancellationRefund = async (ride, { feeDeducted = 0 } = {}) => {
   if (!ride || !ride.userId) {
     return { refunded: false, reason: 'no_ride_or_user' };
+  }
+
+  // COD with an advance: the advance returns to the wallet first (the cancellation fee, if any, comes off it).
+  // Whatever fee is left over then applies to anything the rider also paid in the app, as before.
+  let codRefund = null;
+  if (hasCod(ride)) {
+    codRefund = await refundCodAdvanceToWallet(ride, { feeDeducted });
+    feeDeducted = Math.max(0, Number(feeDeducted || 0) - Number(codRefund?.consumedFee || 0));
   }
 
   // Already refunded check
@@ -960,7 +1075,7 @@ export const processRideCancellationRefund = async (ride, { feeDeducted = 0 } = 
   const refundableAmount = roundMoney(Math.max(0, rawPaidAmount - Number(feeDeducted || 0)));
 
   if (!isOnlinePayment || refundableAmount <= 0) {
-    return { refunded: false, reason: 'not_paid_online_or_zero' };
+    return codRefund?.refunded ? codRefund : { refunded: false, reason: 'not_paid_online_or_zero' };
   }
 
   const hasPaymentId = Boolean(ride.driverPaymentCollection?.providerPaymentId);
@@ -968,7 +1083,7 @@ export const processRideCancellationRefund = async (ride, { feeDeducted = 0 } = 
 
   // If status is still 'pending' with no payment ID, money was never captured
   if (!hasPaymentId && !isPaidStatus) {
-    return { refunded: false, reason: 'payment_was_pending' };
+    return codRefund?.refunded ? codRefund : { refunded: false, reason: 'payment_was_pending' };
   }
 
   // Every refund goes to the rider's Buddy Wallet (full paid amount, wallet + online part), never back
@@ -1856,6 +1971,7 @@ export const startDispatchFlow = async (ride, { forceRestart = false } = {}) => 
 
 export const restoreScheduledDispatches = async () => {
   await sweepExpiredOutstationRides().catch(() => null);
+  await sweepCodAdvanceRefunds();
 
   const rides = await Ride.find({
     status: RIDE_STATUS.SEARCHING,

@@ -39,6 +39,11 @@ import { getBidRideSettings, getTransportRideSettings } from '../../services/tra
 import { matchDrivers } from '../../services/matchingService.js';
 import { Ride } from '../models/Ride.js';
 import { UserWallet } from '../models/UserWallet.js';
+import { User } from '../models/User.js';
+import { CodCheckout } from '../models/CodCheckout.js';
+import { createDeliveryRecord, getDeliveryQuote as quoteDelivery } from '../services/deliveryService.js';
+import { assertCodAllowed } from '../../../common/cod/cod.service.js';
+import { hasCod, rideAmountDue } from '../../services/codAdvance.js';
 
 const EARTH_RADIUS_METERS = 6371000;
 const AVERAGE_CITY_SPEED_KMPH = 24;
@@ -101,7 +106,8 @@ const isDriverCollectionPaid = (ride = {}) =>
   PAYMENT_PAID_STATUSES.has(String(ride?.driverPaymentCollection?.status || '').trim().toLowerCase());
 
 const buildCompletionAmounts = (ride, tipAmount = 0) => {
-  const fare = roundMoney(ride?.fare || 0);
+  // COD with an advance: only the rest of the fare is still owed.
+  const fare = hasCod(ride) ? rideAmountDue(ride) : roundMoney(ride?.fare || 0);
   const normalizedTipAmount = roundMoney(tipAmount || 0);
   const fareDue = isDriverCollectionPaid(ride) ? 0 : fare;
   return {
@@ -393,6 +399,11 @@ export const createRide = async (req, res) => {
     throw new ApiError(400, 'pickup and drop are required');
   }
 
+  // Cash on delivery with an advance has its own booking flow.
+  if (String(paymentMethod || '').trim().toLowerCase() === 'cod') {
+    return createCodRide(req, res);
+  }
+
   console.log('--- TEMPORARY DEBUG LOG ---');
   console.log('backend received vehicleType (ID):', vehicleTypeId);
 
@@ -443,6 +454,302 @@ export const createRide = async (req, res) => {
       },
     },
   });
+};
+
+// ---------------------------------------------------------------------------------------------------------------
+// Cash on delivery with an advance (see services/codAdvance.js and modules/common/cod/cod.service.js).
+//
+// The customer books with paymentMethod 'cod'. The server decides whether COD is allowed and what the advance is.
+// The ride is created - and drivers are searched for - only once the advance is paid:
+//   advance 0                    -> booked straight away
+//   wallet covers it (asked)     -> wallet debited, booked straight away
+//   otherwise                    -> 201 { requiresPayment: true, checkoutId, razorpay{...} }; the app pays and
+//                                   calls POST /rides/cod-advance/verify, which books the ride.
+// The advance is refunded to the WALLET if the ride is cancelled (dispatchService.refundCodAdvanceToWallet).
+// ---------------------------------------------------------------------------------------------------------------
+const COD_ADVANCE_SOURCE = 'ride_cod_advance';
+const COD_CHECKOUT_TTL_MS = 30 * 60 * 1000;
+
+/// Creates the ride for a booking request and starts the driver search. Shared by the normal COD paths.
+const placeRide = async (userId, body, cod) => {
+  const { pickup, drop, pickupAddress, dropAddress, fare, estimatedDistanceMeters, estimatedDurationMinutes, vehicleTypeId, vehicleTypeIds, vehicleIconType, vehicleIconUrl, serviceType, intercity, promo_code, zone_id, service_location_id, transport_type, scheduledAt, bookingMode, userMaxBidFare, bidStepAmount, platformFee, surgeMultiplier } = body;
+  const ride = await createRideRecord({
+    userId,
+    pickupCoords: normalizePoint(pickup, 'pickup'),
+    dropCoords: normalizePoint(drop, 'drop'),
+    pickupAddress,
+    dropAddress,
+    fare: Number(fare || 0),
+    estimatedDistanceMeters: Number(estimatedDistanceMeters || 0),
+    estimatedDurationMinutes: Number(estimatedDurationMinutes || 0),
+    vehicleTypeId,
+    vehicleTypeIds,
+    vehicleIconType,
+    vehicleIconUrl,
+    paymentMethod: 'cash',
+    serviceType,
+    intercity,
+    promo_code,
+    zone_id,
+    service_location_id,
+    transport_type,
+    scheduledAt,
+    bookingMode,
+    userMaxBidFare,
+    bidStepAmount,
+    platformFee,
+    surgeMultiplier,
+    cod,
+  });
+  await startDispatchFlow(ride);
+  announceScheduledRide(ride).catch((error) => console.error('Scheduled ride announcement failed', error));
+  return ride;
+};
+
+/// A parcel booking with its advance paid. The server prices the parcel itself, same as a normal parcel booking.
+const placeDelivery = (userId, body, cod) =>
+  createDeliveryRecord({
+    userId,
+    pickup: body.pickup,
+    drop: body.drop,
+    pickupAddress: body.pickupAddress,
+    dropAddress: body.dropAddress,
+    fare: body.fare,
+    vehicleTypeId: body.vehicleTypeId,
+    vehicleTypeIds: body.vehicleTypeIds,
+    vehicleIconType: body.vehicleIconType,
+    vehicleIconUrl: body.vehicleIconUrl,
+    paymentMethod: 'cash',
+    parcel: body.parcel,
+    cod,
+  });
+
+const sendBookedParcel = (res, delivery) => res.status(201).json({ success: true, data: delivery });
+
+const sendBookedRide = (res, ride) =>
+  res.status(201).json({
+    success: true,
+    data: { ride, realtime: { room: getRideRoom(ride._id), rideId: String(ride._id) } },
+  });
+
+const codCreditBack = (userId, amount, ref, title) =>
+  applyUserWalletAdjustment({ userId, amount, kind: 'credit', title, referenceKey: ref, provider: 'ride_cod_advance_refund' });
+
+/// Takes the wallet part, books the ride, and undoes the payment if booking fails. Idempotent per checkout.
+const finalizeCodBooking = async (checkout, paid = {}) => {
+  const userId = String(checkout.userId);
+  if (checkout.walletAmount > 0) {
+    const debit = await applyUserWalletAdjustment({
+      userId,
+      amount: checkout.walletAmount,
+      kind: 'debit',
+      title: `Ride advance (wallet part) ${String(checkout._id).slice(-6)}`,
+      referenceKey: `ride-cod-advance:${checkout._id}`,
+      provider: 'ride_cod_advance',
+      requireSufficientFunds: true,
+    });
+    if (debit.status === 'insufficient_funds') {
+      if (paid.paymentId && checkout.onlineAmount > 0) {
+        await codCreditBack(userId, checkout.onlineAmount, `ride-cod-advance-online-back:${paid.paymentId}`, 'Ride advance returned (wallet balance changed)');
+      }
+      await CodCheckout.updateOne({ _id: checkout._id }, { $set: { status: 'expired' } });
+      throw new ApiError(409, 'Your wallet balance changed while paying. Any online payment was added to your wallet; please book again.');
+    }
+  }
+  try {
+    const cod = {
+      percent: checkout.percent,
+      advanceAmount: checkout.advanceAmount,
+      advanceWalletAmount: checkout.walletAmount,
+      advanceOnlineAmount: checkout.onlineAmount,
+      razorpayOrderId: paid.orderId || '',
+      razorpayPaymentId: paid.paymentId || '',
+    };
+    if (checkout.kind === 'delivery') {
+      const delivery = await placeDelivery(userId, checkout.payload, cod);
+      const stored = JSON.parse(JSON.stringify(delivery));
+      // Bookkeeping only: the booking succeeded, so a failure here must not undo the payment.
+      await CodCheckout.updateOne({ _id: checkout._id }, { $set: { status: 'completed', response: stored, rideId: delivery?.rideId || delivery?._id || delivery?.id || null } }).catch(() => null);
+      return { kind: 'delivery', delivery };
+    }
+    const ride = await placeRide(userId, checkout.payload, cod);
+    await CodCheckout.updateOne({ _id: checkout._id }, { $set: { status: 'completed', rideId: ride._id } }).catch(() => null);
+    return { kind: 'ride', ride };
+  } catch (error) {
+    // The ride could not be booked: give the whole advance back to the wallet.
+    await codCreditBack(userId, checkout.advanceAmount, `ride-cod-advance-failed:${checkout._id}`, 'Ride advance returned (booking failed)').catch(() => null);
+    await CodCheckout.updateOne({ _id: checkout._id }, { $set: { status: 'expired' } });
+    throw error;
+  }
+};
+
+const sendCodResult = (res, placed) => (placed.kind === 'delivery' ? sendBookedParcel(res, placed.delivery) : sendBookedRide(res, placed.ride));
+
+const createCodRide = async (req, res) => {
+  const body = req.body || {};
+  if (!body.pickup || !body.drop) {
+    throw new ApiError(400, 'pickup and drop are required');
+  }
+  if (!(body.vehicleTypeId || (Array.isArray(body.vehicleTypeIds) && body.vehicleTypeIds[0]))) {
+    throw new ApiError(400, 'vehicleTypeId is required');
+  }
+  return startCodBooking(req, res, { kind: 'ride', quotedFare: roundMoney(body.fare) });
+};
+
+/// Parcel: COD books the same way; the advance is worked out from the server's own parcel price.
+export const createCodDelivery = async (req, res) => {
+  const body = req.body || {};
+  const quote = await quoteDelivery({ vehicleTypeId: body.vehicleTypeId, pickup: body.pickup, drop: body.drop, parcel: body.parcel });
+  return startCodBooking(req, res, { kind: 'delivery', quotedFare: roundMoney(quote?.total) });
+};
+
+const startCodBooking = async (req, res, { kind, quotedFare }) => {
+  const userId = req.auth.sub;
+  const body = req.body || {};
+  if (!(quotedFare > 0)) {
+    throw new ApiError(400, 'Cash on Delivery needs a fare above zero');
+  }
+  const user = await User.findById(userId).select('isCodEnabled isCodAllowed').lean();
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+  let allowed;
+  try {
+    allowed = await assertCodAllowed('taxi', { total: quotedFare, user });
+  } catch (error) {
+    throw new ApiError(400, error.message);
+  }
+  const { split } = allowed;
+
+  // No advance asked: nothing to pay first.
+  if (split.advanceAmount <= 0) {
+    const noAdvance = { percent: split.percent, advanceAmount: 0 };
+    if (kind === 'delivery') return sendBookedParcel(res, await placeDelivery(userId, body, noAdvance));
+    return sendBookedRide(res, await placeRide(userId, body, noAdvance));
+  }
+
+  // Wallet part (same rules as every online payment: opt out with useWallet=false, wallet-only only when asked,
+  // never leave the gateway less than Rs 1).
+  const useWallet = body.useWallet;
+  const optedOut = useWallet === false || useWallet === 'false' || useWallet === 0 || useWallet === '0';
+  const asked = useWallet === true || useWallet === 'true' || useWallet === 1 || useWallet === '1';
+  let walletAmount = 0;
+  if (!optedOut) {
+    await ensureUserWallet(userId);
+    const wallet = await UserWallet.findOne({ userId }).select('balance').lean();
+    walletAmount = roundMoney(Math.min(Number(wallet?.balance || 0), split.advanceAmount));
+    if (walletAmount > 0 && roundMoney(split.advanceAmount - walletAmount) < 1) {
+      walletAmount = asked ? split.advanceAmount : 0;
+    }
+  }
+  const onlineAmount = roundMoney(split.advanceAmount - walletAmount);
+
+  const checkout = await CodCheckout.create({
+    userId,
+    kind,
+    payload: body,
+    percent: split.percent,
+    advanceAmount: split.advanceAmount,
+    walletAmount,
+    onlineAmount,
+    expiresAt: new Date(Date.now() + COD_CHECKOUT_TTL_MS),
+  });
+
+  // Wallet covers the whole advance: book now.
+  if (onlineAmount <= 0) {
+    checkout.status = 'finalizing';
+    await checkout.save();
+    return sendCodResult(res, await finalizeCodBooking(checkout));
+  }
+
+  const { keyId, keySecret } = await resolveRazorpayCredentials();
+  const order = await razorpayRequest({
+    method: 'POST',
+    path: '/orders',
+    body: {
+      amount: Math.round(onlineAmount * 100),
+      currency: 'INR',
+      receipt: `ucod_${String(userId).slice(-8)}_${String(checkout._id).slice(-8)}`,
+      notes: { checkoutId: String(checkout._id), userId: String(userId), walletAmount: String(walletAmount), source: COD_ADVANCE_SOURCE },
+    },
+    keyId,
+    keySecret,
+  });
+  checkout.razorpayOrderId = order.id;
+  await checkout.save();
+
+  return res.status(201).json({
+    success: true,
+    data: {
+      requiresPayment: true,
+      checkoutId: String(checkout._id),
+      kind,
+      percent: split.percent,
+      fare: quotedFare,
+      advanceAmount: split.advanceAmount,
+      remainingAmount: split.remainingAmount,
+      walletAmount,
+      onlineAmount,
+      expiresAt: checkout.expiresAt,
+      razorpay: { keyId, orderId: order.id, amount: order.amount, currency: order.currency || 'INR' },
+    },
+  });
+};
+
+/// Step 2 of a COD booking: verify the advance payment and book the ride.
+export const verifyCodAdvance = async (req, res) => {
+  const checkoutId = String(req.body?.checkoutId || '').trim();
+  const orderId = String(req.body?.razorpay_order_id || '');
+  const paymentId = String(req.body?.razorpay_payment_id || '');
+  const signature = String(req.body?.razorpay_signature || '');
+  if (!mongoose.Types.ObjectId.isValid(checkoutId) || !orderId || !paymentId || !signature) {
+    throw new ApiError(400, 'checkoutId and the payment verification fields are required');
+  }
+  const userId = req.auth.sub;
+  const checkout = await CodCheckout.findOne({ _id: checkoutId, userId });
+  if (!checkout) {
+    throw new ApiError(404, 'Booking not found');
+  }
+  // The app retrying after a dropped response: already booked.
+  if (checkout.status === 'completed' && (checkout.rideId || checkout.response)) {
+    return checkout.kind === 'delivery' ? sendBookedParcel(res, checkout.response) : sendBookedRide(res, await getRideDetails(checkout.rideId));
+  }
+  if (checkout.razorpayOrderId !== orderId) {
+    throw new ApiError(400, 'This payment is not for this booking');
+  }
+
+  const { keyId, keySecret } = await resolveRazorpayCredentials();
+  const expectedSignature = crypto.createHmac('sha256', keySecret).update(`${orderId}|${paymentId}`).digest('hex');
+  if (expectedSignature !== signature) {
+    throw new ApiError(400, 'Invalid payment signature');
+  }
+  await assertRazorpayPaymentCaptured({ paymentId, orderId, keyId, keySecret });
+  const order = await razorpayRequest({ method: 'GET', path: `/orders/${encodeURIComponent(orderId)}`, keyId, keySecret });
+  if (
+    String(order?.notes?.checkoutId || '') !== String(checkout._id)
+    || String(order?.notes?.userId || '') !== String(userId)
+    || String(order?.notes?.source || '') !== COD_ADVANCE_SOURCE
+    || Math.abs(roundMoney(Number(order?.amount || 0) / 100) - checkout.onlineAmount) > 0.01
+  ) {
+    throw new ApiError(400, 'This payment is not for this booking');
+  }
+
+  // Paid after the booking window closed: keep nothing, put the money in the wallet.
+  if (checkout.status === 'expired' || (checkout.status === 'pending' && checkout.expiresAt.getTime() <= Date.now())) {
+    await CodCheckout.updateOne({ _id: checkout._id }, { $set: { status: 'expired' } });
+    await codCreditBack(userId, checkout.onlineAmount, `ride-cod-advance-late:${paymentId}`, 'Ride advance returned (booking window expired)');
+    throw new ApiError(409, `The booking window expired. ₹${checkout.onlineAmount} was added to your wallet; please book again.`);
+  }
+
+  const claimed = await CodCheckout.findOneAndUpdate({ _id: checkout._id, status: 'pending' }, { $set: { status: 'finalizing' } }, { new: true });
+  if (!claimed) {
+    const again = await CodCheckout.findById(checkout._id);
+    if (again?.status === 'completed' && (again.rideId || again.response)) {
+      return again.kind === 'delivery' ? sendBookedParcel(res, again.response) : sendBookedRide(res, await getRideDetails(again.rideId));
+    }
+    throw new ApiError(409, 'This booking is already being processed');
+  }
+  return sendCodResult(res, await finalizeCodBooking(claimed, { orderId, paymentId }));
 };
 
 export const getRideById = async (req, res) => {
@@ -942,7 +1249,8 @@ export const createRazorpayRideFareOrder = async (req, res) => {
     throw new ApiError(409, 'This fare is already paid');
   }
 
-  const fare = roundMoney(ride.fare || 0);
+  // COD with an advance: the rider pays only what is left after the advance.
+  const fare = hasCod(ride) ? rideAmountDue(ride) : roundMoney(ride.fare || 0);
   if (fare <= 0) {
     throw new ApiError(400, 'No fare to pay for this ride');
   }

@@ -46,6 +46,8 @@ import {
 } from './active-restaurant-limit.service.js';
 import * as dispatchService from './order-dispatch.service.js';
 import * as checkoutService from './order-checkout.service.js';
+import { assertCodAllowed, computeCodSplit, buildCodPayment } from '../../../common/cod/cod.service.js';
+import { refundFoodCodAdvance, sweepFoodCodAdvanceRefunds } from './codAdvance.service.js';
 import * as deliveryService from './order-delivery.service.js';
 import * as paymentService from './order-payment.service.js';
 import { getRoadDistanceMeters } from '../../../../core/location/distance.service.js';
@@ -329,6 +331,28 @@ export async function createOrder(userId, dto, options = {}) {
     throw new ValidationError(msg);
   }
 
+  // Cash on delivery with an advance: only the advance is paid now (wallet and/or online); the rest is
+  // collected in cash on delivery. A paid checkout carries its own snapshot, so a later change of the
+  // admin's percent never alters an order that is already being paid. See modules/common/cod.
+  let codSplit = null;
+  let payNow = normalizedPricing.total;
+  if (dto.paymentMethod === 'cod' || verifiedPrepaid?.cod) {
+    if (isPickup) throw new ValidationError('Cash on Delivery is available only for delivery orders.');
+    if (verifiedPrepaid?.cod) {
+      const snap = verifiedPrepaid.cod;
+      if (Math.round(Number(snap.total) * 100) !== Math.round(normalizedPricing.total * 100)) {
+        throw new ValidationError('Order total changed after payment. Contact support for a refund.');
+      }
+      codSplit = { total: Number(snap.total), percent: Number(snap.percent), advanceAmount: Number(snap.advanceAmount), remainingAmount: Number(snap.remainingAmount) };
+    } else {
+      const orderingUser = await FoodUser.findById(userId).select('isCodEnabled isCodAllowed').lean();
+      codSplit = (await assertCodAllowed('food', { total: normalizedPricing.total, user: orderingUser })).split;
+    }
+    payNow = codSplit.advanceAmount;
+    // Advance to pay -> same path as an online order (the wallet may cover it); nothing to pay -> plain cash order.
+    paymentMethod = payNow > 0 ? 'razorpay' : 'cash';
+  }
+
   // Online + wallet split (online only, never cash). A verified checkout carries the wallet part
   // it was priced with, so it is not re-derived from whatever the balance is now.
   let walletAmount = 0;
@@ -337,7 +361,7 @@ export async function createOrder(userId, dto, options = {}) {
   } else if (paymentMethod === "razorpay" && dto.useWallet !== false) {
     // useWallet not sent = use the wallet part automatically; false = the customer opted out.
     const balance = await userWalletService.getWalletBalance(userId);
-    if (balance >= normalizedPricing.total) {
+    if (balance >= payNow) {
       // The wallet alone covers it - nothing to pay online (only when the customer asked for it).
       if (dto.useWallet === true) {
         paymentMethod = "wallet";
@@ -345,13 +369,13 @@ export async function createOrder(userId, dto, options = {}) {
       }
     } else if (balance > 0) {
       // Razorpay needs at least Rs 1, so always leave Rs 1 for the gateway.
-      walletAmount = Math.max(0, Math.min(balance, Math.round((normalizedPricing.total - 1) * 100) / 100));
+      walletAmount = Math.max(0, Math.min(balance, Math.round((payNow - 1) * 100) / 100));
     }
   }
 
   if (verifiedPrepaid && Number.isFinite(Number(verifiedPrepaid.expectedAmount))) {
     const expected = Math.round((Number(verifiedPrepaid.expectedAmount) + walletAmount) * 100);
-    const actual = Math.round(normalizedPricing.total * 100);
+    const actual = Math.round(payNow * 100);
     if (expected !== actual) {
       throw new ValidationError("Order total changed after payment. Contact support for a refund.");
     }
@@ -381,9 +405,11 @@ export async function createOrder(userId, dto, options = {}) {
       dto: lockedDto,
       pricing: normalizedPricing,
       walletAmount,
+      codSplit,
     });
     return {
       order: null,
+      codAdvance: checkout.codAdvance || null,
       checkoutId: checkout.checkoutId,
       paymentType: 'PREPAID',
       amount: normalizedPricing.total,
@@ -710,6 +736,20 @@ export async function createOrder(userId, dto, options = {}) {
       qr: {},
     };
 
+  // COD with an advance: the order is a cash order for the REMAINING amount; the advance is already paid.
+  if (codSplit) {
+    const advanceWallet = verifiedPrepaid ? walletAmount : (isWallet ? codSplit.advanceAmount : 0);
+    const advanceOnline = Math.round((codSplit.advanceAmount - advanceWallet) * 100) / 100;
+    Object.assign(payment, {
+      method: 'cash',
+      status: 'cod_pending',
+      amountDue: codSplit.remainingAmount,
+      walletAmount: advanceWallet,
+      onlineAmount: advanceOnline,
+      cod: buildCodPayment(codSplit, { advanceWalletAmount: advanceWallet, advanceOnlineAmount: advanceOnline }),
+    });
+  }
+
   // scheduledAtDate was validated (and parsed) once, up front, by assertValidScheduledAt - a
   // non-null value here has already cleared the lead-time window and the restaurant-hours
   // check above, so it is always a genuine future scheduled slot, never re-derived from the
@@ -770,7 +810,7 @@ export async function createOrder(userId, dto, options = {}) {
 
   if (isWallet) {
     try {
-      await userWalletService.deductWalletBalance(userId, order.pricing.total, `Payment for order #${order.order_id || order._id}`, { orderId: order._id });
+      await userWalletService.deductWalletBalance(userId, codSplit ? codSplit.advanceAmount : order.pricing.total, `${codSplit ? 'Advance for' : 'Payment for'} order #${order.order_id || order._id}`, { orderId: order._id });
     } catch (err) {
       await FoodOrder.deleteOne({ _id: order._id });
       throw err;
@@ -806,7 +846,7 @@ export async function createOrder(userId, dto, options = {}) {
     payment,
   });
 
-  if (verifiedPrepaid) {
+  if (verifiedPrepaid && !codSplit) {
     try {
       await foodTransactionService.updateTransactionStatus(order._id, 'captured', {
         status: 'captured',
@@ -861,7 +901,7 @@ export async function createOrder(userId, dto, options = {}) {
   }
 
   // Cart clear for confirmed orders (COD / wallet / prepaid-verified razorpay)
-  if (isCash || isWallet || verifiedPrepaid) {
+  if (isCash || isWallet || verifiedPrepaid || codSplit) {
     await clearUserCartAfterOrder(userId);
   }
 
@@ -870,8 +910,9 @@ export async function createOrder(userId, dto, options = {}) {
     order: clientOrder,
     orderId: String(order._id),
     orderNumber: order.order_id || clientOrder?.order_id || String(order._id),
-    paymentType: verifiedPrepaid ? 'PREPAID' : (isCash ? 'COD' : (isWallet ? 'WALLET' : 'PREPAID')),
+    paymentType: codSplit ? 'COD' : verifiedPrepaid ? 'PREPAID' : (isCash ? 'COD' : (isWallet ? 'WALLET' : 'PREPAID')),
     amount: normalizedPricing.total,
+    codAdvance: codSplit,
     pricing: normalizedPricing,
     razorpay: null,
     requiresPayment: false,
@@ -931,6 +972,7 @@ export async function verifyPayment(userId, dto) {
         razorpaySignature: dto.razorpaySignature,
         expectedAmount: claimed.amountDue,
         walletAmount: claimed.walletAmount || 0,
+        cod: claimed.codAdvance || null,
       },
     });
 
@@ -1089,6 +1131,7 @@ export async function finalizeCheckoutFromWebhook(rzOrderId, rzPaymentId) {
       razorpaySignature: claimed.razorpay?.signature || 'webhook',
       expectedAmount: claimed.amountDue,
       walletAmount: claimed.walletAmount || 0,
+      cod: claimed.codAdvance || null,
     },
   });
 
@@ -1716,6 +1759,9 @@ export async function recoverStuckOrders() {
       (order) => now.getTime() - huntStartedAt(order) > NO_DRIVER_AUTO_CANCEL_MS,
     );
 
+    // Any cancelled COD order (whatever path cancelled it) still holding an advance gets it back in the wallet.
+    await sweepFoodCodAdvanceRefunds().catch((err) => logger.warn(`COD advance sweep failed: ${err?.message || err}`));
+
     if (noRiderTimeout.length > 0) {
       logger.info(`Watchdog: Auto-cancelling ${noRiderTimeout.length} orders due to no rider availability.`);
       for (const order of noRiderTimeout) {
@@ -1967,6 +2013,9 @@ export async function cancelOrder(orderId, userId, reason, refundDestination = "
     logger.warn(`cancelOrder transaction sync failed: ${err?.message || err}`);
   }
 
+  // COD with an advance: give the advance back to the wallet right away.
+  const codRefunded = await refundFoodCodAdvance(order._id, { reason: 'Cancelled by you.' }).catch(() => 0);
+
   // Notify User and Restaurant about the cancellation
   const finalPaymentMethod = String(order.payment?.method || paymentMethod || "cash").toLowerCase();
   const finalPaymentStatus = String(order.payment?.status || paymentStatus || "cod_pending").toLowerCase();
@@ -1981,7 +2030,7 @@ export async function cancelOrder(orderId, userId, reason, refundDestination = "
     ? settledRefundDestination === "wallet"
       ? ` Your refund of ₹${order.pricing.total} has been credited to your wallet.`
       : ` Your refund of ₹${order.pricing.total} is being processed to your Buddy wallet.`
-    : "";
+    : (codRefunded > 0 ? ` Your advance of ₹${codRefunded} has been credited to your wallet.` : "");
 
   await notifyOwnersSafely(
     [

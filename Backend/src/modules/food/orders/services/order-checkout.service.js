@@ -25,13 +25,16 @@ export async function createPrepaidCheckoutSession({
   dto,
   pricing,
   walletAmount = 0,
+  codSplit = null,
 }) {
   if (!isRazorpayConfigured()) {
     throw new ValidationError('Online payment is not configured');
   }
 
   // Wallet part is not charged here; only the remainder goes to the gateway.
-  const amountDue = Math.round((Number(pricing?.total ?? 0) - Number(walletAmount || 0)) * 100) / 100;
+  // COD with an advance: only the advance is paid now; otherwise the whole bill.
+  const payNow = codSplit ? Number(codSplit.advanceAmount) : Number(pricing?.total ?? 0);
+  const amountDue = Math.round((payNow - Number(walletAmount || 0)) * 100) / 100;
   const amountPaise = Math.round(amountDue * 100);
   if (amountPaise < 100) {
     throw new ValidationError('Amount too low for online payment');
@@ -46,6 +49,9 @@ export async function createPrepaidCheckoutSession({
     pricing,
     amountDue,
     walletAmount: Number(walletAmount || 0),
+    codAdvance: codSplit
+      ? { total: codSplit.total, percent: codSplit.percent, advanceAmount: codSplit.advanceAmount, remainingAmount: codSplit.remainingAmount }
+      : null,
     currency: String(pricing?.currency || 'INR'),
     expiresAt,
   });
@@ -69,6 +75,7 @@ export async function createPrepaidCheckoutSession({
     pricing,
     walletAmount: Number(walletAmount || 0),
     onlineAmount: amountDue,
+    codAdvance: session.codAdvance || null,
     razorpay: {
       key: getRazorpayKeyId(),
       orderId: rzOrder.id,

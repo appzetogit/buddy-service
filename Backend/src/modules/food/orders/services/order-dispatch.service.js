@@ -120,7 +120,12 @@ async function filterPartnersByCashLimit(partners = [], options = {}) {
       {
         $group: {
           _id: '$dispatch.deliveryPartnerId',
-          grossCashCollected: { $sum: { $ifNull: ['$pricing.total', 0] } },
+          // A COD-with-advance order only put its remaining amount in the rider's hand.
+          grossCashCollected: {
+            $sum: {
+              $cond: [{ $eq: ['$payment.cod.enabled', true] }, { $ifNull: ['$payment.amountDue', 0] }, { $ifNull: ['$pricing.total', 0] }],
+            },
+          },
         },
       },
     ]),
@@ -510,7 +515,7 @@ export async function tryAutoAssign(orderId, options = {}) {
     const offeredIds = (order.dispatch?.offeredTo || []).map(o => o.partnerId.toString());
     const paymentMethod = String(order.payment?.method || 'cash').toLowerCase();
     const isCashOrder = paymentMethod === 'cash' || paymentMethod === 'cod';
-    const requiredAmount = isCashOrder ? Number(order.pricing?.total || 0) : 0;
+    const requiredAmount = isCashOrder ? Number(order.payment?.amountDue ?? order.pricing?.total ?? 0) : 0;
 
     // RADIUS EXPANSION LOGIC
     const isPriority = ['confirmed', 'preparing', 'ready_for_pickup', 'ready'].includes(order.orderStatus);

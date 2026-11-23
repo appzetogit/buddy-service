@@ -767,7 +767,10 @@ const normalizeAdminPayment = (payment = {}, pricing = {}) => {
     amountDue: Number(payment.amountDue ?? pricing.total ?? 0),
     amountPaid: Number(
       payment.amountPaid ??
-        (status === 'completed' ? pricing.total || payment.amountDue || 0 : 0),
+        (payment.cod?.enabled
+          // COD with advance: the advance (less any refund) plus the cash once collected.
+          ? (payment.cod.advanceStatus === 'paid' ? payment.cod.advanceAmount || 0 : 0) + Number(payment.cod.collectedAmount || 0)
+          : status === 'completed' ? pricing.total || payment.amountDue || 0 : 0),
     ),
   };
 };

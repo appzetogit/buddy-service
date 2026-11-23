@@ -397,6 +397,17 @@ export default function OrdersTable({
                       const isCod = paymentTypeDisplay === 'Cash on Delivery' || paymentTypeDisplay === 'COD (QR)';
                       const isWallet = paymentTypeDisplay === 'Wallet';
                       
+                      const codInfo = order.payment?.cod?.enabled ? order.payment.cod : null;
+                      if (codInfo) {
+                        return (
+                          <div>
+                            <span className="text-sm font-medium text-amber-600">COD + Advance</span>
+                            <div className="text-[11px] text-slate-500">
+                              Advance ₹{Number(codInfo.advanceAmount || 0).toFixed(0)} paid · ₹{Number(codInfo.remainingAmount || 0).toFixed(0)} on delivery
+                            </div>
+                          </div>
+                        );
+                      }
                       return (
                         <span className={`text-sm font-medium ${
                           isCod ? 'text-amber-600' : 
@@ -411,9 +422,19 @@ export default function OrdersTable({
                 )}
                 {visibleColumns.paymentCollectionStatus && (
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`text-sm font-medium ${getPaymentStatusColor(order.paymentStatus)}`}>
-                      {order.paymentStatus || "Pending"}
-                    </span>
+                    {order.payment?.cod?.enabled ? (
+                      <span className={`text-sm font-medium ${order.payment.cod.advanceStatus === "refunded" ? "text-sky-600" : (order.payment.cod.collectedAt || order.payment.status === "paid") ? "text-emerald-600" : "text-amber-600"}`}>
+                        {order.payment.cod.advanceStatus === "refunded"
+                          ? `Advance refunded ₹${Number(order.payment.cod.refundedAmount || 0).toFixed(0)}`
+                          : (order.payment.cod.collectedAt || order.payment.status === "paid")
+                            ? "Collected"
+                            : `₹${Number(order.payment.cod.remainingAmount || 0).toFixed(0)} to collect`}
+                      </span>
+                    ) : (
+                      <span className={`text-sm font-medium ${getPaymentStatusColor(order.paymentStatus)}`}>
+                        {order.paymentStatus || "Pending"}
+                      </span>
+                    )}
                   </td>
                 )}
                 {visibleColumns.paymentMethodDetail && (

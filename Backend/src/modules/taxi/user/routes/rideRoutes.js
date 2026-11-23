@@ -28,11 +28,14 @@ import {
   uploadParcelProof,
   verifyRazorpayRideCompletion,
   verifyRazorpayRideTip,
+  verifyCodAdvance,
 } from '../controllers/rideController.js';
 
 export const rideRouter = Router();
 
 rideRouter.post('/', authenticate(['user']), rideCreationRateLimit, asyncHandler(createRide));
+// COD booking, step 2: verify the advance payment and book the ride.
+rideRouter.post('/cod-advance/verify', authenticate(['user']), asyncHandler(verifyCodAdvance));
 rideRouter.get('/', authenticate(['user', 'driver']), asyncHandler(listMyRides));
 rideRouter.get('/app-settings/tip', asyncHandler(getRideAppTipSettings));
 rideRouter.get('/app-settings/bidding', asyncHandler(getRideBiddingSettings));

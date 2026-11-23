@@ -113,7 +113,8 @@ const RideDetail = () => {
         ride?.paymentType ||
         ride?.payment_type ||
         'cash',
-      ).trim().toLowerCase() === 'cash' ? 'Cash' : 'Online',
+      ).trim().toLowerCase() === 'cash' ? (ride?.cod?.enabled ? 'Cash on Delivery' : 'Cash') : 'Online',
+      cod: ride?.cod?.enabled ? ride.cod : null,
       rideCode,
       shortRideCode: rideCode.length > 14 ? `${rideCode.slice(0, 6)}...${rideCode.slice(-4)}` : rideCode,
     };
@@ -243,6 +244,25 @@ const RideDetail = () => {
               <span>Total Paid</span>
               <span>Rs {details.fare}.00</span>
             </div>
+            {details.cod ? (
+              <div className="space-y-2 rounded-2xl bg-amber-50/60 p-3 text-[12px] font-bold text-gray-600">
+                <div className="flex justify-between">
+                  <span>Advance paid ({details.cod.percent}%)</span>
+                  <span className="text-gray-900">Rs {Number(details.cod.advanceAmount || 0).toFixed(2)}</span>
+                </div>
+                {details.cod.advanceStatus === 'refunded' ? (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Refunded to your wallet</span>
+                    <span>Rs {Number(details.cod.refundedAmount || 0).toFixed(2)}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between">
+                    <span>{details.statusLabel === 'Completed' ? 'Paid in cash after the ride' : 'To pay in cash after the ride'}</span>
+                    <span className="text-gray-900">Rs {Number(details.cod.remainingAmount || 0).toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
 

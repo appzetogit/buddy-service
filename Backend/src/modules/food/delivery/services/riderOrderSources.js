@@ -23,6 +23,18 @@ const quickModel = () => mongoose.models.QuickOrder || null;
  */
 const taxiModel = () => mongoose.models.TaxiRide || null;
 
+const TAXI_CASH_DUE = {
+  $max: [
+    0,
+    {
+      $subtract: [
+        { $ifNull: ['$fare', 0] },
+        { $cond: [{ $eq: ['$cod.advanceStatus', 'paid'] }, { $ifNull: ['$cod.advanceAmount', 0] }, 0] },
+      ],
+    },
+  ],
+};
+
 const TAXI_AS_ORDER = {
   $addFields: {
     'dispatch.deliveryPartnerId': '$driverId',
@@ -50,10 +62,12 @@ const TAXI_AS_ORDER = {
             { $not: { $in: ['$driverPaymentCollection.status', ['paid', 'captured', 'completed']] } },
           ],
         },
-        { $ifNull: ['$fare', 0] },
+        // COD with an advance: the advance was already paid online, only the rest is cash in the driver's hand.
+        TAXI_CASH_DUE,
         0,
       ],
     },
+    'payment.cod.enabled': { $ifNull: ['$cod.enabled', false] },
     'payment.method': {
       $cond: [
         {
@@ -77,7 +91,7 @@ const TAXI_AS_ORDER = {
             { $not: { $in: ['$driverPaymentCollection.status', ['paid', 'captured', 'completed']] } },
           ],
         },
-        { $ifNull: ['$fare', 0] },
+        TAXI_CASH_DUE,
         0,
       ],
     },

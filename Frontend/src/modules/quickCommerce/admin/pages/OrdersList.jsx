@@ -149,6 +149,7 @@ const OrdersList = () => {
                     paymentMethod: String(o.payment?.method || '').toLowerCase(),
                     paymentStatus: String(o.payment?.status || '').toLowerCase(),
                     refund: o.payment?.refund || null,
+                    cod: o.payment?.cod?.enabled ? o.payment.cod : null,
                     cancelledBy: String(o.cancelledBy || '').toLowerCase(),
                     cancellationReason: String(o.cancellationReason || ''),
                 }));
@@ -279,6 +280,18 @@ const OrdersList = () => {
     const money = (n) => `₹${Number(n || 0).toLocaleString()}`;
     const getPaymentInfo = (order) => {
         const st = order.paymentStatus;
+        // COD with advance: show what was paid up front and what is still cash.
+        if (order.cod) {
+            const c = order.cod;
+            if (c.advanceStatus === 'refunded') {
+                return { label: `Advance ${money(c.refundedAmount || c.advanceAmount)} refunded to Wallet`, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+            }
+            if (c.collectedAt || st === 'paid' || st === 'completed') {
+                return { label: `COD · fully paid (cash ${money(c.collectedAmount || c.remainingAmount)})`, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+            }
+            if (st === 'failed') return { label: 'COD · cancelled', cls: 'bg-rose-50 text-rose-700 border-rose-200' };
+            return { label: `COD · advance ${money(c.advanceAmount)} paid · ${money(c.remainingAmount)} to collect`, cls: 'bg-sky-50 text-sky-700 border-sky-200' };
+        }
         const refundStatus = String(order.refund?.status || '').toLowerCase();
         const dest = String(order.refund?.processedMethod || order.refund?.requestedMethod || '').toLowerCase();
         const destLabel = dest === 'wallet' ? 'to Wallet' : dest ? 'to source' : '';
@@ -592,6 +605,11 @@ const OrdersList = () => {
                                                     </span>
                                                     {order.paymentMethod ? (
                                                         <span className="text-[10px] font-bold uppercase text-slate-400">{order.paymentMethod}</span>
+                                                    ) : null}
+                                                    {order.cod ? (
+                                                        <span className="text-[10px] font-semibold text-slate-500">
+                                                            {order.cod.percent}% advance: wallet {money(order.cod.advanceWalletAmount)} + online {money(order.cod.advanceOnlineAmount)}
+                                                        </span>
                                                     ) : null}
                                                 </div>
                                             );

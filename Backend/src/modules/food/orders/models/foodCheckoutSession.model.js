@@ -33,6 +33,8 @@ const foodCheckoutSessionSchema = new mongoose.Schema(
     amountDue: { type: Number, required: true, min: 0 },
     /** Wallet part of a split payment; debited when the order is created after the gateway pays. */
     walletAmount: { type: Number, default: 0, min: 0 },
+    /** COD with an advance: snapshot { total, percent, advanceAmount, remainingAmount } taken when the session was priced. */
+    codAdvance: { type: mongoose.Schema.Types.Mixed, default: null },
     currency: { type: String, default: 'INR' },
     razorpay: {
       // Indexed via schema.index below (sparse) — avoid duplicate index:true here.

@@ -263,7 +263,10 @@ export async function dispatchQuickOrder(orderId, options = {}) {
 
     const paymentMethod = String(order.payment?.method || '').toLowerCase();
     const isCashOrder = paymentMethod === 'cash' || paymentMethod === 'cod';
-    const requiredAmount = isCashOrder ? Number(order.pricing?.total || 0) : 0;
+    // A COD-advance order only needs the cash still to be collected, not the whole bill.
+    const requiredAmount = isCashOrder
+      ? Number(order.payment?.cod?.enabled ? order.payment?.amountDue || 0 : order.pricing?.total || 0)
+      : 0;
 
     // Same widening ladder as Food: start tight, open up when nobody bites. An order whose shop
     // is already working on it (admin reassign) skips straight to the widest net.
@@ -658,6 +661,31 @@ export async function recoverStuckQuickOrders() {
     await flows.activateDueScheduledQuickOrders();
   } catch (err) {
     logger.warn(`[QuickDispatch] lifecycle sweep failed: ${err.message}`);
+  }
+
+  // Safety net: any cancelled COD order whose advance was not returned yet (whatever path cancelled it).
+  try {
+    const { refundCodAdvanceToWallet } = await import('./quickRefund.service.js');
+    const cancelled = await QuickOrder.find({
+      'payment.cod.advanceStatus': 'paid',
+      orderStatus: { $in: ['cancelled', 'cancelled_by_user', 'cancelled_by_restaurant', 'cancelled_by_admin', 'cancelled_by_system'] },
+    }).limit(25);
+    for (const order of cancelled) {
+      const refund = await refundCodAdvanceToWallet(order, { reason: order.cancellationReason || 'Order cancelled' }).catch((err) => {
+        logger.warn(`[QuickDispatch] COD advance refund failed for ${order.orderId}: ${err.message}`);
+        return null;
+      });
+      if (refund && order.userId) {
+        await order.save().catch(() => {});
+        void notifyOwnersSafely([{ ownerType: 'USER', ownerId: order.userId }], {
+          title: 'Advance refunded to wallet',
+          body: `Order #${order.orderId} was cancelled. Your advance of Rs ${refund.amount} is back in your wallet.`,
+          data: { type: 'order_cancelled', orderId: String(order.orderId), orderMongoId: String(order._id) },
+        }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    logger.warn(`[QuickDispatch] COD advance sweep failed: ${err.message}`);
   }
 }
 

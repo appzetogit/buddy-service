@@ -498,13 +498,17 @@ export const getDeliveryPartnerWallet = async (deliveryPartnerId) => {
                     _id: null,
                     cashCollected: { 
                         $sum: { 
-                            $max: [
-                                { $ifNull: ['$pricing.total', 0] },
+                            $cond: [
+                                { $eq: ['$payment.cod.enabled', true] },
                                 { $ifNull: ['$payment.amountDue', 0] },
-                                { $ifNull: ['$payment.amount', 0] },
-                                { $ifNull: ['$amountToCollect', 0] },
-                                { $ifNull: ['$totalAmount', 0] }
-                            ] 
+                                { $max: [
+                                    { $ifNull: ['$pricing.total', 0] },
+                                    { $ifNull: ['$payment.amountDue', 0] },
+                                    { $ifNull: ['$payment.amount', 0] },
+                                    { $ifNull: ['$amountToCollect', 0] },
+                                    { $ifNull: ['$totalAmount', 0] }
+                                ] }
+                            ]
                         } 
                     }
                 }

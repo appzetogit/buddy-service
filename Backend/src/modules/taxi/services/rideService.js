@@ -27,6 +27,7 @@ import { resolveBiddingPolicy } from './biddingPolicyService.js';
 import { resolveRideRoute } from './routeService.js';
 import { computeOutstationFare } from './outstationFareService.js';
 import { driverRideFilter, driverTakesRide } from '../shared/driverRideFilters.js';
+import { hasCod, serializeCod, rideAmountDue } from './codAdvance.js';
 
 const clearUserActiveRideIfPresent = async (user) => {
   if (!user?.currentRideId) {
@@ -863,6 +864,25 @@ const haversineFallbackMeters = (c1, c2) => {
   return Math.round(6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 };
 
+/// A COD booking: the advance is already paid. The ride is a cash ride for the driver, with a `cod` block.
+const buildRideCodFields = (cod, fare) => {
+  if (!cod) return {};
+  const advance = Math.min(Math.max(0, Number(cod.advanceAmount) || 0), Math.max(0, Number(fare) || 0));
+  return {
+    paymentMethod: 'cash',
+    cod: {
+      enabled: true,
+      percent: Number(cod.percent) || 0,
+      advanceAmount: advance,
+      advanceWalletAmount: Number(cod.advanceWalletAmount) || 0,
+      advanceOnlineAmount: Number(cod.advanceOnlineAmount) || 0,
+      remainingAmount: Math.max(0, Math.round(((Number(fare) || 0) - advance) * 100) / 100),
+      advanceStatus: advance > 0 ? 'paid' : 'none',
+      advanceRef: { orderId: cod.razorpayOrderId || '', paymentId: cod.razorpayPaymentId || '' },
+    },
+  };
+};
+
 export const createRideRecord = async ({
   userId,
   pickupCoords,
@@ -890,6 +910,7 @@ export const createRideRecord = async ({
   bidStepAmount,
   platformFee,
   surgeMultiplier,
+  cod = null,
 }) => {
   const user = await User.findById(userId);
 
@@ -1212,6 +1233,7 @@ export const createRideRecord = async ({
       estimatedDistanceMeters: routedDistanceMeters,
       estimatedDurationMinutes: routedDurationMinutes,
       paymentMethod: resolvedRequestedPaymentMethod,
+      ...buildRideCodFields(cod, effectiveStartingFare),
       otp: riderOtp,
       service_location_id: resolvedServiceLocationId,
       transport_type: normalizedTransportType,
@@ -1274,6 +1296,7 @@ export const createRideRecord = async ({
             estimatedDistanceMeters: routedDistanceMeters,
             estimatedDurationMinutes: routedDurationMinutes,
             paymentMethod: resolvedRequestedPaymentMethod,
+            ...buildRideCodFields(cod, effectiveStartingFare),
             otp: riderOtp,
             service_location_id: resolvedServiceLocationId,
             transport_type: normalizedTransportType,
@@ -1410,6 +1433,9 @@ export const serializeRideRealtime = (ride) => ({
       }
     : null,
   paymentMethod: ride.paymentMethod,
+  // COD with an advance: what was paid up front, what is still owed in cash, refund status after a cancel.
+  cod: serializeCod(ride),
+  amountDue: rideAmountDue(ride),
   collectedVia: ride.collectedVia || 'cash',
   // Driver's own static UPI handle + QR, exposed to the rider ONLY once admin
   // has verified it. The rider app uses this at ride-end to render a scannable
@@ -1610,6 +1636,7 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50, p
       'estimatedDistanceMeters',
       'estimatedDurationMinutes',
       'paymentMethod',
+      'cod',
       'otp',
       'parcel',
       'intercity',
@@ -1668,6 +1695,9 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50, p
     estimatedDistanceMeters: ride.estimatedDistanceMeters || 0,
     estimatedDurationMinutes: ride.estimatedDurationMinutes || 0,
     paymentMethod: ride.paymentMethod,
+    // COD with an advance (null for every other ride).
+    cod: serializeCod(ride),
+    amountDue: rideAmountDue(ride),
     otp: ride.otp || '',
     parcel: ride.deliveryId?.parcel || ride.parcel || null,
     intercity: ride.intercity || null,
@@ -2012,6 +2042,12 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus, paymen
     ]);
 
     walletUpdate = await settleCompletedRideWallet({ rideId: ride._id });
+    // COD that ended cheaper than its advance: the difference goes back to the wallet (the sweep retries a failure).
+    if (hasCod(ride)) {
+      import('./dispatchService.js')
+        .then(({ refundCodAdvanceExcess }) => refundCodAdvanceExcess(ride._id))
+        .catch((error) => console.error('COD advance excess refund failed', error?.message || error));
+    }
     const settledRide = await Ride.findById(ride._id).select('completedAt driverEarnings estimatedDistanceMeters');
 
     await incrementDriverTodaySummaryForCompletedRide({

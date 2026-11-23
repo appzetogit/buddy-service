@@ -94,6 +94,8 @@ const RideComplete = () => {
   const [walletLoading, setWalletLoading] = useState(false);
   const [useWallet, setUseWallet] = useState(true); // wallet money is used first by default
   const [paymentCollection, setPaymentCollection] = useState(() => state.driverPaymentCollection || null);
+  // Cash on delivery with an advance: the advance was paid up front, only the rest is still owed.
+  const [cod, setCod] = useState(() => state.cod || null);
   const [rideLiveStatus, setRideLiveStatus] = useState(() => String(state.liveStatus || state.status || '').toLowerCase());
   const [tipSettings, setTipSettings] = useState({
     enable_tips: '1',
@@ -124,8 +126,10 @@ const RideComplete = () => {
     ...driver,
     vehicleIconUrl: driver.vehicleIconUrl || state.vehicleIconUrl || state.vehicle?.vehicleIconUrl || state.vehicle?.icon || '',
   });
-  const totalBill = fare + Number(selectedTip || 0);
-  const fareDueNow = isCollectionPaid(paymentCollection) ? 0 : fare;
+  const codAdvancePaid = cod?.enabled && cod.advanceStatus === 'paid' ? Math.min(Number(cod.advanceAmount || 0), fare) : 0;
+  const fareAfterAdvance = Math.max(0, fare - codAdvancePaid);
+  const totalBill = fareAfterAdvance + Number(selectedTip || 0);
+  const fareDueNow = isCollectionPaid(paymentCollection) ? 0 : fareAfterAdvance;
   const payableNow = fareDueNow + Number(selectedTip || 0);
   // Optional wallet + online split (online payments only, never cash).
   const walletBalance = Number(walletSnapshot.balance || 0);
@@ -183,6 +187,7 @@ const RideComplete = () => {
 
         if (active) {
           setPaymentCollection(payload?.driverPaymentCollection || null);
+          setCod(payload?.cod || null);
           setRideLiveStatus(nextLiveStatus);
         }
 
@@ -579,6 +584,12 @@ const RideComplete = () => {
                 <span className="text-[12px] font-bold text-slate-500">Base fare</span>
                 <span className="text-[13px] font-black text-slate-900">Rs {fare.toFixed(2)}</span>
               </div>
+              {codAdvancePaid > 0 ? (
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-emerald-600">Advance paid (COD)</span>
+                  <span className="text-[13px] font-black text-emerald-600">- Rs {codAdvancePaid.toFixed(2)}</span>
+                </div>
+              ) : null}
               <div className="mt-2 flex items-center justify-between">
                 <span className="text-[12px] font-bold text-slate-500">Tip</span>
                 <span className="text-[13px] font-black text-slate-900">Rs {Number(selectedTip || 0).toFixed(2)}</span>

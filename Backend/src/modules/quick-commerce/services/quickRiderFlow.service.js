@@ -417,7 +417,14 @@ export async function completeDelivery(orderId, partnerId, { otp = '' } = {}) {
   order.deliveryState.status = 'delivered';
   order.deliveryState.deliveredAt = new Date();
   order.deliveredAt = new Date();
-  if (String(order.payment?.method || '').toLowerCase() === 'cash') order.payment.status = 'paid';
+  if (String(order.payment?.method || '').toLowerCase() === 'cash') {
+    order.payment.status = 'paid';
+    if (order.payment.cod?.enabled) {
+      // The rider collected the remaining cash; the advance was paid at checkout.
+      order.payment.cod.collectedAmount = Number(order.payment.cod.remainingAmount || 0);
+      order.payment.cod.collectedAt = new Date();
+    }
+  }
   pushHistory(order, partnerId, 'picked_up', 'delivered', `Delivery completed by ${isPrimary ? 'primary' : 'second'} partner`);
   // Handover codes are single-use.
   order.deliveryOtp = '';

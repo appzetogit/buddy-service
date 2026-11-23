@@ -53,6 +53,7 @@ const PAYMENT_STYLES = {
   WALLET: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   ONLINE: 'bg-blue-50 text-blue-700 border-blue-200',
   UPI: 'bg-purple-50 text-purple-700 border-purple-200',
+  COD: 'bg-amber-50 text-amber-700 border-amber-200',
 };
 
 const CATEGORY_STYLES = {
@@ -115,6 +116,8 @@ const normalizeRow = (row = {}) => {
     paymentOption: String(row.paymentOption || row.paymentMethod || 'CASH').toUpperCase(),
     paymentDetail: row.paymentDetail || '',
     paymentReference: row.paymentReference || '',
+    // Cash on delivery with an advance (null for every other trip).
+    cod: row.cod || null,
     fare: Number(row.fare || 0),
     baseFare: Number(row.baseFare || 0),
     pickupAddress: row.pickupAddress || row.pickupLabel || '',
@@ -364,13 +367,39 @@ const TripDetailsModal = ({ trip, onClose, onTrack }) => {
                     {trip.paymentOption}
                   </span>
                   {trip.paymentDetail ? (
-                    <p className="text-[11px] text-gray-300 mt-1 max-w-[200px] truncate">{trip.paymentDetail}</p>
+                    <p className={`text-[11px] text-gray-300 mt-1 ${trip.cod ? 'max-w-[280px]' : 'max-w-[200px] truncate'}`}>{trip.paymentDetail}</p>
                   ) : null}
                   {trip.paymentReference ? (
                     <p className="text-[10px] font-mono text-gray-400 mt-0.5">Ref: {trip.paymentReference}</p>
                   ) : null}
                 </div>
               </div>
+
+              {trip.cod ? (
+                <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
+                  <p className="text-[11px] font-black uppercase tracking-wider text-amber-700 mb-3">Cash on Delivery</p>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between py-1 border-b border-amber-100">
+                      <span className="text-gray-600 font-medium">Advance ({trip.cod.percent}%)</span>
+                      <span className="font-bold text-gray-900">₹{trip.cod.advanceAmount}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-amber-100">
+                      <span className="text-gray-600 font-medium">Advance paid from wallet / online</span>
+                      <span className="font-bold text-gray-900">₹{trip.cod.advanceWalletAmount} / ₹{trip.cod.advanceOnlineAmount}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-amber-100">
+                      <span className="text-gray-600 font-medium">{trip.tripStatus === 'COMPLETED' ? 'Collected in cash' : 'To collect in cash'}</span>
+                      <span className="font-bold text-gray-900">₹{trip.tripStatus === 'COMPLETED' ? trip.cod.collectedAmount : trip.cod.remainingAmount}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600 font-medium">Advance status</span>
+                      <span className={`font-bold ${trip.cod.advanceStatus === 'refunded' ? 'text-emerald-700' : 'text-gray-900'}`}>
+                        {trip.cod.advanceStatus === 'refunded' ? `Refunded to wallet ₹${trip.cod.refundedAmount}` : trip.cod.advanceStatus === 'paid' ? 'Paid' : 'No advance'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               {/* Pricing Snapshot breakdown */}
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">

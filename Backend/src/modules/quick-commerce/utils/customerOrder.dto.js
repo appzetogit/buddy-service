@@ -126,6 +126,22 @@ const mapCustomerPayment = (payment = {}) => {
     method: str(payment.method),
     status: str(payment.status),
     amountDue: num(payment.amountDue),
+    ...(payment.cod?.enabled
+      ? {
+          cod: {
+            percent: num(payment.cod.percent),
+            advanceAmount: num(payment.cod.advanceAmount),
+            advanceWalletAmount: num(payment.cod.advanceWalletAmount),
+            advanceOnlineAmount: num(payment.cod.advanceOnlineAmount),
+            remainingAmount: num(payment.cod.remainingAmount),
+            advanceStatus: str(payment.cod.advanceStatus),
+            refundedAmount: num(payment.cod.refundedAmount),
+            refundedAt: payment.cod.refundedAt || null,
+            collectedAmount: num(payment.cod.collectedAmount),
+            collectedAt: payment.cod.collectedAt || null,
+          },
+        }
+      : {}),
     ...(refund
       ? {
           refund: {

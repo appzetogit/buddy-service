@@ -1,6 +1,7 @@
 import { logger } from '../../../utils/logger.js';
 import { refundWalletBalance } from '../../food/user/services/userWallet.service.js';
 import { initiateRazorpayRefund } from '../../food/orders/helpers/razorpay.helper.js';
+import { QuickOrder } from '../models/order.model.js';
 
 const ONLINE_METHODS = new Set(['razorpay', 'razorpay_qr', 'online']);
 
@@ -43,6 +44,52 @@ const buildRefundMessage = ({ cancelledBy, refundResult, refundTo }) => {
   return 'Order cancelled. Refund will be returned to your original payment method within 5-7 business days.';
 };
 
+/**
+ * Cash-on-delivery orders paid an advance up front. If the order is cancelled that advance returns
+ * to the customer's WALLET (never the gateway). Atomic claim = idempotent across every cancellation
+ * path and the watchdog sweep. Returns null when there is nothing to refund.
+ */
+export const refundCodAdvanceToWallet = async (order, { cancelledBy = 'system', reason = '' } = {}) => {
+  const cod = order?.payment?.cod;
+  const amount = Number(cod?.advanceAmount || 0);
+  if (!cod?.enabled || cod.advanceStatus !== 'paid' || amount <= 0 || !order.userId) return null;
+
+  const now = new Date();
+  const claim = await QuickOrder.findOneAndUpdate(
+    { _id: order._id, 'payment.cod.advanceStatus': 'paid' },
+    { $set: { 'payment.cod.advanceStatus': 'refunded', 'payment.cod.refundedAmount': amount, 'payment.cod.refundedAt': now } },
+    { new: true },
+  );
+  if (!claim) return null; // someone else already refunded it
+  try {
+    await refundWalletBalance(order.userId, amount, 'Marketplace order advance refund', {
+      orderId: String(order.orderId || ''),
+      source: 'quick_cod_advance_refund',
+      cancelledBy,
+    });
+  } catch (err) {
+    await QuickOrder.updateOne({ _id: order._id }, { $set: { 'payment.cod.advanceStatus': 'paid', 'payment.cod.refundedAmount': 0, 'payment.cod.refundedAt': null } });
+    throw err;
+  }
+  // Keep the caller's in-memory document in step (callers save it afterwards).
+  order.payment.cod.advanceStatus = 'refunded';
+  order.payment.cod.refundedAmount = amount;
+  order.payment.cod.refundedAt = now;
+  order.payment.refund = {
+    status: 'processed',
+    amount,
+    refundId: `wallet_refund_${Date.now()}`,
+    requestedMethod: 'wallet',
+    processedMethod: 'wallet',
+    requestedAt: now,
+    requestedByUser: cancelledBy === 'user',
+    cancelledBy,
+    reason,
+    processedAt: now,
+  };
+  return { processed: true, method: 'wallet', amount, message: `Order cancelled. Your advance of ₹${amount} has been credited to your wallet.` };
+};
+
 export const processQuickOrderRefund = async (
   order,
   { refundTo = 'gateway', cancelledBy = 'user', reason = '' } = {},
@@ -60,6 +107,9 @@ export const processQuickOrderRefund = async (
       }),
     };
   }
+
+  const codRefund = await refundCodAdvanceToWallet(order, { cancelledBy, reason });
+  if (codRefund) return codRefund;
 
   const amount = getRefundableAmount(order);
   if (!isPaidPrepaidOrder(order) || amount <= 0) {

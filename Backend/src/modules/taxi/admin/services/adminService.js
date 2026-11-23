@@ -21,6 +21,11 @@ import { AdminActivity } from '../models/AdminActivity.js';
 import { GoodsType } from '../models/GoodsType.js';
 import { SetPrice } from '../models/SetPrice.js';
 import { describeRidePayment } from '../../services/paymentLedgerService.js';
+import { hasCod, rideAmountDue, rideCashPortion, serializeCod } from '../../services/codAdvance.js';
+
+// Fare collected in cash / online for a ride. COD with an advance: only the rest was cash, the advance was online/wallet.
+const fareCashPart = (ride) => (hasCod(ride) ? rideCashPortion(ride) : (String(ride?.paymentMethod || 'cash').toLowerCase() === 'cash' ? Number(ride?.fare || 0) : 0));
+const fareOnlinePart = (ride) => (hasCod(ride) ? Math.max(0, Number(ride?.fare || 0) - rideCashPortion(ride)) : (String(ride?.paymentMethod || '').toLowerCase() === 'online' ? Number(ride?.fare || 0) : 0));
 import { ServiceLocation } from '../models/ServiceLocation.js';
 import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../../driver/models/Driver.js';
@@ -4185,8 +4190,8 @@ export const getDriverProfile = async (id) => {
     const fallbackCommission = Math.max(fare - Number(ride?.driverEarnings || 0), 0);
     return total + Number(explicitCommission ?? fallbackCommission);
   }, 0);
-  const byCash = sum(completedRides.filter((r) => r.paymentMethod === 'cash'), 'fare');
-  const byCard = sum(completedRides.filter((r) => r.paymentMethod === 'online'), 'fare');
+  const byCash = completedRides.reduce((total, r) => total + fareCashPart(r), 0);
+  const byCard = completedRides.reduce((total, r) => total + fareOnlinePart(r), 0);
   const spendAmount = walletTransactions.reduce((total, item) => {
     const amount = Number(item?.amount || 0);
     return amount < 0 ? total + Math.abs(amount) : total;
@@ -4479,8 +4484,15 @@ const formatRidePointLabel = (point, fallback = 'Unknown') => {
 /// method, so a cash booking paid online still read "cash".
 const tripPaymentFields = (ride) => {
   const paid = describeRidePayment(ride);
+  const cod = serializeCod(ride);
   return {
-    paymentOption: paid.method.toUpperCase(),
+    // COD with an advance: advance paid (wallet / online), what is left to collect or was collected, refund after a cancel.
+    cod,
+    codAdvanceAmount: cod?.advanceAmount || 0,
+    codRemainingAmount: cod?.remainingAmount || 0,
+    codCollectedAmount: cod?.collectedAmount || 0,
+    codRefundedAmount: cod?.refundedAmount || 0,
+    paymentOption: cod ? 'COD' : paid.method.toUpperCase(),
     paymentDetail: paid.detail,
     paymentReference: paid.reference,
     paymentStatus: paid.status,
@@ -6739,7 +6751,7 @@ const buildDashboardData = async () => {
     Driver.countDocuments(),
     Driver.countDocuments({ approve: true }),
     Ride.find()
-      .select('status liveStatus fare paymentMethod commissionAmount driverEarnings driverId serviceType intercity parcel pickupAddress dropAddress createdAt updatedAt completedAt')
+      .select('status liveStatus fare paymentMethod cod driverPaymentCollection commissionAmount driverEarnings driverId serviceType intercity parcel pickupAddress dropAddress createdAt updatedAt completedAt')
       .sort({ createdAt: -1 })
       .lean(),
     Ride.find()
@@ -6819,10 +6831,11 @@ const buildDashboardData = async () => {
   const totalOverallDriverEarnings = sumDriverEarnings(completedRides);
   const totalTodayDriverEarnings = sumDriverEarnings(todayCompletedRides);
 
-  const overallByCash = sumFare(completedRides.filter((ride) => String(ride?.paymentMethod || 'cash').toLowerCase() === 'cash'));
-  const overallByCard = sumFare(completedRides.filter((ride) => String(ride?.paymentMethod || '').toLowerCase() === 'online'));
-  const todayByCash = sumFare(todayCompletedRides.filter((ride) => String(ride?.paymentMethod || 'cash').toLowerCase() === 'cash'));
-  const todayByCard = sumFare(todayCompletedRides.filter((ride) => String(ride?.paymentMethod || '').toLowerCase() === 'online'));
+  const sumPart = (items, part) => Math.round(items.reduce((total, ride) => total + part(ride), 0) * 100) / 100;
+  const overallByCash = sumPart(completedRides, fareCashPart);
+  const overallByCard = sumPart(completedRides, fareOnlinePart);
+  const todayByCash = sumPart(todayCompletedRides, fareCashPart);
+  const todayByCard = sumPart(todayCompletedRides, fareOnlinePart);
 
   const buildRecentMonthKeys = (monthCount = 4) => {
     const months = [];

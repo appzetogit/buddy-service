@@ -390,6 +390,25 @@ const rideSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    // Cash on delivery with an advance (see services/codAdvance.js): the advance was paid up front through
+    // the wallet and/or online, the driver collects only the rest in cash. Refunded to the WALLET on cancel.
+    cod: {
+      enabled: { type: Boolean, default: false },
+      percent: { type: Number, default: 0 },
+      advanceAmount: { type: Number, default: 0 },
+      advanceWalletAmount: { type: Number, default: 0 },
+      advanceOnlineAmount: { type: Number, default: 0 },
+      remainingAmount: { type: Number, default: 0 },
+      advanceStatus: { type: String, enum: ['none', 'paid', 'refunded'], default: 'none' },
+      refundedAmount: { type: Number, default: 0 },
+      refundedAt: { type: Date, default: null },
+      collectedAmount: { type: Number, default: 0 },
+      collectedAt: { type: Date, default: null },
+      advanceRef: {
+        orderId: { type: String, default: '' },
+        paymentId: { type: String, default: '' },
+      },
+    },
     /// Cash trips: when the driver marked the cash as received (from the sender
     /// at pickup or the receiver / passenger at drop).
     cashCollectedAt: {

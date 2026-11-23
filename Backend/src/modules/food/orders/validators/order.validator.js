@@ -97,8 +97,8 @@ export function validateCreateOrderDto(body) {
         deliveryInstructions: z.string().trim().max(240).optional(),
         tip: z.number().min(0).optional(),
         sendCutlery: z.boolean().optional(),
-        // COD (cash / razorpay_qr-at-delivery) is disabled — prepaid only.
-        paymentMethod: z.enum(['razorpay', 'card', 'wallet']),
+        // 'cod' = cash on delivery with an advance (only when an admin enabled it for Food).
+        paymentMethod: z.enum(['razorpay', 'card', 'wallet', 'cod']),
         // Online only: pay as much as possible from the wallet and the rest online.
         useWallet: z.boolean().optional(),
         // 'pickup': the customer collects it from the restaurant (no rider, no delivery fee).

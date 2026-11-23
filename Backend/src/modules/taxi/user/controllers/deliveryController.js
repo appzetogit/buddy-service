@@ -7,6 +7,11 @@ import {
 } from '../services/deliveryService.js';
 
 export const createDelivery = async (req, res) => {
+  // Cash on delivery with an advance has its own booking flow (see rideController).
+  if (String(req.body?.paymentMethod || '').trim().toLowerCase() === 'cod') {
+    const { createCodDelivery } = await import('./rideController.js');
+    return createCodDelivery(req, res);
+  }
   const { pickup, drop, pickupAddress, dropAddress, fare, vehicleTypeId, vehicleTypeIds, vehicleIconType, vehicleIconUrl, paymentMethod, parcel } = req.body;
 
   const delivery = await createDeliveryRecord({

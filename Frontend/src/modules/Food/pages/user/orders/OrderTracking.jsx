@@ -1677,7 +1677,9 @@ export default function OrderTracking() {
       if (response.data?.success) {
         const paymentMethod = order?.payment?.method || order?.paymentMethod;
         const successMessage = response.data?.message ||
-          (paymentMethod === 'cash' || paymentMethod === 'cod'
+          (order?.payment?.cod?.enabled && Number(order.payment.cod.advanceAmount) > 0
+            ? `Order cancelled successfully. Your advance of ₹${Number(order.payment.cod.advanceAmount).toFixed(0)} has been added to your wallet.`
+            : paymentMethod === 'cash' || paymentMethod === 'cod'
             ? 'Order cancelled successfully. No refund required as payment was not made.'
             : refundDestination === 'wallet'
               ? 'Order cancelled successfully. Refund has been added to your wallet.'
@@ -2940,8 +2942,20 @@ export default function OrderTracking() {
                   <span className="text-sm font-medium">Payment Method</span>
                 </div>
                 <span className="text-sm font-bold text-gray-900 uppercase tracking-wide">
-                  {order.paymentMethod}
+                  {order.payment?.cod?.enabled ? "COD + Advance" : order.paymentMethod}
                 </span>
+              </div>
+            )}
+            {order?.payment?.cod?.enabled && (
+              <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900 space-y-1">
+                <p>Paid in advance: <b>₹{Number(order.payment.cod.advanceAmount || 0).toFixed(2)}</b></p>
+                {order.payment.cod.advanceStatus === "refunded" ? (
+                  <p className="font-semibold text-emerald-700">Advance ₹{Number(order.payment.cod.refundedAmount || 0).toFixed(2)} refunded to your wallet</p>
+                ) : order.payment.cod.collectedAt || order.payment.status === "paid" ? (
+                  <p className="font-semibold text-emerald-700">Paid in cash on delivery: ₹{Number(order.payment.cod.collectedAmount || order.payment.cod.remainingAmount || 0).toFixed(2)}</p>
+                ) : (
+                  <p>To pay in cash on delivery: <b>₹{Number(order.payment.cod.remainingAmount || 0).toFixed(2)}</b></p>
+                )}
               </div>
             )}
           </div>

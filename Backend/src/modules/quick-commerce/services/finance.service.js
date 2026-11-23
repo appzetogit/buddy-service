@@ -240,7 +240,8 @@ export async function getQuickCommerceFinanceSummary() {
           $expr: codMethodExpr,
         },
       },
-      { $group: { _id: null, total: { $sum: orderTotalExpr } } },
+      // COD with an advance: the rider only collected what was left after the advance.
+      { $group: { _id: null, total: { $sum: { $cond: [{ $eq: ["$payment.cod.enabled", true] }, { $ifNull: ["$payment.cod.remainingAmount", 0] }, orderTotalExpr] } } } },
     ]),
     QuickOrder.aggregate([
       { $match: deliveredQuickMatch },

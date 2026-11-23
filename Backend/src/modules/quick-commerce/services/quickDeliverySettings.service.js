@@ -1,6 +1,7 @@
 import { QuickDeliverySettings } from '../admin/models/quickDeliverySettings.model.js';
 import { sanitizeDeliverySpeedOptions } from '../../food/admin/services/admin.service.js';
 import { isPeakHourRuleActiveAt, nowInZone } from '../../food/orders/services/order.helpers.js';
+import { getServiceCod } from '../../common/cod/cod.service.js';
 
 /** Values used until an admin saves the settings page (and as the fallback for missing fields). */
 export const QUICK_DELIVERY_SETTINGS_DEFAULTS = Object.freeze({
@@ -204,8 +205,11 @@ export async function getPublicQuickDeliveryOptions() {
   const s = await getQuickDeliverySettings();
   const options = s.deliverySpeedOptions.filter((o) => o.isEnabled !== false);
   const defaultOption = options.find((o) => o.isDefault) || options[0] || null;
+  // COD is governed by the admin COD settings (per service): on/off + advance percent.
+  const cod = await getServiceCod('quickCommerce');
   return {
-    codEnabled: s.codEnabled,
+    codEnabled: cod.enabled,
+    cod: { enabled: cod.enabled, advancePercent: cod.advancePercent },
     schedule: {
       enabled: s.scheduleEnabled,
       leadMinutes: s.scheduleLeadMinutes,

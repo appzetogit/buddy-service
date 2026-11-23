@@ -9,6 +9,7 @@ import { getLocalUserToken, userAuthService } from '../../services/authService';
 import { getCurrentRide, isActiveCurrentRide, saveCurrentRide } from '../../services/currentRideService';
 import { useBaseGoogleMapsLoader, HAS_VALID_GOOGLE_MAPS_KEY } from '../../../admin/utils/googleMaps';
 import { scheduleScheduledRideReminders } from '../../utils/upcomingRideReminderService';
+import { payCodAdvance, pendingAdvanceOf } from '../../utils/codAdvance';
 import { toHistorySafeState } from '../../../../shared/utils/historyState';
 
 const MAP_OPTIONS = {
@@ -685,7 +686,26 @@ const SearchingDriver = () => {
         console.log('--- TEMPORARY DEBUG LOG ---');
         console.log('booking payload vehicleType:', selectedVehicleTypeId);
 
-        const response = await api.post('/rides', requestPayload, rideRequestConfig);
+        let response = await api.post('/rides', requestPayload, rideRequestConfig);
+
+        // Cash on delivery: the ride is booked only after the advance is paid.
+        const pendingAdvance = pendingAdvanceOf(response);
+        if (pendingAdvance) {
+          setSearchStatus(`Pay Rs ${pendingAdvance.advanceAmount} advance to confirm your booking.`);
+          let userInfo = {};
+          try {
+            userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+          } catch {
+            userInfo = {};
+          }
+          response = await payCodAdvance({
+            api,
+            pending: pendingAdvance,
+            verifyPath: '/rides/cod-advance/verify',
+            config: rideRequestConfig,
+            userInfo,
+          });
+        }
 
         if (disposed) {
           return;
@@ -1382,6 +1402,9 @@ const SearchingDriver = () => {
               <p className="text-[13px] font-bold text-slate-400 mb-6 leading-relaxed">
                 {"We're still searching. Stop looking?"}
               </p>
+              {String(routeState?.paymentMethod || '').trim().toLowerCase() === 'cod' ? (
+                <p className="-mt-4 mb-6 text-[12px] font-bold text-emerald-600">The advance you paid will be returned to your wallet.</p>
+              ) : null}
               <div className="space-y-2.5">
                 <motion.button whileTap={{ scale: 0.97 }} onClick={handleCancel}
                   className="w-full bg-slate-900 text-white py-3.5 rounded-[16px] text-[13px] font-bold uppercase tracking-widest">

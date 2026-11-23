@@ -60,6 +60,7 @@ import {
   getQuickCategoriesPath, getQuickOrderDetailPath, getQuickOrdersPath,
 } from "../utils/routes";
 import { initRazorpayPayment } from "@food/utils/razorpay";
+import { paymentOptionsAPI } from "@/services/api";
 import { isFlutterWebView, handleFlutterRazorpayPayment } from "../utils/flutterRazorpay";
 import { getRoadDistanceKm, getRoadDistanceDetails } from "@/shared/services/roadDistance";
 import {
@@ -582,8 +583,21 @@ const CheckoutPage = () => {
     gstAmount,
     discountAmount,
   ]);
+  // Cash on Delivery with an advance: the admin sets the advance %, the rest is paid in cash on delivery.
+  const [codOptions, setCodOptions] = useState(null);
+  useEffect(() => {
+    let mounted = true;
+    const t = setTimeout(() => {
+      paymentOptionsAPI
+        .get("quickCommerce", Number(totalAmount || 0) || undefined)
+        .then((res) => { if (mounted) setCodOptions(res?.data?.data || null); })
+        .catch(() => { /* COD simply stays hidden when the options cannot be loaded */ });
+    }, 250);
+    return () => { mounted = false; clearTimeout(t); };
+  }, [totalAmount]);
+  const codSplit = codOptions?.cod?.split || null;
   const codLimitApplies = Number.isFinite(Number(codOrderLimit)) && Number(codOrderLimit) > 0;
-  const isCodBlockedByOrderValue = codLimitApplies && Number(totalAmount || 0) > Number(codOrderLimit);
+  const isCodBlockedByOrderValue = codLimitApplies && Number(codSplit ? codSplit.remainingAmount : totalAmount || 0) > Number(codOrderLimit);
   const codBlockedMessage = isCodBlockedByOrderValue
     ? `Cash on Delivery available up to ₹${Math.round(Number(codOrderLimit))} only`
     : "";
@@ -609,14 +623,14 @@ const CheckoutPage = () => {
   const speedOptions = deliveryOptions?.speedOptions || [];
   const selectedSpeedOption = speedOptions.find((option) => option.id === selectedSpeedId) || null;
   const scheduleRules = deliveryOptions?.schedule || { enabled: true, minAheadMinutes: 20, maxDays: 7 };
-  const codAllowedByAdmin = deliveryOptions ? deliveryOptions.codEnabled === true : false;
+  const codAllowedByAdmin = codOptions?.cod?.enabled === true;
 
   // Cash on Delivery is off unless an admin enabled it; never leave a hidden method selected.
   useEffect(() => {
-    if (deliveryOptions && deliveryOptions.codEnabled !== true && selectedPayment === "cash") {
+    if (codOptions && !codAllowedByAdmin && selectedPayment === "cash") {
       setSelectedPayment(settings?.onlineEnabled === false ? "wallet" : "online");
     }
-  }, [deliveryOptions, selectedPayment, settings?.onlineEnabled]);
+  }, [codOptions, codAllowedByAdmin, selectedPayment, settings?.onlineEnabled]);
 
   const paymentMethods = useMemo(() => [
     ...(settings?.onlineEnabled === false ? [] : [{
@@ -630,9 +644,12 @@ const CheckoutPage = () => {
       disabled: Number(walletBalance || 0) < Number(totalAmount || 0),
     }] : []),
     ...(!codAllowedByAdmin || settings?.codEnabled === false || userProfile?.isCodAllowed === false || isCodBlockedByOrderValue ? [] : [{
-      id: "cash", label: "Cash on Delivery", icon: Banknote, sublabel: "Pay after delivery",
+      id: "cash", label: "Cash on Delivery", icon: Banknote,
+      sublabel: codSplit && codSplit.advanceAmount > 0
+        ? `Pay ₹${Number(codSplit.advanceAmount).toLocaleString("en-IN")} now, ₹${Number(codSplit.remainingAmount).toLocaleString("en-IN")} on delivery`
+        : "Pay after delivery",
     }]),
-  ], [codAllowedByAdmin, settings?.onlineEnabled, settings?.codEnabled, userProfile?.isCodAllowed, isAuthenticated, walletBalance, totalAmount, isCodBlockedByOrderValue]);
+  ], [codSplit, codAllowedByAdmin, settings?.onlineEnabled, settings?.codEnabled, userProfile?.isCodAllowed, isAuthenticated, walletBalance, totalAmount, isCodBlockedByOrderValue]);
 
   // â”€â”€ Memoized callbacks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -1066,7 +1083,7 @@ const CheckoutPage = () => {
             : selectedPayment === "wallet"
               ? "WALLET"
               : "COD",
-        ...(selectedPayment === "online" && isAuthenticated && Number(walletBalance) > 0 ? { useWallet: Boolean(useWalletSplit) } : {}),
+        ...((selectedPayment === "online" || (selectedPayment === "cash" && Number(codSplit?.advanceAmount) > 0)) && isAuthenticated && Number(walletBalance) > 0 ? { useWallet: Boolean(useWalletSplit) } : {}),
         discountTotal: discountAmount,
         taxTotal: gstAmount,
         platformFee,
@@ -1209,7 +1226,18 @@ const CheckoutPage = () => {
           }, 400);
         };
 
-        if (paidInAdvance) {
+        if (paidInAdvance && order?.payment?.cod?.enabled) {
+          // COD advance: only the advance is paid; the order stays cash-on-delivery for the rest.
+          prefetchedOrder.payment = {
+            ...(prefetchedOrder.payment || {}),
+            razorpay: {
+              ...(prefetchedOrder.payment?.razorpay || {}),
+              paymentId: paidInAdvance.razorpay_payment_id || "",
+              orderId: paidInAdvance.razorpay_order_id || "",
+            },
+          };
+          finishCheckout();
+        } else if (paidInAdvance) {
           prefetchedOrder.payment = {
             ...(prefetchedOrder.payment || {}),
             method: prefetchedOrder.payment?.method || "razorpay",
@@ -1964,9 +1992,17 @@ const CheckoutPage = () => {
                 {paymentMethods.map((method) => (
                   <PaymentMethodButton key={method.id} method={method} isSelected={selectedPayment === method.id} onSelect={setSelectedPayment} />
                 ))}
-                {selectedPayment === "online" && isAuthenticated && Number(walletBalance) > 0 && (() => {
-                  const walletPart = Math.min(Math.floor(Number(walletBalance) * 100) / 100, Number(totalAmount || 0));
-                  const onlinePart = Math.max(0, Math.round((Number(totalAmount || 0) - walletPart) * 100) / 100);
+                {selectedPayment === "cash" && codSplit && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-900">
+                    <p className="font-semibold">Cash on Delivery with advance ({Number(codSplit.percent)}%)</p>
+                    <p className="mt-0.5">Pay <b>₹{Number(codSplit.advanceAmount).toLocaleString("en-IN")}</b> now (wallet / online) and <b>₹{Number(codSplit.remainingAmount).toLocaleString("en-IN")}</b> in cash on delivery.</p>
+                    <p className="mt-0.5 text-[11px] text-emerald-800">If you cancel the order, the advance goes back to your wallet.</p>
+                  </div>
+                )}
+                {(selectedPayment === "online" || (selectedPayment === "cash" && Number(codSplit?.advanceAmount) > 0)) && isAuthenticated && Number(walletBalance) > 0 && (() => {
+                  const payNow = selectedPayment === "cash" ? Number(codSplit?.advanceAmount || 0) : Number(totalAmount || 0);
+                  const walletPart = Math.min(Math.floor(Number(walletBalance) * 100) / 100, payNow);
+                  const onlinePart = Math.max(0, Math.round((payNow - walletPart) * 100) / 100);
                   return (
                     <button
                       type="button"

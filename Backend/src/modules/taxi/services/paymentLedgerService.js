@@ -7,6 +7,7 @@ import { WalletTransaction } from '../driver/models/WalletTransaction.js';
 // the app has loaded the Driver model yet.
 import '../driver/models/Driver.js';
 import { Vehicle } from '../admin/models/Vehicle.js';
+import { codAdvanceApplied, hasCod, rideAmountDue, serializeCod } from './codAdvance.js';
 
 /**
  * Every payment the platform takes, in one list for the admin Payments page.
@@ -41,6 +42,31 @@ const titleCase = (value) => String(value || '').replace(/\b\w/g, (c) => c.toUpp
  * rider can book cash and pay online at the end.
  */
 export const describeRidePayment = (ride = {}) => {
+  // COD with an advance: part was paid up front, the rest is cash (or paid in the app) after the ride.
+  if (hasCod(ride)) {
+    const cod = serializeCod(ride);
+    const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+    const refunded = cod.advanceStatus === 'refunded';
+    const completed = ride.status === 'completed';
+    const paidInApp = String(ride.driverPaymentCollection?.status || '').toLowerCase() === 'paid';
+    const parts = [];
+    if (cod.advanceAmount > 0) {
+      const how = [cod.advanceWalletAmount > 0 ? `wallet ${inr(cod.advanceWalletAmount)}` : '', cod.advanceOnlineAmount > 0 ? `online ${inr(cod.advanceOnlineAmount)}` : ''].filter(Boolean).join(' + ');
+      parts.push(refunded ? `Advance ${inr(cod.advanceAmount)} refunded to wallet` : `Advance ${inr(cod.advanceAmount)} paid (${how || 'prepaid'})`);
+    }
+    if (!refunded) {
+      parts.push(completed ? `${inr(cod.remainingAmount)} ${paidInApp ? 'paid in the app' : 'collected in cash'}` : `${inr(cod.remainingAmount)} to collect after the ride`);
+    }
+    return {
+      method: paidInApp ? 'online' : 'cash',
+      provider: paidInApp ? String(ride.driverPaymentCollection?.provider || 'online').toLowerCase() : 'cash',
+      status: refunded ? 'refunded' : (completed ? 'paid' : 'unpaid'),
+      reference: ride.driverPaymentCollection?.providerPaymentId || ride.cod?.advanceRef?.paymentId || '',
+      paidAt: ride.driverPaymentCollection?.paidAt || null,
+      detail: `COD - ${parts.join(', ')}`,
+      cod,
+    };
+  }
   const collection = ride.driverPaymentCollection || {};
   const booked = String(ride.paymentMethod || 'cash').toLowerCase();
   const provider = String(collection.provider || '').toLowerCase();
@@ -99,14 +125,34 @@ const rideRows = async ({ from, to, onlyId }) => {
     status: 'completed',
     $or: [{ completedAt: { $gte: from, $lte: to } }, { completedAt: null, updatedAt: { $gte: from, $lte: to } }],
   })
-    .select('fare status paymentMethod driverPaymentCollection completedAt updatedAt createdAt userId driverId pickupAddress dropAddress serviceType trip_category vehicleTypeId')
+    .select('cod fare status paymentMethod driverPaymentCollection completedAt updatedAt createdAt userId driverId pickupAddress dropAddress serviceType trip_category vehicleTypeId')
     .populate('userId', 'name phone')
     .populate('driverId', 'name phone')
     .lean();
 
-  return rides.map((ride) => {
+  return rides.flatMap((ride) => {
     const payment = describeRidePayment(ride);
-    return {
+    const base = {
+      kind: 'ride',
+      record_id: String(ride._id),
+      date: payment.paidAt || ride.completedAt || ride.updatedAt,
+      payer: person(ride.userId, 'rider'),
+      payee: person(ride.driverId, 'driver'),
+      description: `${ride.pickupAddress || 'Pickup'} -> ${ride.dropAddress || 'Drop'}`,
+      vehicle_type_ids: ride.vehicleTypeId ? [String(ride.vehicleTypeId)] : [],
+    };
+    if (hasCod(ride) && ride.status === 'completed') {
+      // The advance was received up front (online and/or from the wallet); only the rest was cash.
+      const applied = codAdvanceApplied(ride);
+      const online = Math.min(Number(ride.cod.advanceOnlineAmount || 0), applied);
+      const wallet = Math.max(0, applied - online);
+      const rows = [{ ...base, id: `ride:${ride._id}`, amount: rideAmountDue(ride), method: payment.method, provider: payment.provider, status: payment.status, reference: payment.reference, detail: payment.detail }];
+      if (online > 0) rows.push({ ...base, id: `ride:${ride._id}:advance_online`, amount: online, method: 'online', provider: 'razorpay', status: 'paid', reference: ride.cod?.advanceRef?.paymentId || '', detail: 'COD advance paid online' });
+      if (wallet > 0) rows.push({ ...base, id: `ride:${ride._id}:advance_wallet`, amount: wallet, method: 'wallet', provider: 'wallet', status: 'paid', reference: '', detail: 'COD advance paid from the wallet' });
+      return rows;
+    }
+    return [{
+      ...base,
       id: `ride:${ride._id}`,
       kind: 'ride',
       record_id: String(ride._id),
@@ -117,11 +163,7 @@ const rideRows = async ({ from, to, onlyId }) => {
       status: payment.status,
       reference: payment.reference,
       detail: payment.detail,
-      payer: person(ride.userId, 'rider'),
-      payee: person(ride.driverId, 'driver'),
-      description: `${ride.pickupAddress || 'Pickup'} -> ${ride.dropAddress || 'Drop'}`,
-      vehicle_type_ids: ride.vehicleTypeId ? [String(ride.vehicleTypeId)] : [],
-    };
+    }];
   });
 };
 

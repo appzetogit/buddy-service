@@ -71,6 +71,7 @@ import {
   getRiderCapacity,
 } from './rider-capacity.service.js';
 import { assertGigAllowsService, recordGigEarning, riderGigWindows, eligiblePartnerIds } from '../../../common/gigs/gig.service.js';
+import { recordFoodCodCollected } from './codAdvance.service.js';
 
 /**
  * Server-side anti-spoof geofence for "reached pickup" / "reached drop".
@@ -2288,6 +2289,11 @@ export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
     sharedRiderShare: order.sharedRiderEarning,
     note: `Rider finalized payment as ${finalPayMethod}. Order is now delivered.`,
   });
+
+  // COD with an advance: remember the remaining cash the rider collected.
+  if (order.payment?.cod?.enabled) {
+    void recordFoodCodCollected(order._id, order.payment.amountDue).catch(() => {});
+  }
 
   // Notify both partners about completion and split
   try {

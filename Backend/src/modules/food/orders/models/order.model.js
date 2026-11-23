@@ -139,6 +139,20 @@ const paymentSchema = new mongoose.Schema(
             status: { type: String },
             expiresAt: { type: Date }
         },
+        /** Cash on delivery with an advance (see modules/common/cod/cod.service.js). advance is paid now, remaining in cash. */
+        cod: {
+            enabled: { type: Boolean, default: false },
+            percent: { type: Number, default: 0 },
+            advanceAmount: { type: Number, default: 0, min: 0 },
+            advanceWalletAmount: { type: Number, default: 0, min: 0 },
+            advanceOnlineAmount: { type: Number, default: 0, min: 0 },
+            remainingAmount: { type: Number, default: 0, min: 0 },
+            advanceStatus: { type: String, enum: ['none', 'paid', 'refunding', 'refunded'], default: 'none' },
+            refundedAmount: { type: Number, default: 0, min: 0 },
+            refundedAt: { type: Date, default: null },
+            collectedAmount: { type: Number, default: 0, min: 0 },
+            collectedAt: { type: Date, default: null }
+        },
         // ✅ NEW: Added refund object to track refund status without breaking existing flow
         refund: {
             status: {

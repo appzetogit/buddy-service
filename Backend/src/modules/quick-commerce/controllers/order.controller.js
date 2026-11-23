@@ -69,6 +69,7 @@ import {
     assertPaymentMethodAllowed,
 } from '../../common/services/globalPaymentSettings.service.js';
 import { getDeliveryCashLimitSettings } from '../../food/admin/services/admin.service.js';
+import { assertCodAllowed, buildCodPayment, computeCodSplit, getServiceCod } from '../../common/cod/cod.service.js';
 import {
     createRazorpayOrder,
     fetchRazorpayPayment,
@@ -263,6 +264,8 @@ const normalizeOrderSummary = (order) => {
     paymentMethod,
     paymentStatus,
     payment: order.payment || {},
+    cod: order.payment?.cod?.enabled ? order.payment.cod : null,
+    amountDue: Number(order.payment?.amountDue ?? amount),
     itemCount: Array.isArray(order.items)
       ? order.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0)
       : 0,
@@ -745,8 +748,28 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
     // Online + wallet split (online only, never cash, logged-in users only). A verified checkout
     // carries the wallet part it was priced with instead of re-reading the current balance.
     let walletAmount = 0;
+    // COD with advance: only the advance is paid now (wallet and/or online); the rest is cash on delivery.
+    // A verified checkout carries the split it was priced with, so a later admin change cannot break it.
+    const codSnap = verifiedPrepaid?.cod && Number.isFinite(Number(verifiedPrepaid.cod.advanceAmount)) ? verifiedPrepaid.cod : null;
+    let codSplit = null;
+    let codWalletOnly = false;
+    if (!['ONLINE', 'WALLET'].includes(paymentModeRaw)) {
+      codSplit = codSnap
+        ? { total, percent: Number(codSnap.percent) || 0, advanceAmount: Number(codSnap.advanceAmount), remainingAmount: Number(codSnap.remainingAmount) }
+        : computeCodSplit(total, (await getServiceCod('quickCommerce')).advancePercent);
+    }
     if (verifiedPrepaid) {
       walletAmount = Math.max(0, Number(verifiedPrepaid.walletAmount || 0));
+    } else if (codSplit && codSplit.advanceAmount > 0 && req.body?.useWallet !== false && idQuery.userId) {
+      const advance = codSplit.advanceAmount;
+      const balance = await getWalletBalance(idQuery.userId);
+      if (balance >= advance) {
+        // The wallet alone covers the advance (only when the customer asked for it).
+        if (req.body?.useWallet === true) codWalletOnly = true;
+      } else if (balance > 0) {
+        // Razorpay needs at least Rs 1, so always leave Rs 1 for the gateway.
+        walletAmount = Math.max(0, Math.min(balance, Math.round((advance - 1) * 100) / 100));
+      }
     } else if (paymentModeRaw === 'ONLINE' && req.body?.useWallet !== false && idQuery.userId) {
       // useWallet not sent = use the wallet part automatically; false = the customer opted out.
       const balance = await getWalletBalance(idQuery.userId);
@@ -762,6 +785,9 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
     const isPrepaidVerified = Boolean(verifiedPrepaid);
     const isWalletPayment = paymentModeRaw === 'WALLET';
     const paymentMode = isOnlinePayment ? 'razorpay' : isWalletPayment ? 'wallet' : 'cash';
+    const isCod = paymentMode === 'cash';
+    // What the customer pays right now: the whole bill, or just the advance of a COD order.
+    const payNow = isCod ? codSplit.advanceAmount : total;
     const sellerPaymentMode = isOnlinePayment || isWalletPayment ? 'online' : 'cash';
     // Online orders reach sellers only after Razorpay payment is verified.
     const shouldFanOutSellerOrders = !isOnlinePayment || isPrepaidVerified;
@@ -798,14 +824,17 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
 
     // Cash on Delivery follows Food: off unless an admin enables it in Quick Commerce delivery settings.
     const quickDeliverySettings = await getQuickDeliverySettings();
-    if (paymentMode === 'cash' && !quickDeliverySettings.codEnabled) {
-      throw new ValidationError('Cash on Delivery is no longer available. Please pay online or with wallet.');
+    if (isCod && !codSnap) {
+      // Admin COD settings (per service) + the customer's own COD flag. A checkout already paid keeps its snapshot.
+      const codUser = idQuery.userId ? await FoodUser.findById(idQuery.userId).select('isCodAllowed isCodEnabled').lean() : null;
+      await assertCodAllowed('quickCommerce', { total, user: codUser });
     }
 
-    if (paymentMode === 'cash') {
+    if (isCod) {
       const cashLimitSettings = await getDeliveryCashLimitSettings();
       const codOrderLimit = Number(cashLimitSettings?.deliveryCashLimit || 0);
-      if (Number.isFinite(codOrderLimit) && codOrderLimit > 0 && total > codOrderLimit) {
+      // Only the cash still to be collected counts against the limit.
+      if (Number.isFinite(codOrderLimit) && codOrderLimit > 0 && codSplit.remainingAmount > codOrderLimit) {
         throw new ValidationError(
           `Cash on Delivery is not available for orders above ₹${Math.round(codOrderLimit)}.`,
         );
@@ -921,7 +950,10 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
     }
     const isScheduledOrder = Boolean(scheduledAt);
 
-    if (isPrepaidVerified && Math.round(total * 100) !== Math.round((Number(verifiedPrepaid.expectedAmount) + walletAmount) * 100)) {
+    if (isPrepaidVerified && Math.round(payNow * 100) !== Math.round((Number(verifiedPrepaid.expectedAmount) + walletAmount) * 100)) {
+      throw new ValidationError('Order total changed after payment. Contact support for a refund.');
+    }
+    if (codSnap && Math.round((codSplit.advanceAmount + codSplit.remainingAmount) * 100) !== Math.round(total * 100)) {
       throw new ValidationError('Order total changed after payment. Contact support for a refund.');
     }
 
@@ -940,6 +972,30 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
         amount: total,
         walletAmount: checkout.walletAmount,
         onlineAmount: checkout.onlineAmount,
+        razorpay: checkout.razorpay,
+        expiresAt: checkout.expiresAt,
+        result: null,
+      });
+    }
+
+    // COD with an advance the wallet cannot cover alone: pay the advance first, the order is placed after payment.
+    if (isCod && codSplit.advanceAmount > 0 && !codWalletOnly && !isPrepaidVerified) {
+      const checkout = await createQuickCheckoutSession({
+        idQuery,
+        requestBody: { ...(req.body || {}), paymentMode: 'COD' },
+        amountDue: codSplit.advanceAmount,
+        walletAmount,
+        cod: codSplit,
+      });
+      return res.status(201).json({
+        success: true,
+        requiresPayment: true,
+        checkoutId: checkout.checkoutId,
+        amount: codSplit.advanceAmount,
+        total,
+        walletAmount: checkout.walletAmount,
+        onlineAmount: checkout.onlineAmount,
+        cod: { percent: codSplit.percent, advanceAmount: codSplit.advanceAmount, remainingAmount: codSplit.remainingAmount },
         razorpay: checkout.razorpay,
         expiresAt: checkout.expiresAt,
         result: null,
@@ -992,9 +1048,22 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
       payment: {
         method: paymentMode,
         status: isOnlinePayment ? (isPrepaidVerified ? 'paid' : 'created') : isWalletPayment ? 'paid' : 'cod_pending',
-        amountDue: Math.max(0, total),  // total already includes platformFee
-        walletAmount: isWalletPayment ? Math.max(0, total) : walletAmount,
-        onlineAmount: isWalletPayment ? 0 : Math.max(0, Math.round((total - walletAmount) * 100) / 100),
+        // COD: the cash still to collect is only what the advance did not cover.
+        amountDue: isCod ? codSplit.remainingAmount : Math.max(0, total),  // total already includes platformFee
+        walletAmount: isCod
+          ? (codWalletOnly ? codSplit.advanceAmount : walletAmount)
+          : isWalletPayment ? Math.max(0, total) : walletAmount,
+        onlineAmount: isCod
+          ? Math.max(0, Math.round((codSplit.advanceAmount - (codWalletOnly ? codSplit.advanceAmount : walletAmount)) * 100) / 100)
+          : isWalletPayment ? 0 : Math.max(0, Math.round((total - walletAmount) * 100) / 100),
+        ...(isCod
+          ? {
+              cod: buildCodPayment(codSplit, {
+                advanceWalletAmount: codWalletOnly ? codSplit.advanceAmount : walletAmount,
+                advanceOnlineAmount: codSplit.advanceAmount - (codWalletOnly ? codSplit.advanceAmount : walletAmount),
+              }),
+            }
+          : {}),
         ...(isPrepaidVerified
           ? {
               razorpay: {
@@ -1112,7 +1181,7 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
 
     // What is taken from the wallet: everything for a wallet order, the wallet part of a split.
     // The gateway took the rest of a split before this point.
-    const walletCharged = isWalletPayment ? total : isPrepaidVerified ? walletAmount : 0;
+    const walletCharged = isWalletPayment ? total : (isCod && codWalletOnly) ? codSplit.advanceAmount : isPrepaidVerified ? walletAmount : 0;
     if (walletCharged > 0) {
       try {
         await deductWalletBalance(
@@ -1400,7 +1469,8 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
  * webhook; the session claim makes sure only one of them does it.
  */
 export async function finalizeQuickCheckout(claimedSession) {
-  const body = { ...(claimedSession.requestBody || {}), paymentMode: 'ONLINE' };
+  const isCodSession = Boolean(claimedSession.cod && Number(claimedSession.cod.advanceAmount) > 0);
+  const body = { ...(claimedSession.requestBody || {}), paymentMode: isCodSession ? 'COD' : 'ONLINE' };
   const idQuery = claimedSession.userId
     ? { userId: String(claimedSession.userId) }
     : { sessionId: String(claimedSession.sessionId || '') };
@@ -1431,6 +1501,7 @@ export async function finalizeQuickCheckout(claimedSession) {
       razorpaySignature: claimedSession.razorpay?.signature || 'webhook',
       expectedAmount: claimedSession.amountDue,
       walletAmount: claimedSession.walletAmount || 0,
+      ...(isCodSession ? { cod: { percent: claimedSession.cod.percent, advanceAmount: claimedSession.cod.advanceAmount, remainingAmount: claimedSession.cod.remainingAmount } } : {}),
     },
   });
 
@@ -1447,7 +1518,8 @@ export async function finalizeQuickCheckout(claimedSession) {
   });
   await markQuickCheckoutCompleted(claimedSession, order?._id);
 
-  if (order) {
+  // A COD advance is not the full payment: the order stays cod_pending until the rider collects the rest.
+  if (order && !isCodSession) {
     try {
       await foodTransactionService.updateTransactionStatus(order._id, 'captured', {
         status: 'captured',

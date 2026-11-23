@@ -267,6 +267,7 @@ export const createDeliveryRecord = async ({
   vehicleIconUrl,
   paymentMethod,
   parcel,
+  cod = null,
 }) => {
   await ensureDeliveryVehicleAllowed({ vehicleTypeId, parcel });
   const pickupCoords = normalizePoint(pickup, 'pickup');
@@ -318,6 +319,7 @@ export const createDeliveryRecord = async ({
     transport_type: 'delivery',
     serviceType: 'parcel',
     parcel,
+    cod,
   });
 
   // Waiting at the pickup is charged on the same tariff as the fare, and locked
