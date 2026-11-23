@@ -418,6 +418,10 @@ const CheckoutPage = () => {
   const [selectedPayment, setSelectedPayment] = useState(
     routerLocation.state?.selectedPayment || storedCheckoutState.selectedPayment || "cash",
   );
+  // COD: the advance is paid online unless the customer ticks the wallet option; Online keeps wallet-first.
+  useEffect(() => {
+    setUseWalletSplit(selectedPayment !== "cash");
+  }, [selectedPayment]);
   const [showAllCartItems, setShowAllCartItems] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [selectedCoupon, setSelectedCoupon] = useState(storedCheckoutState.selectedCoupon || null);

@@ -634,7 +634,8 @@ const startCodBooking = async (req, res, { kind, quotedFare }) => {
   const optedOut = useWallet === false || useWallet === 'false' || useWallet === 0 || useWallet === '0';
   const asked = useWallet === true || useWallet === 'true' || useWallet === 1 || useWallet === '1';
   let walletAmount = 0;
-  if (!optedOut) {
+  // The COD advance is paid online unless the customer explicitly asks for the wallet (useWallet: true).
+  if (asked && !optedOut) {
     await ensureUserWallet(userId);
     const wallet = await UserWallet.findOne({ userId }).select('balance').lean();
     walletAmount = roundMoney(Math.min(Number(wallet?.balance || 0), split.advanceAmount));

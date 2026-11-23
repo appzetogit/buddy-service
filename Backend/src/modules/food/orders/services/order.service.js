@@ -358,7 +358,8 @@ export async function createOrder(userId, dto, options = {}) {
   let walletAmount = 0;
   if (verifiedPrepaid) {
     walletAmount = Math.max(0, Number(verifiedPrepaid.walletAmount || 0));
-  } else if (paymentMethod === "razorpay" && dto.useWallet !== false) {
+  } else if (paymentMethod === "razorpay" && (codSplit ? dto.useWallet === true : dto.useWallet !== false)) {
+    // COD advance: the wallet is used only when the customer explicitly asked (useWallet: true); otherwise it is paid online.
     // useWallet not sent = use the wallet part automatically; false = the customer opted out.
     const balance = await userWalletService.getWalletBalance(userId);
     if (balance >= payNow) {

@@ -760,7 +760,8 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
     }
     if (verifiedPrepaid) {
       walletAmount = Math.max(0, Number(verifiedPrepaid.walletAmount || 0));
-    } else if (codSplit && codSplit.advanceAmount > 0 && req.body?.useWallet !== false && idQuery.userId) {
+    } else if (codSplit && codSplit.advanceAmount > 0 && req.body?.useWallet === true && idQuery.userId) {
+      // COD advance: wallet only when the customer explicitly asked for it; otherwise it is paid online.
       const advance = codSplit.advanceAmount;
       const balance = await getWalletBalance(idQuery.userId);
       if (balance >= advance) {

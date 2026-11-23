@@ -3480,6 +3480,9 @@ function Cart() {
                         }
                         if (!option.disabled) {
                           setSelectedPaymentMethod(option.id)
+                          // COD: the advance is paid online unless the customer ticks "use wallet"; Online keeps wallet-first.
+                          if (option.id === "cod") setUseWalletSplit(false)
+                          if (option.id === "razorpay") setUseWalletSplit(true)
                           setShowPaymentSheet(false)
                         }
                       }}
@@ -3561,7 +3564,7 @@ function Cart() {
                     </button>
                   ))}
 
-                  {selectedPaymentMethod === "razorpay" && walletBalance > 0 && (
+                  {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "cod") && walletBalance > 0 && (
                     <button
                       type="button"
                       onClick={() => setUseWalletSplit((v) => !v)}
