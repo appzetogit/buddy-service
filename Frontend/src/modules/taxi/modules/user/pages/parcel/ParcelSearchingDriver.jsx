@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from '@taxi/shared/router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShieldCheck, Phone, MessageCircle, CheckCircle2, AlertTriangle, Star } from 'lucide-react';
+import { X, ShieldCheck, Phone, MessageCircle, CheckCircle2, AlertTriangle, Star, Calendar, Clock3, LoaderCircle } from 'lucide-react';
 import { GoogleMap, OverlayView, Polyline } from '@react-google-maps/api';
 import api from '../../../../shared/api/axiosInstance';
 import { payCodAdvance, pendingAdvanceOf } from '../../utils/codAdvance';
+import { scheduleScheduledRideReminders } from '../../utils/upcomingRideReminderService';
 import { socketService } from '../../../../shared/api/socket';
 import { getLocalUserToken, userAuthService } from '../../services/authService';
 import { getCurrentRide, isActiveCurrentRide, saveCurrentRide } from '../../services/currentRideService';
@@ -370,6 +371,10 @@ const ParcelSearchingDriver = () => {
   );
   const userHomeRoute = routePrefix || '/taxi/user';
   const [stage, setStage] = useState(STAGES.SEARCHING);
+  // A parcel booked for later is saved and dispatched at its time; it never shows the live search screen.
+  const isScheduledParcel = Boolean(routeState.scheduledAt);
+  const [scheduledStatus, setScheduledStatus] = useState(() => (routeState.scheduledAt ? 'saving' : 'idle'));
+  const [scheduledError, setScheduledError] = useState('');
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [otp] = useState(generateOTP);
   const [driver, setDriver] = useState(DRIVER_PLACEHOLDER);
@@ -705,6 +710,7 @@ const ParcelSearchingDriver = () => {
           paymentMethod: routeState.paymentMethod || 'Cash',
           type: 'parcel',
           parcel: parcelPayload,
+          scheduledAt: routeState.scheduledAt || null,
         }, rideRequestConfig);
 
         // Cash on delivery: the delivery is booked only once the advance is paid.
@@ -730,6 +736,20 @@ const ParcelSearchingDriver = () => {
         const payload = unwrap(response);
         const rideId = payload?.rideId || payload?.realtime?.rideId || payload?.ride?._id || payload?._id || payload?.id;
         activeRideIdRef.current = String(rideId || '');
+
+        if (routeState.scheduledAt) {
+          scheduleScheduledRideReminders({
+            ...payload,
+            rideId: String(rideId || ''),
+            scheduledAt: payload?.scheduledAt || routeState.scheduledAt,
+            pickupAddress: payload?.pickupAddress || routeState.pickup || '',
+            dropAddress: payload?.dropAddress || routeState.drop || '',
+            status: payload?.status || 'scheduled',
+            liveStatus: payload?.liveStatus || 'scheduled',
+          });
+          setScheduledStatus('scheduled');
+          return;
+        }
 
         if (socket && rideId) {
           socketService.emit('joinRide', { rideId });
@@ -791,6 +811,10 @@ const ParcelSearchingDriver = () => {
       } catch (error) {
         if (disposed) return;
         const errorMessage = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Dispatch failed.';
+        if (routeState.scheduledAt) {
+          setScheduledStatus('error');
+          setScheduledError(errorMessage);
+        }
         setBookingError(errorMessage);
         setSearchStatus(errorMessage);
         clearTimeout(searchTimeoutRef.current);
@@ -824,6 +848,50 @@ const ParcelSearchingDriver = () => {
 
   const isSearching = stage === STAGES.SEARCHING;
   const isAccepted = stage === STAGES.ACCEPTED;
+
+  if (isScheduledParcel) {
+    const when = new Date(routeState.scheduledAt);
+    const whenLabel = Number.isNaN(when.getTime())
+      ? 'Scheduled'
+      : when.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return (
+      <div className="min-h-screen max-w-lg mx-auto flex items-center justify-center bg-slate-950 px-6">
+        <div className="w-full rounded-[32px] border border-white/10 bg-white/5 px-6 py-8 text-center shadow-2xl">
+          <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] ${scheduledStatus === 'scheduled' ? 'bg-emerald-600/20 text-emerald-400' : scheduledStatus === 'error' ? 'bg-rose-600/20 text-rose-400' : 'bg-blue-600/20 text-blue-400'}`}>
+            {scheduledStatus === 'scheduled' ? <CheckCircle2 size={26} /> : scheduledStatus === 'error' ? <AlertTriangle size={26} /> : <LoaderCircle size={26} className="animate-spin" />}
+          </div>
+          <h1 className="mt-5 text-[22px] font-black text-white">
+            {scheduledStatus === 'scheduled' ? 'Parcel scheduled' : scheduledStatus === 'error' ? 'Scheduling failed' : 'Scheduling your parcel'}
+          </h1>
+          <p className="mt-2 text-[13px] font-bold text-white/55">
+            {scheduledStatus === 'scheduled'
+              ? 'Your booking has been saved. A captain will be assigned automatically before the pickup time.'
+              : scheduledStatus === 'error'
+                ? (scheduledError || 'Could not schedule this parcel.')
+                : 'Saving your booking.'}
+          </p>
+          <div className="mt-6 rounded-[24px] border border-white/10 bg-white/5 px-4 py-4 text-left">
+            <div className="flex items-center gap-3 text-white">
+              <Calendar size={16} className="text-blue-300" />
+              <span className="text-sm font-bold">Pickup scheduled for</span>
+            </div>
+            <p className="mt-2 text-lg font-black text-white">{whenLabel}</p>
+            <div className="mt-4 flex items-center gap-3 text-white/65">
+              <Clock3 size={15} />
+              <span className="text-xs font-bold uppercase tracking-[0.16em]">{routeState.pickup || 'Pickup'} to {routeState.drop || 'Drop'}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate(userHomeRoute, { replace: true })}
+            className="mt-6 h-12 w-full rounded-[18px] bg-white text-sm font-black uppercase tracking-[0.16em] text-slate-900"
+          >
+            {scheduledStatus === 'error' ? 'Back to Home' : 'Done'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 max-w-lg mx-auto relative font-['Plus_Jakarta_Sans'] overflow-hidden">

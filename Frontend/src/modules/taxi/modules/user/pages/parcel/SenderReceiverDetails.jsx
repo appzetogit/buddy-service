@@ -1305,6 +1305,16 @@ const SenderReceiverDetails = () => {
   }, [dropCoords, estimatedDistanceKm, isGoogleMapsLoaded, pickupCoords]);
 
   const [parcelPayment, setParcelPayment] = useState('Cash');
+  // "Send now" or schedule the pickup for later (same window as scheduled rides: 1 hour to 7 days ahead).
+  const [parcelRideMode, setParcelRideMode] = useState('now');
+  const toLocalInput = (d) => {
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const minScheduleAt = useMemo(() => toLocalInput(new Date(Date.now() + 60 * 60 * 1000)), []);
+  const maxScheduleAt = useMemo(() => toLocalInput(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)), []);
+  const [parcelScheduledAt, setParcelScheduledAt] = useState(minScheduleAt);
+  const [parcelScheduleError, setParcelScheduleError] = useState('');
   const estimatedFare = useMemo(() => {
     if (!drop.trim()) {
       return null;
@@ -1702,6 +1712,23 @@ const SenderReceiverDetails = () => {
       return;
     }
 
+    if (parcelRideMode === 'schedule') {
+      const picked = new Date(parcelScheduledAt);
+      if (!parcelScheduledAt || Number.isNaN(picked.getTime())) {
+        setParcelScheduleError('Choose a valid pickup date and time.');
+        return;
+      }
+      if (parcelScheduledAt < minScheduleAt) {
+        setParcelScheduleError('Pickup time must be at least 1 hour from now.');
+        return;
+      }
+      if (parcelScheduledAt > maxScheduleAt) {
+        setParcelScheduleError('Advance booking is available for up to 7 days only.');
+        return;
+      }
+    }
+    setParcelScheduleError('');
+
     let resolvedPickupCoords = pickupCoords;
     let resolvedDropCoords = dropCoords;
 
@@ -1751,6 +1778,8 @@ const SenderReceiverDetails = () => {
           receiverMobile,
         },
         isParcel: true,
+        rideMode: parcelRideMode,
+        scheduledAt: parcelRideMode === 'schedule' ? new Date(parcelScheduledAt).toISOString() : null,
         searchNonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
@@ -2075,6 +2104,37 @@ const SenderReceiverDetails = () => {
 
       <div className="fixed bottom-0 left-0 right-0 z-30 p-6">
         <div className="mx-auto max-w-lg relative">
+          <div className="relative mb-3 rounded-[20px] border border-slate-200 bg-white p-1.5 shadow-sm">
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: 'now', label: 'Send now', sub: 'Find a captain now' },
+                { id: 'schedule', label: 'Schedule', sub: 'Pick a date & time' },
+              ].map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => { setParcelRideMode(option.id); setParcelScheduleError(''); }}
+                  className={`rounded-[16px] px-3 py-2 text-left transition ${parcelRideMode === option.id ? 'bg-slate-900 text-white' : 'text-slate-700'}`}
+                >
+                  <p className="text-[12px] font-black">{option.label}</p>
+                  <p className={`text-[10px] font-semibold ${parcelRideMode === option.id ? 'text-slate-300' : 'text-slate-500'}`}>{option.sub}</p>
+                </button>
+              ))}
+            </div>
+            {parcelRideMode === 'schedule' ? (
+              <div className="px-2 pb-2 pt-3">
+                <input
+                  type="datetime-local"
+                  value={parcelScheduledAt}
+                  min={minScheduleAt}
+                  max={maxScheduleAt}
+                  onChange={(event) => { setParcelScheduledAt(event.target.value); setParcelScheduleError(''); }}
+                  className="h-11 w-full rounded-[14px] border border-slate-200 bg-slate-50 px-3 text-[13px] font-bold text-slate-900 outline-none"
+                />
+                {parcelScheduleError ? <p className="mt-2 text-[11px] font-bold text-rose-600">{parcelScheduleError}</p> : null}
+              </div>
+            ) : null}
+          </div>
           {parcelCod.enabled ? (
             <div className="relative mb-3 grid grid-cols-2 gap-2 rounded-[20px] border border-slate-200 bg-white p-1.5 shadow-sm">
               {[
