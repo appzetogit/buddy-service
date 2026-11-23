@@ -752,7 +752,9 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
   const deliveryBreakdown = pricing.deliveryFeeBreakdown || null
 
   const paymentDisplay =
-    data?.paymentType === "Cash on Delivery" ||
+    data?.payment?.cod?.enabled && data.payment.cod.advanceStatus === "refunded"
+      ? "Advance refunded"
+      : data?.paymentType === "Cash on Delivery" ||
     data?.payment?.method === "cash" ||
     data?.payment?.method === "cod"
       ? data?.paymentCollectionStatus || data?.status === "delivered" || data?.orderStatus === "Delivered"
@@ -1544,7 +1546,10 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
               data?.settlementBreakdown?.status === "cancelled" ||
               cancellationInfo?.isFullCancel
                 ? `Refund ${money(
-                    data?.settlementBreakdown?.customer?.refund ??
+                    (data?.payment?.cod?.enabled
+                      ? Number(data.payment.cod.refundedAmount) || Number(data.payment.cod.advanceAmount)
+                      : null) ??
+                      data?.settlementBreakdown?.customer?.refund ??
                       cancellationInfo?.refundAmount ??
                       data?.pricing?.total ??
                       data?.totalAmount,
@@ -1573,12 +1578,16 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
               // Only show the reversed/cancelled ledger for FULL order cancel.
               // Partial restaurant drops must use the live settlement (remaining restos + driver + platform).
               const isCancelledSettlement = Boolean(isFullOrderCancelled)
+              // COD with advance: the customer only ever paid the advance (older ledgers stored the full total).
+              const codAdv = data?.payment?.cod?.enabled ? Number(data.payment.cod.advanceAmount) || 0 : null
               const customerRefund =
-                sb?.customer?.refund ??
-                cancelLedger?.refundAmount ??
-                (isFullOrderCancelled ? cancellationInfo?.refundAmount : null) ??
-                null
-              const customerPaid = sb?.customer?.paid ?? pricing.total
+                codAdv != null
+                  ? Number(data.payment.cod.refundedAmount) || Number(data.payment.refund?.amount) || codAdv
+                  : sb?.customer?.refund ??
+                    cancelLedger?.refundAmount ??
+                    (isFullOrderCancelled ? cancellationInfo?.refundAmount : null) ??
+                    null
+              const customerPaid = codAdv != null ? codAdv : sb?.customer?.paid ?? pricing.total
 
               if (isCancelledSettlement) {
                 const restaurants =

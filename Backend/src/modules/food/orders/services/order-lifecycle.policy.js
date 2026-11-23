@@ -785,10 +785,15 @@ export function applyCancellationSettlement(order, { cancelledBy = 'system', not
     paymentStatus === 'refunded' ||
     paymentMethod === 'wallet' ||
     paymentMethod === 'razorpay';
-  const refundAmount =
-    Number(refund.amount) ||
-    (refundStatus === 'processed' || paymentStatus === 'refunded' ? total : 0);
-  const refundDestination = refund.destination || null;
+  // COD with advance: the customer paid only the advance, and it goes back to the wallet.
+  const cod = order.payment?.cod?.enabled ? order.payment.cod : null;
+  const codAdvance = cod ? Number(cod.advanceAmount) || 0 : 0;
+  const customerPaid = cod ? codAdvance : total;
+  const refundAmount = cod
+    ? Number(refund.amount) || Number(cod.refundedAmount) || codAdvance
+    : Number(refund.amount) ||
+      (refundStatus === 'processed' || paymentStatus === 'refunded' ? total : 0);
+  const refundDestination = refund.destination || (cod && codAdvance > 0 ? 'wallet' : null);
 
   const previousSb =
     order.settlementBreakdown && typeof order.settlementBreakdown === 'object'
@@ -831,6 +836,7 @@ export function applyCancellationSettlement(order, { cancelledBy = 'system', not
   }
 
   const refundNote = (() => {
+    if (cod && codAdvance > 0) return `COD advance ₹${codAdvance} refunded to customer wallet; remaining cash was never collected`;
     if (refundAmount > 0 && refundDestination === 'wallet') {
       return `Full order amount ₹${refundAmount} credited to customer wallet`;
     }
@@ -849,11 +855,11 @@ export function applyCancellationSettlement(order, { cancelledBy = 'system', not
     status: 'cancelled',
     customer: {
       ...(previousSb.customer || {}),
-      paid: total,
+      paid: customerPaid,
       refund: refundAmount,
       refundDestination,
-      refundStatus: refund.status || (paymentStatus === 'refunded' ? 'processed' : 'none'),
-      netCost: Math.max(0, total - refundAmount),
+      refundStatus: refund.status || (paymentStatus === 'refunded' ? 'processed' : cod && codAdvance > 0 ? 'pending' : 'none'),
+      netCost: Math.max(0, customerPaid - refundAmount),
       note: refundNote,
     },
     restaurants: previousRestaurants.map((r) => ({
