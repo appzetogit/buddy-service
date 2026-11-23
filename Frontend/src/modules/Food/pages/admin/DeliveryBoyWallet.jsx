@@ -266,8 +266,8 @@ export default function DeliveryBoyWallet() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-4 text-sm font-bold text-slate-800">{inr(cashFor(w, service))}</td>
                         <td className="whitespace-nowrap px-4 py-4 text-sm text-amber-600">{inr(pendingFor(w, service))}</td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-700">{num(w.limit) > 0 ? inr(w.limit) : "No limit"}</td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-emerald-600">{w.available == null || num(w.limit) <= 0 ? "—" : inr(w.available)}</td>
+                        <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-700">{num(w.cashLimit) > 0 ? inr(w.cashLimit) : "No limit"}</td>
+                        <td className="whitespace-nowrap px-4 py-4 text-sm font-semibold text-emerald-600">{w.availableCashLimit == null || num(w.cashLimit) <= 0 ? "—" : inr(w.availableCashLimit)}</td>
                         <td className="whitespace-nowrap px-4 py-4">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${w.blocked ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-700"}`}>{w.blocked ? "Blocked" : "OK"}</span>
                         </td>
