@@ -114,6 +114,12 @@ const sellerOrderSchema = new mongoose.Schema(
         enum: ["cash", "cod", "online"],
         default: "online",
       },
+      // COD with an advance on the parent order (the advance covers the whole parent bill, not just this seller).
+      cod: {
+        enabled: { type: Boolean, default: false },
+        advanceAmount: { type: Number, default: 0 },
+        remainingAmount: { type: Number, default: 0 },
+      },
     },
   },
   {

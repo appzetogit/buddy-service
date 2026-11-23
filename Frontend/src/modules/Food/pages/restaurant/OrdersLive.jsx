@@ -164,6 +164,7 @@ function CompletedOrders({ onSelectOrder, refreshToken = 0 }) {
             photoAlt: order.items?.[0]?.name || "Order",
             amount: order.pricing?.total || order.total || 0,
             paymentMethod: order.paymentMethod || order.payment?.method || null,
+            payment: order.payment || null,
           }));
 
           transformedOrders.sort((a, b) => {
@@ -377,6 +378,7 @@ function CancelledOrders({ onSelectOrder, refreshToken = 0 }) {
             photoAlt: order.items?.[0]?.name || "Order",
             amount: order.pricing?.total || order.total || 0,
             paymentMethod: order.paymentMethod || order.payment?.method || null,
+            payment: order.payment || null,
             restaurantNote: order.restaurantNote || null,
           }));
 
@@ -3202,6 +3204,7 @@ function PreparingOrders({
               dispatchStatus: order.dispatch?.status || null,
               paymentMethod:
                 order.paymentMethod || order.payment?.method || null,
+              payment: order.payment || null,
               scheduledAt: order.scheduledAt || null,
               restaurantNote: order.restaurantNote || null,
             };
@@ -3508,6 +3511,7 @@ function ReadyOrders({ onSelectOrder, refreshToken = 0 }) {
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || "Order",
             paymentMethod: order.paymentMethod || order.payment?.method || null,
+            payment: order.payment || null,
             deliveryPartnerId: order.deliveryPartnerId || null,
             dispatchStatus: order.dispatch?.status || null,
             scheduledAt: order.scheduledAt || null,
@@ -3630,6 +3634,7 @@ const OutForDeliveryOrders = ({ onSelectOrder, refreshToken = 0 }) => {
             photoUrl: order.items?.[0]?.image || null,
             photoAlt: order.items?.[0]?.name || "Order",
             paymentMethod: order.paymentMethod || order.payment?.method || null,
+            payment: order.payment || null,
             deliveryPartnerId: order.deliveryPartnerId || null,
             dispatchStatus: order.dispatch?.status || null,
             scheduledAt: order.scheduledAt || null,

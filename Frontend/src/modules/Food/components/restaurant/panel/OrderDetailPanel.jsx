@@ -1,4 +1,5 @@
 import ResendNotificationButton from "@food/components/restaurant/ResendNotificationButton";
+import CodPaymentNote from "@food/components/restaurant/CodPaymentNote";
 
 export default function OrderDetailPanel({ order, onClose, className = "" }) {
   if (!order) return null;
@@ -136,6 +137,7 @@ export default function OrderDetailPanel({ order, onClose, className = "" }) {
                 "Paid Online"
               )}
             </p>
+            <CodPaymentNote order={order} className="mt-1" />
           </div>
         </div>
 

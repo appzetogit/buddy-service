@@ -1402,8 +1402,13 @@ export function toUserOrderResponse(orderDoc, extras = {}) {
     payment: {
       method: order.payment?.method || '',
       status: order.payment?.status || '',
+      // COD with an advance: what is still to be paid in cash, and the advance split.
+      amountDue: order.payment?.amountDue,
+      walletAmount: order.payment?.walletAmount,
+      onlineAmount: order.payment?.onlineAmount,
+      cod: codPaymentView(order.payment),
       refund: order.payment?.refund
-        ? { destination: order.payment.refund.destination, status: order.payment.refund.status }
+        ? { destination: order.payment.refund.destination, status: order.payment.refund.status, amount: order.payment.refund.amount }
         : undefined,
     },
     dispatch: {
@@ -1928,6 +1933,8 @@ export function toRestaurantOrderResponse(orderDoc) {
     payment: {
       method: order.payment?.method || '',
       status: order.payment?.status || '',
+      amountDue: order.payment?.amountDue,
+      cod: codPaymentView(order.payment),
     },
     tracking: order.tracking
       ? {
@@ -2228,4 +2235,23 @@ export function isStatusAdvance(current, next) {
   if (nextPrio === 100 && currentPrio < 80) return true;
 
   return nextPrio > currentPrio;
+}
+
+/** Public view of a COD-with-advance payment (no gateway ids); undefined for every other order. */
+export function codPaymentView(payment) {
+  const c = payment?.cod;
+  if (!c?.enabled) return undefined;
+  return {
+    enabled: true,
+    percent: c.percent,
+    advanceAmount: c.advanceAmount,
+    advanceWalletAmount: c.advanceWalletAmount,
+    advanceOnlineAmount: c.advanceOnlineAmount,
+    remainingAmount: c.remainingAmount,
+    advanceStatus: c.advanceStatus,
+    refundedAmount: c.refundedAmount,
+    refundedAt: c.refundedAt,
+    collectedAmount: c.collectedAmount,
+    collectedAt: c.collectedAt,
+  };
 }

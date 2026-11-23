@@ -74,6 +74,8 @@ import { FoodRestaurantWithdrawal } from '../../restaurant/models/foodRestaurant
 import { FoodDeliveryWithdrawal } from '../../delivery/models/foodDeliveryWithdrawal.model.js';
 import { FoodDeliveryWallet } from '../../delivery/models/deliveryWallet.model.js';
 import { FoodDeliveryCashDeposit } from '../../delivery/models/foodDeliveryCashDeposit.model.js';
+import { riderOrders } from '../../delivery/services/riderOrderSources.js';
+import { getRiderCashSummaries, getCashLimits } from '../../delivery/services/riderCash.service.js';
 import {
     backfillLegacyCategoryWorkflow,
     categoryAllowsFoodType,
@@ -941,12 +943,27 @@ export async function getTransactionReport(query = {}) {
             deliveryCharge: pricing.deliveryFee || 0,
             platformFee,
             orderAmount: tx.amounts?.totalCustomerPaid || pricing.total || 0,
-            status: tx.status
+            status: tx.status,
+            // COD with an advance: what was paid up front vs collected in cash (never the whole bill as cash).
+            paymentType: tx.payment?.cod?.enabled ? 'COD + Advance' : (tx.payment?.method || ''),
+            ...(tx.payment?.cod?.enabled
+                ? {
+                    codAdvance: Number(tx.payment.cod.advanceAmount || 0),
+                    codRemaining: Number(tx.payment.cod.remainingAmount || 0),
+                    codCashCollected: Number(tx.payment.cod.collectedAmount || 0),
+                    codAdvanceRefunded: Number(tx.payment.cod.refundedAmount || 0),
+                    onlineAmount: Number(tx.payment.cod.advanceAmount || 0),
+                    cashAmount: Number(tx.payment.cod.collectedAmount || 0),
+                }
+                : {}),
         };
     });
 
     let completedTransaction = 0;
     let refundedTransaction = 0;
+    let codAdvanceCollected = 0;
+    let codCashCollected = 0;
+    let codCashPending = 0;
     let adminEarning = 0;
     let restaurantEarning = 0;
     let deliverymanEarning = 0;
@@ -966,14 +983,25 @@ export async function getTransactionReport(query = {}) {
         if (tx.status === 'refunded' || (tx.orderId && tx.orderId.orderStatus === 'cancelled_by_admin')) {
             // Count number of refunded transactions according to old logic or sum them
             if (isPrimaryTx) {
-                refundedTransaction += tx.amounts?.totalCustomerPaid || 0;
+                // COD with an advance: only the advance was ever received, so only that can be refunded.
+                refundedTransaction += tx.payment?.cod?.enabled
+                    ? Number(tx.payment.cod.refundedAmount || 0)
+                    : (tx.amounts?.totalCustomerPaid || 0);
             }
+        }
+        if (isPrimaryTx && tx.payment?.cod?.enabled && tx.payment.cod.advanceStatus !== 'refunded') {
+            codAdvanceCollected += Number(tx.payment.cod.advanceAmount || 0);
+            if (tx.payment.cod.collectedAt) codCashCollected += Number(tx.payment.cod.collectedAmount || 0);
+            else if (tx.status === 'pending') codCashPending += Number(tx.payment.cod.remainingAmount || 0);
         }
     }
 
     const summary = {
         completedTransaction,
         refundedTransaction, // Returning amount instead of count for consistency, frontend might expect count though
+        codAdvanceCollected,
+        codCashCollected,
+        codCashPending,
         adminEarning,
         restaurantEarning,
         deliverymanEarning,
@@ -6760,8 +6788,9 @@ export async function getDeliveryWallets(query = {}) {
         FoodDeliveryPartner.countDocuments(filter)
     ]);
 
-    const cashLimitSettings = await FoodDeliveryCashLimit.findOne({ isActive: true }).lean();
-    const globalLimit = Number(cashLimitSettings?.deliveryCashLimit || 0);
+    // One cash source of truth (Food + Marketplace + Taxi, COD remainder only) - same as dispatch and the rider app.
+    const cashSummaries = await getRiderCashSummaries(partners.map((p) => p._id));
+    const globalLimit = (await getCashLimits()).deliveryCashLimit;
 
     const wallets = await Promise.all(partners.map(async (p) => {
         const wallet = await FoodDeliveryWallet.findOne({ deliveryPartnerId: p._id }).lean();
@@ -6775,7 +6804,7 @@ export async function getDeliveryWallets(query = {}) {
                 phone: p.phone || '',
                 deliveryIdString: partnerIdstr,
                 pocketBalance: 0,
-                remainingCashLimit: globalLimit,
+                remainingCashLimit: globalLimit > 0 ? globalLimit : null,
                 cashCollected: 0,
                 totalEarning: 0,
                 bonus: 0,
@@ -6786,29 +6815,10 @@ export async function getDeliveryWallets(query = {}) {
 
         const partnerId = new mongoose.Types.ObjectId(p._id);
 
-        const [earningsAgg, cashCollectedAgg, cashDepositsAgg, bonusAgg, withdrawalAgg] = await Promise.all([
-            FoodOrder.aggregate([
+        const [earningsAgg, bonusAgg, withdrawalAgg] = await Promise.all([
+            riderOrders.aggregate([
                 { $match: { 'dispatch.deliveryPartnerId': partnerId, orderStatus: 'delivered' } },
                 { $group: { _id: null, totalEarned: { $sum: { $ifNull: ['$riderEarning', 0] } } } }
-            ]),
-            FoodOrder.aggregate([
-                {
-                    $match: {
-                        'dispatch.deliveryPartnerId': partnerId,
-                        orderStatus: 'delivered',
-                        'payment.method': 'cash'
-                    }
-                },
-                { $group: { _id: null, cashCollected: { $sum: { $ifNull: ['$pricing.total', 0] } } } }
-            ]),
-            FoodDeliveryCashDeposit.aggregate([
-                {
-                    $match: {
-                        deliveryPartnerId: partnerId,
-                        status: 'Completed'
-                    }
-                },
-                { $group: { _id: null, depositedCash: { $sum: { $ifNull: ['$amount', 0] } } } }
             ]),
             DeliveryBonusTransaction.aggregate([
                 { $match: { deliveryPartnerId: partnerId } },
@@ -6835,9 +6845,9 @@ export async function getDeliveryWallets(query = {}) {
         ]);
 
         const totalEarned = Number(earningsAgg?.[0]?.totalEarned) || 0;
-        const grossCashCollected = Number(cashCollectedAgg?.[0]?.cashCollected) || 0;
-        const totalDepositedCash = Number(cashDepositsAgg?.[0]?.depositedCash) || 0;
-        const cashInHand = Math.max(0, grossCashCollected - totalDepositedCash);
+        const cash = cashSummaries.get(String(p._id));
+        const grossCashCollected = cash ? Object.values(cash.byService).reduce((a, b) => a + b.collected, 0) : 0;
+        const cashInHand = cash?.cashInHand || 0;
         const totalBonus = Number(bonusAgg?.[0]?.total) || 0;
         const totalWithdrawn = Number(withdrawalAgg?.[0]?.totalWithdrawn) || 0;
         const pendingWithdrawals = Number(withdrawalAgg?.[0]?.pendingWithdrawals) || 0;
@@ -6850,12 +6860,19 @@ export async function getDeliveryWallets(query = {}) {
             phone: p.phone || '',
             deliveryIdString: partnerIdstr,
             pocketBalance,
-            remainingCashLimit: Math.max(0, globalLimit - cashInHand),
+            remainingCashLimit: cash?.available ?? null,
             cashCollected: grossCashCollected,
             totalEarning: totalEarned,
             bonus: totalBonus,
             totalWithdrawn,
             cashInHand,
+            pendingCash: cash?.pendingCash || 0,
+            deposited: cash?.deposited || 0,
+            lastDepositAt: cash?.lastDepositAt || null,
+            cashLimit: globalLimit,
+            availableCashLimit: cash?.available ?? null,
+            blocked: Boolean(cash?.blocked),
+            byService: cash?.byService || null,
         };
     }));
 

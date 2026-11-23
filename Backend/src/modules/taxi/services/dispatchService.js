@@ -15,7 +15,7 @@ import {
 } from '../constants/index.js';
 import { Delivery } from '../user/models/Delivery.js';
 import { getRideRoom, isReservation, resolveSetPriceForRide } from './rideService.js';
-import { hasCod } from './codAdvance.js';
+import { hasCod, rideCashPortion } from './codAdvance.js';
 import { SOCKET_EVENTS } from '../socket/events.js';
 import { resolveTransportDispatchConfig } from './transportSettingsService.js';
 import { sendPushNotificationToEntities } from './pushNotificationService.js';
@@ -269,6 +269,8 @@ const matchDispatchDrivers = async ({
     serviceType: ride.serviceType,
     // Scheduled ride: only gig riders who booked the slot covering its pickup time.
     scheduledAt: ride.scheduledAt || null,
+    // Cash the driver would collect (COD remainder): only drivers with cash headroom are offered it.
+    cashDue: rideCashPortion(ride),
   };
 
   let result = await matchDrivers(ride.pickupLocation.coordinates, {

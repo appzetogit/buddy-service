@@ -14,6 +14,8 @@ import { useNavigate } from 'react-router-dom';
 import { deliveryAPI } from '@food/api';
 import { toast } from 'sonner';
 import { formatCurrency } from '@food/utils/currency';
+import CashCard from '../components/CashCard';
+import ServiceFilter, { ServiceBadge, tripService, tripPaymentLine } from '../components/ServiceFilter';
 
 const TRIPS_PAGE_SIZE = 10;
 
@@ -36,6 +38,7 @@ export const PocketV2 = () => {
   const [hasMoreTrips, setHasMoreTrips] = useState(false);
   const [loadingMoreTrips, setLoadingMoreTrips] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState(null);
+  const [service, setService] = useState('');
 
   const getTripPeriod = (p) => {
     if (p === 'today') return 'daily';
@@ -49,6 +52,7 @@ export const PocketV2 = () => {
       status: 'Completed',
       page,
       limit: TRIPS_PAGE_SIZE,
+      ...(service ? { service } : {}),
     });
 
     const payload = tripsRes?.data?.data || {};
@@ -64,7 +68,7 @@ export const PocketV2 = () => {
     setTripsPage(page);
     setTripsTotal(total);
     setHasMoreTrips(hasMore);
-  }, [period]);
+  }, [period, service]);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,7 +111,7 @@ export const PocketV2 = () => {
 
         const [profileRes, earningsRes] = await Promise.all([
           deliveryAPI.getProfile().catch(() => null),
-          deliveryAPI.getEarnings({ period }),
+          deliveryAPI.getEarnings({ period, ...(service ? { service } : {}) }),
         ]);
 
         if (cancelled) return;
@@ -132,7 +136,7 @@ export const PocketV2 = () => {
     return () => {
       cancelled = true;
     };
-  }, [period, fetchTrips]);
+  }, [period, service, fetchTrips]);
 
   const handleLoadMore = async () => {
     if (loadingMoreTrips || !hasMoreTrips) return;
@@ -269,6 +273,9 @@ export const PocketV2 = () => {
             </button>
           </div>
 
+          {/* Cash in hand, limit, per-service split and deposit */}
+          <CashCard />
+
           {/* Earnings Overview & Delivery History */}
           <div className="bg-white rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-gray-100">
             <div className="flex items-center justify-between mb-4">
@@ -290,6 +297,9 @@ export const PocketV2 = () => {
                   <ChevronRight className="w-3.5 h-3.5 rotate-90" />
                 </div>
               </div>
+            </div>
+            <div className="mb-4">
+              <ServiceFilter value={service} onChange={setService} />
             </div>
             <div className="flex items-end justify-between">
               <div>
@@ -371,6 +381,10 @@ export const PocketV2 = () => {
                               <p className="text-[11px] font-medium text-gray-500 truncate">
                                 ID: {String(oid).slice(-6).toUpperCase()} • {formatTripDate(trip)}
                               </p>
+                              <div className="mt-1 flex items-center gap-1.5">
+                                <ServiceBadge service={tripService(trip)} />
+                                {tripPaymentLine(trip) && <span className="truncate text-[10px] font-semibold text-gray-500">{tripPaymentLine(trip)}</span>}
+                              </div>
                             </div>
                           </div>
                           <p className="text-[14px] font-semibold text-green-600 shrink-0 ml-3 bg-white px-2 py-1 rounded-lg border border-green-100">
@@ -450,6 +464,18 @@ export const PocketV2 = () => {
                     <p className="text-sm font-bold text-gray-900">{selectedTrip.orderId || selectedTrip._id || selectedTrip.id}</p>
                   </div>
                   
+                  <div>
+                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Service</p>
+                    <ServiceBadge service={tripService(selectedTrip)} />
+                  </div>
+
+                  {tripPaymentLine(selectedTrip) && (
+                    <div>
+                      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Payment</p>
+                      <p className="text-sm font-bold text-gray-900">{tripPaymentLine(selectedTrip)}</p>
+                    </div>
+                  )}
+
                   <div>
                     <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Date & Time</p>
                     <p className="text-sm font-bold text-gray-900">{formatTripDate(selectedTrip)}</p>

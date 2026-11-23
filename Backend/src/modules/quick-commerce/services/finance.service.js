@@ -376,9 +376,29 @@ export async function getQuickCommerceFinanceSummary() {
   };
 }
 
+// COD with an advance: advance (credit), cash collected (credit), refund of the advance (debit) - never the whole bill as cash.
+const mapQuickCodFinanceEntries = (txn, orderRef) => {
+  const cod = txn.payment?.cod || {};
+  const base = { transactionId: txn._id, reference: orderRef, paymentMode: "cod", actorType: "CUSTOMER", createdAt: txn.createdAt };
+  const rows = [];
+  if (num(cod.advanceAmount) > 0) {
+    rows.push({ ...base, _id: `${txn._id}:advance`, type: "COD_ADVANCE", direction: "CREDIT", amount: num(cod.advanceAmount), status: "CAPTURED", description: `COD advance paid (wallet Rs ${num(cod.advanceWalletAmount)} + online Rs ${num(cod.advanceOnlineAmount)}) #${orderRef}` });
+  }
+  if (cod.collectedAt) {
+    rows.push({ ...base, _id: `${txn._id}:cash`, type: "COD_CASH", direction: "CREDIT", amount: num(cod.collectedAmount), status: "CAPTURED", createdAt: cod.collectedAt, description: `COD cash collected on delivery #${orderRef}` });
+  } else if (String(cod.advanceStatus) !== "refunded" && String(txn.status) !== "failed") {
+    rows.push({ ...base, _id: `${txn._id}:cash`, type: "COD_CASH", direction: "CREDIT", amount: num(cod.remainingAmount), status: "PENDING", description: `COD cash to collect on delivery #${orderRef}` });
+  }
+  if (num(cod.refundedAmount) > 0) {
+    rows.push({ ...base, _id: `${txn._id}:refund`, type: "ORDER_REFUND", direction: "DEBIT", amount: num(cod.refundedAmount), status: "REFUNDED", description: `COD advance refunded to wallet #${orderRef}` });
+  }
+  return rows;
+};
+
 const mapQuickOrderFinanceEntry = (txn, orderMap) => {
   const order = orderMap.get(String(txn.orderId || ""));
   const orderRef = order?.orderId || String(txn.orderId || "");
+  if (txn.payment?.cod?.enabled) return mapQuickCodFinanceEntries(txn, orderRef);
   const amount = num(txn.amounts?.totalCustomerPaid || txn.pricing?.total || 0);
   const isRefund = String(txn.status || "").toLowerCase() === "refunded";
 
@@ -468,7 +488,7 @@ export async function getQuickCommerceFinanceLedger({ page = 1, limit = PAGINATI
 
   const quickOrderItems = (orderTxns || [])
     .filter((txn) => orderMap.has(String(txn.orderId || "")))
-    .map((txn) => mapQuickOrderFinanceEntry(txn, orderMap));
+    .flatMap((txn) => mapQuickOrderFinanceEntry(txn, orderMap));
 
   const merged = [
     ...quickOrderItems,

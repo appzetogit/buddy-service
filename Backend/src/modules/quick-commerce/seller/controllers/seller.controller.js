@@ -258,6 +258,21 @@ const buildSellerOrderFromParentOrder = async (order, sellerId) => {
       )
         ? "cash"
         : "online",
+      // COD with an advance: what the customer already paid and what the rider collects.
+      ...(order?.payment?.cod?.enabled
+        ? {
+          status: order.payment.status,
+          amountDue: order.payment.amountDue,
+          cod: {
+            advanceAmount: order.payment.cod.advanceAmount,
+            remainingAmount: order.payment.cod.remainingAmount,
+            advanceStatus: order.payment.cod.advanceStatus,
+            refundedAmount: order.payment.cod.refundedAmount,
+            collectedAmount: order.payment.cod.collectedAmount,
+            collectedAt: order.payment.cod.collectedAt,
+          },
+        }
+        : {}),
     },
   };
 };

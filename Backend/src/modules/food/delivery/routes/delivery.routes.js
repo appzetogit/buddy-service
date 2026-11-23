@@ -4,6 +4,7 @@ import { authMiddleware } from '../../../../core/auth/auth.middleware.js';
 import { requireRoles } from '../../../../core/roles/role.middleware.js';
 import * as orderController from '../../orders/controllers/order.controller.js';
 import { registerDeliveryPartnerController, updateDeliveryPartnerProfileController, updateDeliveryPartnerBankDetailsController, listSupportTicketsController, createSupportTicketController, getSupportTicketByIdController, updateDeliveryPartnerDetailsController, updateDeliveryPartnerProfilePhotoBase64Controller, updateAvailabilityController, getWalletController, createWithdrawalRequestController, createCashDepositOrderController, verifyCashDepositPaymentController, getEarningsController, getTripHistoryController, getPocketDetailsController, getEmergencyHelpController, getCashLimitController, getDeliveryReferralStatsController, getActiveEarningAddonsController } from '../controllers/delivery.controller.js';
+import { getCashSummaryController, getCashDepositsController } from '../controllers/delivery.controller.js';
 import { deleteDeliveryAccountController } from '../controllers/deleteAccount.controller.js';
 import { fetchPolyline } from '../../orders/utils/googleMaps.js';
 
@@ -83,6 +84,8 @@ router.get('/trip-history', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DR
 router.get('/pocket-details', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), getPocketDetailsController);
 router.get('/emergency-help', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), getEmergencyHelpController);
 router.get('/cash-limit', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), getCashLimitController);
+router.get('/cash-summary', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), getCashSummaryController);
+router.get('/wallet/deposits', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), getCashDepositsController);
 router.get('/referrals/stats', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), getDeliveryReferralStatsController);
 
 // Delete account (Bearer DELIVERY_PARTNER)

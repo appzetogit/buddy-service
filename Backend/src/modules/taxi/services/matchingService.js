@@ -8,6 +8,7 @@ import { Driver } from '../driver/models/Driver.js';
 import { Zone } from '../driver/models/Zone.js';
 import { getRiderActiveLoadMap } from '../../food/orders/services/rider-capacity.service.js';
 import { filterPartnersByGig } from '../../common/gigs/gig.service.js';
+import { getRiderCashSummaries, riderCanTakeWork } from '../../food/delivery/services/riderCash.service.js';
 import { getDriverIdsBlockedByUpcomingScheduledRides } from './rideService.js';
 
 const EARTH_RADIUS_METERS = 6371000;
@@ -346,6 +347,7 @@ const findDriversForZone = async ({
   serviceType,
   strictZoneOnly = false,
   scheduledAt = null,
+  cashDue = 0,
 }) => {
   const commonFilters = buildDriverMatchFilters({ vehicleTypeKeys, serviceType });
   const selectedFields =
@@ -373,7 +375,10 @@ const findDriversForZone = async ({
   const notBusy = nearby.filter((driver) => !(loadMap.get(String(driver._id)) > 0));
   // Riders with a gig booked today only get rides inside their booked hours. A scheduled ride goes
   // only to riders who booked the gig covering its pickup time.
-  const free = (await filterPartnersByGig(notBusy, 'taxi', { at: scheduledAt })).slice(0, limit);
+  const gigOk = await filterPartnersByGig(notBusy, 'taxi', { at: scheduledAt });
+  // Over the admin's cash limit = no new rides until the cash is deposited (fails open on a lookup error).
+  const cashMap = await getRiderCashSummaries(gigOk.map((d) => d._id)).catch(() => null);
+  const free = (cashMap ? gigOk.filter((d) => riderCanTakeWork(cashMap.get(String(d._id)), cashDue)) : gigOk).slice(0, limit);
 
   // Downstream ranking reads `driver.location`; point it at wherever the partner really is.
   const placed = free.map((driver) => {
@@ -399,6 +404,8 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     serviceType,
     // Pickup time of a scheduled ride (gig riders only).
     scheduledAt = null,
+    // Cash the driver would collect on this ride (0 = unknown / prepaid): only checked against the headroom.
+    cashDue = 0,
   } = options;
   const normalizedVehicleTypeIds = normalizeVehicleTypeIds(vehicleTypeIds, vehicleTypeId);
   const allowedVehicles = normalizedVehicleTypeIds.length
@@ -423,6 +430,7 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     serviceType,
     strictZoneOnly,
     scheduledAt,
+    cashDue,
   });
   drivers = filterDriversForMatchedZone({
     drivers,
@@ -448,6 +456,7 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
       serviceType,
       strictZoneOnly,
       scheduledAt,
+      cashDue,
     });
     drivers = filterDriversForMatchedZone({
       drivers,

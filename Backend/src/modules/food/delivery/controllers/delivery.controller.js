@@ -6,6 +6,28 @@ import { DeliveryBonusTransaction } from '../../admin/models/deliveryBonusTransa
 import { validateDeliveryRegisterDto, validateDeliveryProfileUpdateDto, validateDeliveryBankDetailsDto } from '../validators/delivery.validator.js';
 import { sendResponse } from '../../../../utils/response.js';
 import { getDeliveryReferralStats } from '../services/deliveryReferral.service.js';
+import { getRiderCashSummary, listCashDeposits, resolvePartnerObjectId } from '../services/riderCash.service.js';
+
+// GET /food/delivery/cash-summary - the one cash picture (Food + Marketplace + Taxi) for the signed-in rider
+export const getCashSummaryController = async (req, res, next) => {
+    try {
+        const summary = await getRiderCashSummary(req.user?.userId);
+        return sendResponse(res, 200, 'Cash summary fetched successfully', { summary });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// GET /food/delivery/wallet/deposits - the rider's own deposit history, paged
+export const getCashDepositsController = async (req, res, next) => {
+    try {
+        const partnerId = await resolvePartnerObjectId(req.user?.userId);
+        const data = await listCashDeposits({ partnerId: partnerId || 'none', status: req.query?.status, page: req.query?.page, limit: req.query?.limit });
+        return sendResponse(res, 200, 'Cash deposits fetched successfully', data);
+    } catch (error) {
+        next(error);
+    }
+};
 
 export const registerDeliveryPartnerController = async (req, res, next) => {
     try {

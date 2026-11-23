@@ -23,6 +23,7 @@ import { getIO, rooms } from '../../../config/socket.js';
 import { getQuickDeliverySettings } from './quickDeliverySettings.service.js';
 import { getNextPickup } from '../../food/orders/services/order-lifecycle.policy.js';
 import { logger } from '../../../utils/logger.js';
+import { getRiderCashSummary, riderCanTakeWork, CASH_BLOCKED_MESSAGE, CASH_NO_HEADROOM_MESSAGE } from '../../food/delivery/services/riderCash.service.js';
 import { eligiblePartnerIds, gigPartnerIdsForTime, GIG_BLOCKED_MESSAGE, GIG_SCHEDULED_MESSAGE } from '../../common/gigs/gig.service.js';
 
 /** Default offer window; the live value comes from the admin delivery settings. */
@@ -432,8 +433,16 @@ export async function acceptQuickOrder(orderId, partnerId) {
   }
 
   // A rider with a gig booked today only takes jobs inside the booked hours (fails open on error).
-  const gigOrder = await QuickOrder.findById(orderId).select('scheduledAt dispatch.assignedByAdmin').lean().catch(() => null);
+  const gigOrder = await QuickOrder.findById(orderId).select('scheduledAt dispatch.assignedByAdmin payment pricing.total').lean().catch(() => null);
   if (!gigOrder?.dispatch?.assignedByAdmin) {
+    // Strict cash gate: over the admin's cash limit = no new order; a cash/COD order also needs headroom for its remainder.
+    const cashDue = ['cash', 'cod'].includes(String(gigOrder?.payment?.method || '').toLowerCase())
+      ? Number(gigOrder?.payment?.cod?.enabled ? gigOrder.payment.amountDue : (gigOrder?.payment?.amountDue ?? gigOrder?.pricing?.total)) || 0
+      : 0;
+    const cash = await getRiderCashSummary(partnerId, { excludeOrderId: orderId }).catch(() => null);
+    if (!riderCanTakeWork(cash, cashDue)) {
+      return { ok: false, reason: 'CASH_LIMIT', message: cash?.blocked ? CASH_BLOCKED_MESSAGE : CASH_NO_HEADROOM_MESSAGE };
+    }
     const gigAt = gigOrder?.scheduledAt || null;
     const gigOk = await eligiblePartnerIds([partnerId], 'quickCommerce', new Date(), gigAt).then((s) => s.has(String(partnerId))).catch(() => true);
     if (!gigOk) return { ok: false, reason: 'GIG_BLOCKED', message: gigAt ? GIG_SCHEDULED_MESSAGE : GIG_BLOCKED_MESSAGE };

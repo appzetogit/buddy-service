@@ -3,6 +3,7 @@ import { FoodOrder } from '../models/order.model.js';
 import * as userWalletService from '../../user/services/userWallet.service.js';
 import { notifyOwnersSafely } from './order.helpers.js';
 import { logger } from '../../../../utils/logger.js';
+import { recordCodAdvanceRefunded, recordCodCashCollected } from './foodTransaction.service.js';
 
 /**
  * Food: cash on delivery with an advance (shared rules: modules/common/cod).
@@ -46,6 +47,7 @@ export async function refundFoodCodAdvance(orderId, { reason = 'Order cancelled'
         },
       },
     );
+    void recordCodAdvanceRefunded(order._id, amount);
     void notifyOwnersSafely([{ ownerType: 'USER', ownerId: order.userId }], {
       title: 'Advance refunded to wallet',
       body: `Rs ${amount} paid in advance for order #${order.order_id || order._id} has been added to your wallet. ${reason}`,
@@ -79,4 +81,5 @@ export async function recordFoodCodCollected(orderId, amount) {
     { _id: new mongoose.Types.ObjectId(String(orderId)), 'payment.cod.enabled': true },
     { $set: { 'payment.cod.collectedAmount': money(amount), 'payment.cod.collectedAt': new Date() } },
   );
+  await recordCodCashCollected(orderId, amount);
 }

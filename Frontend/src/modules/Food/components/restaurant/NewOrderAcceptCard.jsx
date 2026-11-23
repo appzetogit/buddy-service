@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { motion } from "framer-motion"
+import CodPaymentNote from "@food/components/restaurant/CodPaymentNote";
 import {
   ChevronRight,
   Minus,
@@ -366,6 +367,7 @@ export default function NewOrderAcceptCard({
               >
                 {isCod ? "Cash on Delivery" : "Online Paid"}
               </p>
+              <CodPaymentNote order={order} className="mt-1" />
             </div>
           </div>
 

@@ -38,6 +38,7 @@ import { getLegacyStatusFromOrder } from "@/shared/utils/orderStatus";
 import { Loader2 } from "lucide-react";
 import Pagination from "@shared/components/ui/Pagination";
 import { DatePicker } from "@/components/ui/date-picker";
+import { sellerPaymentLabel } from "../utils/paymentLabel";
 import {
   joinOrderRoom,
   onOrderStatusUpdate,
@@ -578,10 +579,7 @@ const Orders = () => {
             vehicleNumber: order.deliveryPartner.vehicleNumber || "",
           }
           : null,
-        payment:
-          order.payment?.method === "cash" || order.payment?.method === "cod"
-            ? "Cash on Delivery"
-            : "Online Paid",
+        payment: sellerPaymentLabel(order),
         cancellationReason: order.cancellationReason || "",
         statusHistory: Array.isArray(order.statusHistory) ? order.statusHistory : [],
         returnStatus: order.returnStatus || "",

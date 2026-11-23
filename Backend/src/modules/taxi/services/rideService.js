@@ -1789,7 +1789,7 @@ export const acceptRideAssignment = async ({ rideId, driverId }) => {
     throw new ApiError(409, 'Driver already has another scheduled trip in a similar time range');
   }
 
-  await ensureDriverWalletCanAcceptRide(driver);
+  await ensureDriverWalletCanAcceptRide(driver, { ride });
 
   // A trip booked for later does not occupy the driver now — they keep taking
   // rides until it is due.
@@ -2355,7 +2355,7 @@ export const acceptRideBidAssignment = async ({ rideId, bidId, userId }) => {
         throw new ApiError(409, 'Driver already has another scheduled trip in a similar time range');
       }
 
-      await ensureDriverWalletCanAcceptRide(driver, { session });
+      await ensureDriverWalletCanAcceptRide(driver, { session, ride });
 
       ride.driverId = driver._id;
       ride.fare = Number(bid.bidFare || ride.fare || 0);

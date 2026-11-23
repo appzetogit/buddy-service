@@ -26,6 +26,22 @@ const formatReceiptDateTime = (value) => {
     hour12: true,
   })
 }
+// COD with an advance: what was paid up front and what is (or was) paid in cash.
+const codPaymentLines = (order) => {
+  const c = order?.payment?.cod
+  if (!c?.enabled) return []
+  const money = (n) => `Rs ${Number(n || 0).toFixed(2)}`
+  const how = [
+    Number(c.advanceWalletAmount) > 0 ? `wallet ${money(c.advanceWalletAmount)}` : "",
+    Number(c.advanceOnlineAmount) > 0 ? `online ${money(c.advanceOnlineAmount)}` : "",
+  ].filter(Boolean).join(" + ")
+  const lines = [`Advance paid ${money(c.advanceAmount)}${how ? ` (${how})` : ""}`]
+  if (c.advanceStatus === "refunded") lines.push(`Advance refunded to wallet ${money(c.refundedAmount)}`)
+  else if (c.collectedAt || order?.payment?.status === "paid") lines.push(`Paid in cash on delivery ${money(c.collectedAmount || c.remainingAmount)}`)
+  else lines.push(`Balance due on delivery ${money(c.remainingAmount)}`)
+  return lines
+}
+
 const normalizePaymentLabel = (raw, statusRaw = "") => {
   const method = String(raw || "").trim().toLowerCase()
   const status = String(statusRaw || "").trim().toLowerCase()
@@ -363,6 +379,10 @@ const buildCustomerReceiptPdfDocument = async (order, settings = {}) => {
   y += 4
   doc.text(`Payment: ${paymentLabel}`, margin, y)
   y += 4
+  for (const line of codPaymentLines(order)) {
+    doc.text(line, margin, y)
+    y += 4
+  }
 
   drawReceiptLine(doc, y, receiptWidth, margin, "dashed")
   y += 4
@@ -926,7 +946,10 @@ export const generateOrderInvoice = async (order, options = {}) => {
     })
 
     if (isCustomerInvoice) {
-      const paymentLines = [`Paid via ${paymentType} - ${paymentStatus}`]
+      const codLines = codPaymentLines(order)
+      const paymentLines = codLines.length
+        ? ["Cash on delivery with advance", ...codLines]
+        : [`Paid via ${paymentType} - ${paymentStatus}`]
       if (hasRefund || returnSummary?.hasReturn) {
         if (returnStatusLabel) paymentLines.push(`Return status: ${returnStatusLabel}`)
         paymentLines.push(

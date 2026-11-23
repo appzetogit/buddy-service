@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { sellerPaymentLabel } from "../utils/paymentLabel";
 import { useNavigate } from "react-router-dom";
 import Card from "@shared/components/ui/Card";
 import PageHeader from "@shared/components/ui/PageHeader";
@@ -318,10 +319,7 @@ const Dashboard = () => {
         receivable: resolveSellerReceivable(order),
       },
       status: order.status || "pending",
-      payment:
-        order.payment?.method === "cash" || order.payment?.method === "cod"
-          ? "Cash on Delivery"
-          : "Online Paid",
+      payment: sellerPaymentLabel(order),
     };
   };
 

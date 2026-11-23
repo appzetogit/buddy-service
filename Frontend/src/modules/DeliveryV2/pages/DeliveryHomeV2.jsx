@@ -49,6 +49,7 @@ import {
 } from '@/modules/DeliveryV2/utils/geo';
 import { useCompanyName } from "@food/hooks/useCompanyName";
 import { useNavigate } from 'react-router-dom';
+import { DepositSheet } from '../components/CashCard';
 import useNotificationInbox from "@food/hooks/useNotificationInbox";
 
 /** Minimal bottom-sheet popup (Restored from legacy FeedNavbar) */
@@ -99,6 +100,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   const [incomingOrder, setIncomingOrder] = useState(null);
   const [cashLimitNotice, setCashLimitNotice] = useState(null);
+  const [showDepositSheet, setShowDepositSheet] = useState(false);
   const [currentTab, setCurrentTab] = useState(tab);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -1462,12 +1464,29 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                     <p className="mt-0.5 text-[10px] font-semibold text-amber-100">
                       {cashLimitNotice?.message || 'Please deposit your amount to get orders.'}
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowDepositSheet(true)}
+                      className="pointer-events-auto mt-1.5 rounded-full bg-amber-300 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-amber-950 active:scale-95"
+                    >
+                      Deposit now
+                    </button>
                   </div>
                 )}
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+      )}
+
+      {showDepositSheet && (
+        <DepositSheet
+          onClose={() => setShowDepositSheet(false)}
+          onDone={() => {
+            setCashLimitNotice(null);
+            window.dispatchEvent(new CustomEvent('deliveryWalletStateUpdated'));
+          }}
+        />
       )}
 
       {/* ─── 2. MAIN CONTENT ─── */}

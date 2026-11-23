@@ -122,8 +122,11 @@ const driverVehicleTypeIds = (driver) =>
 
 const rideRows = async ({ from, to, onlyId }) => {
   const rides = await Ride.find(onlyId ? { _id: onlyId } : {
-    status: 'completed',
-    $or: [{ completedAt: { $gte: from, $lte: to } }, { completedAt: null, updatedAt: { $gte: from, $lte: to } }],
+    $or: [
+      { status: 'completed', $or: [{ completedAt: { $gte: from, $lte: to } }, { completedAt: null, updatedAt: { $gte: from, $lte: to } }] },
+      // A cancelled COD ride still moved money: the advance came in and (mostly) went back to the wallet.
+      { status: 'cancelled', 'cod.enabled': true, 'cod.advanceAmount': { $gt: 0 }, updatedAt: { $gte: from, $lte: to } },
+    ],
   })
     .select('cod fare status paymentMethod driverPaymentCollection completedAt updatedAt createdAt userId driverId pickupAddress dropAddress serviceType trip_category vehicleTypeId')
     .populate('userId', 'name phone')
@@ -141,6 +144,17 @@ const rideRows = async ({ from, to, onlyId }) => {
       description: `${ride.pickupAddress || 'Pickup'} -> ${ride.dropAddress || 'Drop'}`,
       vehicle_type_ids: ride.vehicleTypeId ? [String(ride.vehicleTypeId)] : [],
     };
+    if (hasCod(ride) && ride.status === 'cancelled') {
+      const advance = Number(ride.cod.advanceAmount || 0);
+      const online = Math.min(Number(ride.cod.advanceOnlineAmount || 0), advance);
+      const wallet = Math.max(0, advance - online);
+      const rows = [];
+      if (online > 0) rows.push({ ...base, date: ride.createdAt, id: `ride:${ride._id}:advance_online`, amount: online, method: 'online', provider: 'razorpay', status: 'paid', reference: ride.cod?.advanceRef?.paymentId || '', detail: 'COD advance paid online (ride cancelled)' });
+      if (wallet > 0) rows.push({ ...base, date: ride.createdAt, id: `ride:${ride._id}:advance_wallet`, amount: wallet, method: 'wallet', provider: 'wallet', status: 'paid', reference: '', detail: 'COD advance paid from the wallet (ride cancelled)' });
+      const refunded = Number(ride.cod.refundedAmount || 0);
+      if (refunded > 0) rows.push({ ...base, date: ride.cod.refundedAt || ride.updatedAt, id: `ride:${ride._id}:advance_refund`, amount: refunded, method: 'wallet', provider: 'wallet', status: 'refunded', reference: '', detail: 'COD advance refunded to the rider wallet' });
+      return rows;
+    }
     if (hasCod(ride) && ride.status === 'completed') {
       // The advance was received up front (online and/or from the wallet); only the rest was cash.
       const applied = codAdvanceApplied(ride);

@@ -233,6 +233,15 @@ export const buildQuickSellerOrderDocsFromParent = async (parentOrder) => {
         },
         payment: {
           method: sellerPaymentMode,
+          ...(parentOrder?.payment?.cod?.enabled
+            ? {
+              cod: {
+                enabled: true,
+                advanceAmount: Number(parentOrder.payment.cod.advanceAmount || 0),
+                remainingAmount: Number(parentOrder.payment.cod.remainingAmount || 0),
+              },
+            }
+            : {}),
         },
       };
     }),

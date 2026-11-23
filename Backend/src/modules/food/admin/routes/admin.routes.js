@@ -194,6 +194,10 @@ router.patch('/delivery/withdrawals/:id', adminController.updateDeliveryWithdraw
 router.get('/delivery/join-requests', adminController.getDeliveryJoinRequests);
 router.get('/delivery/join-requests/:identityId', adminController.getDeliveryJoinRequestDetail);
 router.get('/delivery/wallets', adminController.getDeliveryWallets);
+router.get('/delivery/wallets/:partnerId/cash', adminController.getDeliveryRiderCash);
+router.get('/delivery/cash-limit', adminController.getDeliveryCashLimit);
+router.put('/delivery/cash-limit', adminController.updateDeliveryCashLimit);
+router.get('/delivery/cash-deposits', adminController.getDeliveryCashDeposits);
 router.get('/delivery/bonus-transactions', adminController.getDeliveryPartnerBonusTransactions);
 router.get('/delivery/earnings', adminController.getDeliveryEarnings);
 router.get('/delivery/salary-earnings', adminController.getDeliverySalaryEarnings);

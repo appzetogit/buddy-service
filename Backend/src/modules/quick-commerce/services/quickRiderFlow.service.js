@@ -12,6 +12,7 @@
 import { recordGigEarning } from '../../common/gigs/gig.service.js';
 import mongoose from 'mongoose';
 import { QuickOrder } from '../models/order.model.js';
+import { recordCodCashCollected, updateTransactionStatus } from '../../food/orders/services/foodTransaction.service.js';
 import { FoodDeliveryPartner } from '../../food/delivery/models/deliveryPartner.model.js';
 import {
   applyEmploymentAwareDualEarnings,
@@ -437,6 +438,11 @@ export async function completeDelivery(orderId, partnerId, { otp = '' } = {}) {
     order.riderEarning = Number(order.riderEarning || 0) + tip;
   }
   await order.save();
+  // Ledger: COD records the cash actually collected; legacy cash orders are captured now (both never throw).
+  if (String(order.payment?.method || '').toLowerCase() === 'cash') {
+    if (order.payment.cod?.enabled) void recordCodCashCollected(order._id, order.payment.cod.collectedAmount);
+    else void Promise.resolve(updateTransactionStatus(order._id, 'cod_marked_paid_on_delivery', { status: 'captured', paymentMethod: 'cash', recordedBy: { role: 'SYSTEM' } })).catch(() => {});
+  }
   // Gig extra for this order when the rider has a gig booked for this hour (never throws).
   void recordGigEarning({ partnerId, service: 'quickCommerce', orderRef: `${order.orderId || order._id}:${partnerId}`, at: order.scheduledAt || new Date() });
 

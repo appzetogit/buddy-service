@@ -7,7 +7,8 @@ import { Driver } from '../models/Driver.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
 import { Ride } from '../../user/models/Ride.js';
 import { getWalletSettings } from '../../services/appSettingsService.js';
-import { hasCod, codAdvanceApplied, rideAmountDue } from '../../services/codAdvance.js';
+import { hasCod, codAdvanceApplied, rideAmountDue, rideCashPortion } from '../../services/codAdvance.js';
+import { getRiderCashSummary, riderCanTakeWork, CASH_BLOCKED_MESSAGE, CASH_NO_HEADROOM_MESSAGE } from '../../../food/delivery/services/riderCash.service.js';
 
 /**
  * Which classes of vehicle a driver drives, from the catalog rather than the
@@ -197,11 +198,18 @@ export const serializeDriverWallet = async (driver) => {
 };
 
 /**
- * Taxi has no wallet minimum of its own: the riders are the platform's delivery partners, whose
- * money (earnings, cash in hand, the cash limit) is governed by the delivery wallet, so a ride
- * is never refused on a balance here.
+ * Taxi has no wallet minimum of its own, but the driver is a delivery partner under the admin's
+ * cash limit: at/over it no new ride, and a cash ride (the COD remainder) needs headroom.
+ * An admin-assigned ride is exempt.
  */
-export const ensureDriverWalletCanAcceptRide = async () => null;
+export const ensureDriverWalletCanAcceptRide = async (driver, { ride = null } = {}) => {
+  if (ride?.assignedByAdmin) return null;
+  const summary = await getRiderCashSummary(driver?._id || driver).catch(() => null);
+  if (!riderCanTakeWork(summary, ride ? rideCashPortion(ride) : 0)) {
+    throw new ApiError(409, summary?.blocked ? CASH_BLOCKED_MESSAGE : CASH_NO_HEADROOM_MESSAGE);
+  }
+  return null;
+};
 
 export const applyDriverWalletAdjustment = async ({
   driverId,

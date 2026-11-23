@@ -827,6 +827,16 @@ export default function OrderDetail() {
                                     {formatCurrency(order.payment?.amountPaid || order.pricing?.total || order.amount)}
                                 </span>
                             </div>
+                            {order.payment?.cod?.enabled ? (
+                                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[11px] font-bold text-amber-900 space-y-1.5">
+                                    <p className="uppercase tracking-widest text-[10px]">Cash on Delivery (advance)</p>
+                                    <p>Advance paid: {formatCurrency(order.payment.cod.advanceAmount)} ({order.payment.cod.percent}%) - Wallet {formatCurrency(order.payment.cod.advanceWalletAmount)} + Online {formatCurrency(order.payment.cod.advanceOnlineAmount)}</p>
+                                    <p>Remaining on delivery: {formatCurrency(order.payment.cod.remainingAmount)}{order.payment.cod.collectedAt ? ` - collected ${formatCurrency(order.payment.cod.collectedAmount)}` : ' - not collected yet'}</p>
+                                    {order.payment.cod.advanceStatus === 'refunded' ? (
+                                        <p className="text-sky-700">Advance {formatCurrency(order.payment.cod.refundedAmount)} refunded to the customer's wallet</p>
+                                    ) : null}
+                                </div>
+                            ) : null}
                         </div>
                     </Card>
 

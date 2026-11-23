@@ -21,7 +21,7 @@ import { AdminActivity } from '../models/AdminActivity.js';
 import { GoodsType } from '../models/GoodsType.js';
 import { SetPrice } from '../models/SetPrice.js';
 import { describeRidePayment } from '../../services/paymentLedgerService.js';
-import { hasCod, rideAmountDue, rideCashPortion, serializeCod } from '../../services/codAdvance.js';
+import { codAdvanceApplied, hasCod, rideAmountDue, rideCashPortion, serializeCod } from '../../services/codAdvance.js';
 
 // Fare collected in cash / online for a ride. COD with an advance: only the rest was cash, the advance was online/wallet.
 const fareCashPart = (ride) => (hasCod(ride) ? rideCashPortion(ride) : (String(ride?.paymentMethod || 'cash').toLowerCase() === 'cash' ? Number(ride?.fare || 0) : 0));
@@ -6511,6 +6511,12 @@ export const getAdminEarnings = async (query = {}) => {
         transportType: vehicleDoc?.transport_type || ride.transport_type || 'taxi',
         grossFare: Number(grossFare.toFixed(2)),
         adminCommission: Number(adminCommission.toFixed(2)),
+        // COD with an advance: the commission is covered by the advance (online/wallet) first, the rest by cash.
+        ...(() => {
+          const pm = describeRidePayment(ride).method;
+          const online = hasCod(ride) ? Math.min(adminCommission, codAdvanceApplied(ride)) : (pm === 'online' ? adminCommission : 0);
+          return { onlineCommission: Number(online.toFixed(2)), cashCommission: Number((adminCommission - online).toFixed(2)) };
+        })(),
         driverEarnings: Number(driverEarnings.toFixed(2)),
         commissionRate: Number(ride.pricingSnapshot?.admin_commission_from_driver || 0),
         commissionType: Number(ride.pricingSnapshot?.admin_commission_type_from_driver || 1) === 1 ? 'percentage' : 'fixed',
@@ -6555,8 +6561,8 @@ export const getAdminEarnings = async (query = {}) => {
       acc.grossFare += row.grossFare;
       acc.adminCommission += row.adminCommission;
       acc.driverEarnings += row.driverEarnings;
-      if (row.paymentMethod === 'cash') acc.byCash += row.adminCommission;
-      if (row.paymentMethod === 'online') acc.byOnline += row.adminCommission;
+      acc.byCash += row.cashCommission ?? (row.paymentMethod === 'cash' ? row.adminCommission : 0);
+      acc.byOnline += row.onlineCommission ?? (row.paymentMethod === 'online' ? row.adminCommission : 0);
       return acc;
     },
     { totalTrips: 0, grossFare: 0, adminCommission: 0, driverEarnings: 0, byCash: 0, byOnline: 0 },
@@ -9668,11 +9674,11 @@ export const getAdminEarningDetails = async (query = {}) => {
         ],
       };
     case 'cash-commission': {
-      const rows = rides.filter((row) => row.paymentMethod === 'cash');
+      const rows = rides.filter((row) => (row.cashCommission ?? (row.paymentMethod === 'cash' ? row.adminCommission : 0)) > 0);
       return rideResult('Cash commission', 'Commission on trips the rider paid in cash.', rows, 'Commission', money(summary.byCash));
     }
     case 'online-commission': {
-      const rows = rides.filter((row) => row.paymentMethod === 'online');
+      const rows = rides.filter((row) => (row.onlineCommission ?? (row.paymentMethod === 'online' ? row.adminCommission : 0)) > 0);
       return rideResult('Online commission', 'Commission on trips paid online (including cash bookings paid online at the end).', rows, 'Commission', money(summary.byOnline));
     }
     case 'driver-earnings': {

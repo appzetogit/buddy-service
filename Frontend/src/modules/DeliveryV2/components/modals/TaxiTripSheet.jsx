@@ -244,6 +244,13 @@ export const TaxiTripSheet = ({
   const isParcel = taxi.serviceType === 'parcel';
   const isCash = String(order.paymentMethod || taxi.paymentMethod || '').toLowerCase() === 'cash';
   const fare = Number(taxi.fare ?? order.pricing?.total ?? 0);
+  // COD with an advance: the passenger already paid the advance online, so only the remaining is collected.
+  const cod = order.cod || taxi.cod || order.payment?.cod || null;
+  const hasCod = Boolean(cod?.enabled);
+  const advancePaid = hasCod && cod.advanceStatus === 'paid' ? Number(cod.advanceAmount) || 0 : 0;
+  const collect = hasCod
+    ? Math.max(0, Number(order.amountToCollect ?? order.payment?.amountDue ?? cod.remainingAmount ?? fare - advancePaid) || 0)
+    : fare;
   const earning = Number(order.riderEarning || 0);
   const pickupProof = Boolean(parcel?.pickupProof?.url);
   const deliveryProof = Boolean(parcel?.deliveryProof?.url);
@@ -360,9 +367,12 @@ export const TaxiTripSheet = ({
         <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-1">
           {isCash ? 'Collect from passenger' : 'Fare'}
         </p>
-        <p className="text-4xl font-black tracking-tight text-[#16A34A]">{money(fare)}</p>
+        <p className="text-4xl font-black tracking-tight text-[#16A34A]">{money(isCash ? collect : fare)}</p>
+        {hasCod && advancePaid > 0 && (
+          <p className="text-white/70 text-[11px] font-semibold mt-1">Fare {money(fare)} − {money(advancePaid)} paid in advance</p>
+        )}
         <p className="text-white/60 text-[11px] font-semibold mt-2">
-          {isCash ? 'Cash ride' : 'Paid online — nothing to collect'} · You earn {money(earning)}
+          {isCash ? (hasCod ? 'COD ride' : 'Cash ride') : 'Paid online — nothing to collect'} · You earn {money(earning)}
         </p>
       </div>
 

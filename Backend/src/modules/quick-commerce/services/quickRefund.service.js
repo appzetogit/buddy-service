@@ -2,6 +2,7 @@ import { logger } from '../../../utils/logger.js';
 import { refundWalletBalance } from '../../food/user/services/userWallet.service.js';
 import { initiateRazorpayRefund } from '../../food/orders/helpers/razorpay.helper.js';
 import { QuickOrder } from '../models/order.model.js';
+import { recordCodAdvanceRefunded } from '../../food/orders/services/foodTransaction.service.js';
 
 const ONLINE_METHODS = new Set(['razorpay', 'razorpay_qr', 'online']);
 
@@ -71,6 +72,7 @@ export const refundCodAdvanceToWallet = async (order, { cancelledBy = 'system', 
     await QuickOrder.updateOne({ _id: order._id }, { $set: { 'payment.cod.advanceStatus': 'paid', 'payment.cod.refundedAmount': 0, 'payment.cod.refundedAt': null } });
     throw err;
   }
+  void recordCodAdvanceRefunded(order._id, amount);
   // Keep the caller's in-memory document in step (callers save it afterwards).
   order.payment.cod.advanceStatus = 'refunded';
   order.payment.cod.refundedAmount = amount;

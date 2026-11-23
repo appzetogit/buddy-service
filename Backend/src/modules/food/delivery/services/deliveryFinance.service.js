@@ -10,6 +10,7 @@ import { getBalance } from '../../../../core/payments/transaction.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { assertRazorpayAvailableInProduction, createRazorpayOrder, fetchCapturedPayment, getRazorpayKeyId, isRazorpayConfigured, verifyPaymentSignature } from '../../orders/helpers/razorpay.helper.js';
 import { resolveRiderPayoutAmount } from '../../orders/services/order.helpers.js';
+import { getRiderCashSummary, resolvePartnerObjectId, CASH_SERVICES } from './riderCash.service.js';
 
 /**
  * Enhanced wallet fetch for delivery partners.
@@ -190,9 +191,11 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
 
     const totalEarned = Number(ordersRes[0]?.totalEarned || 0);
     const totalOrders = Number(ordersRes[0]?.count || 0);
-    const actualCashCollected = Number(cashCollectedRes[0]?.actualCashCollected || 0);
-    const pendingCashLiability = Number(cashCollectedRes[0]?.pendingCashLiability || 0);
-    const totalCashDeposited = Number(depositsRes[0]?.total || 0);
+    // shortcut: cashCollectedRes / depositsRes above are legacy queries kept only for their other callers; cash now comes from the unified summary.
+    const cashSummary = (await getRiderCashSummary(partnerId)) || {};
+    const actualCashCollected = CASH_SERVICES.reduce((s, k) => s + Number(cashSummary.byService?.[k]?.collected || 0), 0);
+    const pendingCashLiability = Number(cashSummary.pendingCash || 0);
+    const totalCashDeposited = Number(cashSummary.deposited || 0);
     const totalBonus = Number(bonusRes[0]?.total || 0);
 
     const withdrawalsMap = (withdrawalsRes || []).reduce((acc, curr) => {
@@ -216,12 +219,13 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
     );
     
     // 2. Calculate actual cash in hand (already delivered - total deposited)
-    const actualCashInHand = Math.max(0, actualCashCollected - totalCashDeposited);
+    const actualCashInHand = Number(cashSummary.cashInHand || 0);
 
     const pocketBalance = Math.max(rawEarningsBalance, ledgerAvailable);
     const netCashInHand = actualCashInHand;
 
-    const totalCashLimit = Number(partner?.cashLimit || cashLimitSettings?.deliveryCashLimit) || 2000;
+    // The admin's limit, as is: 0 means no cap (the old hard-coded 2000 fallback made riders look blocked).
+    const totalCashLimit = Number(cashSummary.limit || 0);
     const deliveryWithdrawalLimit = Number(cashLimitSettings?.deliveryWithdrawalLimit) || 100;
 
     const totalCurrentLiability = netCashInHand + pendingCashLiability;
@@ -312,7 +316,11 @@ export const getDeliveryPartnerWalletEnhanced = async (deliveryPartnerId) => {
             date: lastWithdrawal.updatedAt
         } : null,
         totalCashLimit: Number(totalCashLimit.toFixed(2)),
-        availableCashLimit: Number(Math.max(0, totalCashLimit - totalCurrentLiability).toFixed(2)),
+        // null = no cap set by the admin
+        availableCashLimit: cashSummary.available == null ? null : Number(Number(cashSummary.available).toFixed(2)),
+        pendingCash: Number(pendingCashLiability.toFixed(2)),
+        cashBlocked: Boolean(cashSummary.blocked),
+        cashByService: cashSummary.byService || null,
         deliveryWithdrawalLimit: Number(deliveryWithdrawalLimit.toFixed(2)),
         transactions: transactions.slice(0, 50)
     };
@@ -380,7 +388,10 @@ export const requestDeliveryWithdrawal = async (deliveryPartnerId, payload) => {
     return withdrawal;
 };
 
-export const createDeliveryCashDepositOrder = async (deliveryPartnerId, amountInr) => {
+export const createDeliveryCashDepositOrder = async (rawPartnerId, amountInr) => {
+    // Tokens of a DRIVER carry the unified identity id; deposits must be stored under the partner _id.
+    const deliveryPartnerId = await resolvePartnerObjectId(rawPartnerId);
+    if (!deliveryPartnerId) throw new ValidationError('Delivery partner not found');
     const amount = Number(amountInr);
     if (!Number.isFinite(amount) || amount < 1) {
         throw new ValidationError('Amount must be at least ₹1');
@@ -411,6 +422,14 @@ export const createDeliveryCashDepositOrder = async (deliveryPartnerId, amountIn
     }
 
     const order = await createRazorpayOrder(amountPaise, 'INR', receipt);
+    // A Pending row from the start: a deposit paid but never verified by the app can be found and reconciled.
+    await FoodDeliveryCashDeposit.create({
+        deliveryPartnerId,
+        amount,
+        paymentMethod: 'razorpay',
+        status: 'Pending',
+        razorpayOrderId: String(order.id),
+    });
     return {
         razorpay: {
             key: getRazorpayKeyId(),
@@ -421,7 +440,20 @@ export const createDeliveryCashDepositOrder = async (deliveryPartnerId, amountIn
     };
 };
 
-export const verifyDeliveryCashDepositPayment = async (deliveryPartnerId, payload = {}) => {
+/** A verify that did not pass leaves a Failed row (instead of nothing) so support can see what happened. */
+async function markDepositFailed(deliveryPartnerId, orderId, paymentId, reason) {
+    try {
+        await FoodDeliveryCashDeposit.updateOne(
+            { deliveryPartnerId, razorpayOrderId: orderId, status: { $ne: 'Completed' } },
+            { $set: { status: 'Failed', razorpayPaymentId: paymentId, adminNote: String(reason || '').slice(0, 200) } },
+        );
+    } catch { /* never mask the real error */ }
+}
+
+
+export const verifyDeliveryCashDepositPayment = async (rawPartnerId, payload = {}) => {
+    const deliveryPartnerId = await resolvePartnerObjectId(rawPartnerId);
+    if (!deliveryPartnerId) throw new ValidationError('Delivery partner not found');
     const orderId = String(payload?.razorpayOrderId || '').trim();
     const paymentId = String(payload?.razorpayPaymentId || '').trim();
     const signature = String(payload?.razorpaySignature || '').trim();
@@ -444,6 +476,9 @@ export const verifyDeliveryCashDepositPayment = async (deliveryPartnerId, payloa
         return { deposit: existing, wallet: await getDeliveryPartnerWalletEnhanced(deliveryPartnerId) };
     }
 
+    // Without a gateway nothing can be verified: allowed only outside production (dev stub), never in production.
+    if (!isRazorpayConfigured()) assertRazorpayAvailableInProduction();
+
     const wallet = await getDeliveryPartnerWalletEnhanced(deliveryPartnerId);
     if (amount > wallet.cashInHand) {
         throw new ValidationError('Deposit amount cannot exceed cash in hand');
@@ -454,6 +489,7 @@ export const verifyDeliveryCashDepositPayment = async (deliveryPartnerId, payloa
         : true;
 
     if (!isValid) {
+        await markDepositFailed(deliveryPartnerId, orderId, paymentId, 'Signature verification failed');
         throw new ValidationError('Payment verification failed');
     }
 
@@ -465,6 +501,7 @@ export const verifyDeliveryCashDepositPayment = async (deliveryPartnerId, payloa
                 throw new Error('Paid amount does not match the deposit amount');
             }
         } catch (err) {
+            await markDepositFailed(deliveryPartnerId, orderId, paymentId, err?.message || 'Payment verification failed');
             throw new ValidationError(err?.message || 'Payment verification failed');
         }
     }
@@ -496,4 +533,19 @@ export const verifyDeliveryCashDepositPayment = async (deliveryPartnerId, payloa
         deposit,
         wallet: await getDeliveryPartnerWalletEnhanced(deliveryPartnerId)
     };
+};
+
+/**
+ * Webhook safety net: a rider paid the deposit but the app never called verify (crash / no network).
+ * Razorpay's payment.captured completes the Pending row created with the order, for exactly that amount.
+ */
+export const reconcileCashDepositFromWebhook = async (razorpayOrderId, razorpayPaymentId, amountPaise) => {
+    if (!razorpayOrderId) return null;
+    const row = await FoodDeliveryCashDeposit.findOne({ razorpayOrderId, status: 'Pending' }).lean();
+    if (!row || Math.round(Number(row.amount) * 100) !== Math.round(Number(amountPaise))) return null;
+    return FoodDeliveryCashDeposit.findOneAndUpdate(
+        { _id: row._id, status: 'Pending' },
+        { $set: { status: 'Completed', razorpayPaymentId: String(razorpayPaymentId || '') } },
+        { new: true },
+    );
 };

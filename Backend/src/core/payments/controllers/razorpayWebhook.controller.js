@@ -57,6 +57,14 @@ export const handleRazorpayWebhook = async (req, res) => {
             const rzOrderId = paymentObj.order_id;
             const rzPaymentId = paymentObj.id;
 
+            // A rider's cash deposit paid but never verified by the app: complete it here.
+            try {
+                const { reconcileCashDepositFromWebhook } = await import('../../../modules/food/delivery/services/deliveryFinance.service.js');
+                await reconcileCashDepositFromWebhook(rzOrderId, rzPaymentId, paymentObj.amount);
+            } catch (depErr) {
+                logger.error(`Webhook cash-deposit reconcile error: ${depErr.message}`);
+            }
+
             // Atomic update to mark as paid if not already
             const order = await FoodOrder.findOneAndUpdate(
                 { 

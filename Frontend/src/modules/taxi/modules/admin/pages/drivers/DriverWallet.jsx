@@ -40,6 +40,9 @@ const DriverWallet = () => {
 
   return (
     <div className="space-y-10 p-1 animate-in fade-in duration-700 font-sans text-gray-950">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+        Sample data (demo only, not live). Real rider cash in hand and deposits: Food admin, Delivery boy Wallet and Cash Deposits.
+      </div>
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
          <div>

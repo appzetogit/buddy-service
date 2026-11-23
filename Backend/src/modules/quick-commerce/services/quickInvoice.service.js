@@ -136,11 +136,20 @@ export const renderQuickInvoicePdf = (order, { company, symbol, customer, seller
     line('Total', money(p.total, symbol), true);
 
     const pay = order.payment || {};
-    const parts = [`Paid via ${quickPaymentLabel(pay)}`];
-    if (Number(pay.walletAmount) > 0 && Number(pay.onlineAmount) > 0) {
+    const cod = pay.cod?.enabled ? pay.cod : null;
+    const parts = [cod ? 'Cash on Delivery with advance' : `Paid via ${quickPaymentLabel(pay)}`];
+    if (cod) {
+      const split = [];
+      if (Number(cod.advanceWalletAmount) > 0) split.push(`wallet ${money(cod.advanceWalletAmount, symbol)}`);
+      if (Number(cod.advanceOnlineAmount) > 0) split.push(`online ${money(cod.advanceOnlineAmount, symbol)}`);
+      parts.push(`Advance paid ${money(cod.advanceAmount, symbol)}${split.length ? ` (${split.join(' + ')})` : ''}`);
+      if (cod.advanceStatus === 'refunded') parts.push(`Advance ${money(cod.refundedAmount, symbol)} refunded to wallet`);
+      else if (cod.collectedAt) parts.push(`Balance ${money(cod.collectedAmount, symbol)} paid in cash`);
+      else parts.push(`Balance due in cash ${money(cod.remainingAmount, symbol)}`);
+    } else if (Number(pay.walletAmount) > 0 && Number(pay.onlineAmount) > 0) {
       parts.push(`Wallet ${money(pay.walletAmount, symbol)} + Online ${money(pay.onlineAmount, symbol)}`);
     }
-    if (pay.status === 'refunded' || pay.refund?.status === 'processed') {
+    if (!cod && (pay.status === 'refunded' || pay.refund?.status === 'processed')) {
       parts.push(`Refunded ${money(pay.refund?.amount || p.total, symbol)}`);
     }
     doc.font('r').fontSize(9).fillColor(MUTED).text(parts.join('  ·  '), left, y + 6, { width, align: 'right' });

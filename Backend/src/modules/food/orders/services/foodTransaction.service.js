@@ -100,6 +100,22 @@ function buildPaymentSnapshot(order) {
       status: String(order.payment?.qr?.status || ''),
       expiresAt: order.payment?.qr?.expiresAt || null,
     },
+    ...(order.payment?.cod?.enabled
+      ? {
+        cod: {
+          enabled: true,
+          percent: Number(order.payment.cod.percent || 0),
+          advanceAmount: Number(order.payment.cod.advanceAmount || 0),
+          advanceWalletAmount: Number(order.payment.cod.advanceWalletAmount || 0),
+          advanceOnlineAmount: Number(order.payment.cod.advanceOnlineAmount || 0),
+          remainingAmount: Number(order.payment.cod.remainingAmount || 0),
+          advanceStatus: String(order.payment.cod.advanceStatus || 'none'),
+          refundedAmount: Number(order.payment.cod.refundedAmount || 0),
+          collectedAmount: Number(order.payment.cod.collectedAmount || 0),
+          collectedAt: order.payment.cod.collectedAt || null,
+        },
+      }
+      : {}),
   };
 }
 
@@ -164,6 +180,7 @@ export async function createInitialTransaction(order) {
   const settlements = resolveSettlementRows(order);
   const primaryRid = String(order.restaurantId?._id || order.restaurantId || '');
   const paymentSnapshot = buildPaymentSnapshot(order);
+  const codOn = order.payment?.cod?.enabled === true;
   const paymentMethod = order.payment?.method || 'cash';
   const status = order.payment?.status === 'paid' ? 'captured' : 'pending';
 
@@ -229,6 +246,8 @@ export async function createInitialTransaction(order) {
           sharedRiderShare: isPrimary ? (order.sharedRiderEarning || 0) : 0,
           platformNetProfit: isPrimary ? platformNetProfit : 0,
           taxAmount: isPrimary ? (Number(order.pricing?.tax || 0) || 0) : 0,
+          codAdvanceReceived: isPrimary && codOn ? Number(order.payment.cod.advanceAmount || 0) : 0,
+          codRemainingDue: isPrimary && codOn ? Number(order.payment.cod.remainingAmount || 0) : 0,
         },
         gateway: {
           razorpayOrderId: order.payment?.razorpay?.orderId,
@@ -242,6 +261,14 @@ export async function createInitialTransaction(order) {
               ? 'Initial transaction created with order'
               : 'Per-restaurant transaction for multi-restaurant order',
           },
+          // COD with an advance: record what was received up front and how (wallet / online).
+          ...(isPrimary && codOn && Number(order.payment.cod.advanceAmount) > 0
+            ? [{
+              kind: 'cod_advance_paid',
+              amount: Number(order.payment.cod.advanceAmount),
+              note: `COD advance received (wallet Rs ${Number(order.payment.cod.advanceWalletAmount || 0)} + online Rs ${Number(order.payment.cod.advanceOnlineAmount || 0)}); Rs ${Number(order.payment.cod.remainingAmount || 0)} to be collected in cash`,
+            }]
+            : []),
         ],
       }),
     );
@@ -309,9 +336,16 @@ export async function updateTransactionStatus(orderId, kind, details = {}) {
       transaction.amounts.sharedRiderShare = details.sharedRiderShare;
     }
 
+    // COD with an advance: the cash events carry the cash amount, not the whole bill; a cancelled order whose
+    // advance went back to the wallet is 'refunded', never 'failed'.
+    const codTx = transaction.payment?.cod?.enabled === true;
+    if (codTx && details.status === 'failed' && transaction.payment.cod.advanceAmount > 0) {
+      transaction.status = transaction.payment.cod.advanceStatus === 'refunded' ? 'refunded' : 'failed';
+    }
+    if (details.status === 'captured') transaction.set('payment.status', 'paid');
     transaction.history.push({
       kind,
-      amount: transaction.amounts.totalCustomerPaid,
+      amount: codTx && String(kind).startsWith('cod_') ? Number(transaction.payment.cod.remainingAmount || 0) : transaction.amounts.totalCustomerPaid,
       at: new Date(),
       note: details.note || `Transaction updated: ${kind}`,
       recordedBy: { role: details.recordedByRole || 'SYSTEM', id: details.recordedById },
@@ -415,4 +449,49 @@ export async function settleRestaurant(orderId, adminId) {
     recordedByRole: 'ADMIN',
     recordedById: adminId,
   });
+}
+
+
+// ---- COD with an advance (Food and Marketplace share this ledger) -----------------------------------
+const roundMoney = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+const codEvent = (kind, amount, note) => ({ kind, amount, at: new Date(), note, recordedBy: { role: 'SYSTEM' } });
+
+/** The advance went back to the customer's wallet: the ledger rows become 'refunded'. Idempotent; never throws. */
+export async function recordCodAdvanceRefunded(orderId, amount) {
+  try {
+    const oid = new mongoose.Types.ObjectId(String(orderId));
+    const amt = roundMoney(amount);
+    await FoodTransaction.updateMany(
+      { orderId: oid },
+      { $set: { status: 'refunded', 'payment.cod.advanceStatus': 'refunded', 'payment.cod.refundedAmount': amt } },
+    );
+    await FoodTransaction.updateOne(
+      { orderId: oid, isPrimary: true, 'history.kind': { $ne: 'cod_advance_refunded' } },
+      { $push: { history: codEvent('cod_advance_refunded', amt, 'COD advance refunded to the customer wallet') } },
+    );
+  } catch (err) {
+    console.error('recordCodAdvanceRefunded failed:', err?.message || err);
+  }
+}
+
+/** The rider handed over the remaining cash: record the cash actually collected. Idempotent; never throws. */
+export async function recordCodCashCollected(orderId, amount) {
+  try {
+    const oid = new mongoose.Types.ObjectId(String(orderId));
+    const amt = roundMoney(amount);
+    await FoodTransaction.updateMany(
+      { orderId: oid },
+      { $set: { 'payment.status': 'paid', 'payment.cod.collectedAmount': amt, 'payment.cod.collectedAt': new Date() } },
+    );
+    await FoodTransaction.updateMany({ orderId: oid, status: 'pending' }, { $set: { status: 'captured' } });
+    await FoodTransaction.updateOne(
+      { orderId: oid, isPrimary: true, 'history.kind': { $ne: 'cod_cash_collected' } },
+      {
+        $set: { 'amounts.codCashCollected': amt },
+        $push: { history: codEvent('cod_cash_collected', amt, 'Remaining cash collected on delivery') },
+      },
+    );
+  } catch (err) {
+    console.error('recordCodCashCollected failed:', err?.message || err);
+  }
 }

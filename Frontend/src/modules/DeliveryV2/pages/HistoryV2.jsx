@@ -14,6 +14,7 @@ import {
 import { deliveryAPI } from '@food/api';
 import { toast } from 'sonner';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
+import ServiceFilter, { ServiceBadge, tripService, tripPaymentLine } from '@/modules/DeliveryV2/components/ServiceFilter';
 
 const PAGE_SIZE = 15;
 
@@ -55,6 +56,7 @@ export const HistoryV2 = () => {
   const tripStatus = useDeliveryStore((s) => s.tripStatus);
 
   const [filter, setFilter] = useState('all');
+  const [service, setService] = useState('');
   const [page, setPage] = useState(1);
   const [trips, setTrips] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: PAGE_SIZE, total: 0, hasMore: false });
@@ -117,6 +119,7 @@ export const HistoryV2 = () => {
               : filter === 'pending'
                 ? 'Pending'
                 : undefined,
+        ...(service ? { service } : {}),
       };
       const response = await deliveryAPI.getTripHistory(params);
       const payload = response?.data?.data || {};
@@ -139,7 +142,7 @@ export const HistoryV2 = () => {
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, service]);
 
   useEffect(() => {
     loadActiveTrip();
@@ -147,7 +150,7 @@ export const HistoryV2 = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [filter]);
+  }, [filter, service]);
 
   useEffect(() => {
     loadTrips(page);
@@ -261,6 +264,9 @@ export const HistoryV2 = () => {
               </button>
             ))}
           </div>
+          <div className="mt-3">
+            <ServiceFilter value={service} onChange={setService} />
+          </div>
         </section>
 
         {/* History list */}
@@ -300,6 +306,10 @@ export const HistoryV2 = () => {
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-gray-900 truncate">{orderId}</p>
                           <p className="text-xs text-gray-500 truncate mt-0.5">{restaurant}</p>
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <ServiceBadge service={tripService(trip)} />
+                            {tripPaymentLine(trip) && <span className="truncate text-[10px] font-semibold text-gray-500">{tripPaymentLine(trip)}</span>}
+                          </div>
                           <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
                             <Clock className="w-3 h-3" />
                             {formatTripTime(trip)}

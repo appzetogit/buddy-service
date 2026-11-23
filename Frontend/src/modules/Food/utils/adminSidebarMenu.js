@@ -172,6 +172,8 @@ export const adminSidebarMenu = [
     label: "PAYMENT SETTINGS",
     items: [
       { type: "link", label: "Cash on Delivery (COD)", path: "/admin/food/cod-settings", icon: "CreditCard" },
+      { type: "link", label: "Rider Cash Limit", path: "/admin/food/rider-cash-limit", icon: "ShieldCheck" },
+      { type: "link", label: "Cash Deposits", path: "/admin/food/cash-deposits", icon: "PiggyBank" },
     ],
   },
   {

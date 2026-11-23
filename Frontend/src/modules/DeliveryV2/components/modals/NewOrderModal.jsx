@@ -287,6 +287,12 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize, riderProf
                 (50% of ₹{Number(totalOriginalEarning).toFixed(2)} Total)
               </span>
             ) : null}
+            {/* COD with an advance: tell the rider how much cash will be collected. */}
+            {(order.payment?.cod?.enabled || order.cod?.enabled) && (
+              <span className="mt-1 inline-block rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold text-amber-200">
+                COD · collect ₹{Number(order.amountToCollect ?? order.payment?.amountDue ?? order.payment?.cod?.remainingAmount ?? order.cod?.remainingAmount ?? 0).toFixed(0)}
+              </span>
+            )}
           </div>
           <div className="shrink-0 bg-white/10 border border-white/10 rounded-2xl px-3 sm:px-5 py-2 sm:py-2.5 text-white font-bold text-base sm:text-xl shadow-inner tabular-nums leading-none">
             {timeLeft}s

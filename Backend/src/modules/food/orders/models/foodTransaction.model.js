@@ -59,6 +59,19 @@ const foodTransactionSchema = new mongoose.Schema({
             shortUrl: { type: String, default: '' },
             status: { type: String, default: '' },
             expiresAt: { type: Date, default: null }
+        },
+        /** COD with an advance (see modules/common/cod): advance paid up front, remaining collected in cash. */
+        cod: {
+            enabled: { type: Boolean, default: false },
+            percent: { type: Number, default: 0 },
+            advanceAmount: { type: Number, default: 0, min: 0 },
+            advanceWalletAmount: { type: Number, default: 0, min: 0 },
+            advanceOnlineAmount: { type: Number, default: 0, min: 0 },
+            remainingAmount: { type: Number, default: 0, min: 0 },
+            advanceStatus: { type: String, default: 'none' },
+            refundedAmount: { type: Number, default: 0, min: 0 },
+            collectedAmount: { type: Number, default: 0, min: 0 },
+            collectedAt: { type: Date, default: null }
         }
     },
 
@@ -71,7 +84,11 @@ const foodTransactionSchema = new mongoose.Schema({
         primaryRiderShare: { type: Number, default: 0, min: 0 },
         sharedRiderShare: { type: Number, default: 0, min: 0 },
         platformNetProfit: { type: Number, required: true },
-        taxAmount: { type: Number, default: 0, min: 0 }
+        taxAmount: { type: Number, default: 0, min: 0 },
+        // COD with an advance: what came in up front, what the rider still had to collect, what was collected.
+        codAdvanceReceived: { type: Number, default: 0, min: 0 },
+        codRemainingDue: { type: Number, default: 0, min: 0 },
+        codCashCollected: { type: Number, default: 0, min: 0 }
     },
 
     // Gateway / Provider Metadata

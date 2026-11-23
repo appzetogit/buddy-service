@@ -236,7 +236,16 @@ export default function OrderInvoice() {
                   <h3 className="font-bold mb-2 text-sm sm:text-base dark:text-gray-100">Invoice Details:</h3>
                   <p className="text-xs sm:text-sm dark:text-gray-300"><strong>Invoice #:</strong> {order.id}</p>
                   <p className="text-xs sm:text-sm dark:text-gray-300"><strong>Date:</strong> {formatDate(order.createdAt)}</p>
-                  <p className="text-xs sm:text-sm dark:text-gray-300"><strong>Payment:</strong> {order.paymentMethod?.type?.toUpperCase() || "Card"}</p>
+                  <p className="text-xs sm:text-sm dark:text-gray-300"><strong>Payment:</strong> {order.payment?.cod?.enabled ? "CASH ON DELIVERY (ADVANCE PAID)" : String(order.payment?.method || order.paymentMethod?.type || (typeof order.paymentMethod === "string" ? order.paymentMethod : "") || "N/A").toUpperCase()}</p>
+                  {order.payment?.cod?.enabled && (
+                    <>
+                      <p className="text-xs sm:text-sm dark:text-gray-300"><strong>Advance paid:</strong> ₹{Number(order.payment.cod.advanceAmount || 0).toFixed(2)}</p>
+                      <p className="text-xs sm:text-sm dark:text-gray-300">
+                        <strong>{order.payment.cod.advanceStatus === "refunded" ? "Advance refunded to wallet:" : order.payment.cod.collectedAt || order.payment.status === "paid" ? "Paid in cash on delivery:" : "Balance due on delivery:"}</strong>{" "}
+                        ₹{Number(order.payment.cod.advanceStatus === "refunded" ? order.payment.cod.refundedAmount : order.payment.cod.collectedAt ? order.payment.cod.collectedAmount : order.payment.cod.remainingAmount || 0).toFixed(2)}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
 

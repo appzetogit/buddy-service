@@ -7,6 +7,7 @@ import { AdminBusinessSetting } from '../admin/models/AdminBusinessSetting.js';
 import { getLandingContent } from '../admin/services/landingContentService.js';
 import { sendEmail } from './mailService.js';
 import { describeRidePayment, invoiceNumber } from './paymentLedgerService.js';
+import { codAdvanceApplied, hasCod, rideAmountDue } from './codAdvance.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -199,7 +200,10 @@ export const buildInvoiceModel = async ({ rideId }) => {
     },
     payment: (() => {
       const paid = describeRidePayment(ride);
-      return { detail: paid.detail, reference: paid.reference, method: paid.method };
+      const cod = hasCod(ride)
+        ? { advance: codAdvanceApplied(ride), balance: rideAmountDue(ride), refunded: Number(ride.cod.refundedAmount || 0) }
+        : null;
+      return { detail: paid.detail, reference: paid.reference, method: paid.method, status: paid.status, cod };
     })(),
     invoiceNumber: invoiceNumber('ride', ride._id),
     fare: {
@@ -274,8 +278,12 @@ export const renderInvoicePdf = (model) =>
     const badgeH = 15;
     const badgeX = right - badgeW;
     const badgeY = y + 46;
-    doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 3).fillColor('#DCFCE7').fill();
-    doc.font(FONTS.bold).fontSize(8).fillColor('#15803D').text('PAID', badgeX, badgeY + 3.5, { width: badgeW, align: 'center' });
+    // A COD ride whose balance is not yet collected is not "PAID".
+    const unpaidBalance = Boolean(model.payment?.cod) && model.payment?.status !== 'paid';
+    const bx = badgeX - (unpaidBalance ? 34 : 0);
+    const bw = badgeW + (unpaidBalance ? 34 : 0);
+    doc.roundedRect(bx, badgeY, bw, badgeH, 3).fillColor(unpaidBalance ? '#FEF3C7' : '#DCFCE7').fill();
+    doc.font(FONTS.bold).fontSize(8).fillColor(unpaidBalance ? '#B45309' : '#15803D').text(unpaidBalance ? 'BALANCE DUE' : 'PAID', bx, badgeY + 3.5, { width: bw, align: 'center' });
 
     y += 66;
     doc.moveTo(left, y).lineTo(right, y).lineWidth(1).strokeColor(BORDER_COLOR).stroke();
@@ -426,6 +434,11 @@ export const renderInvoicePdf = (model) =>
       });
     }
 
+    if (model.payment?.cod?.advance > 0) {
+      rows.push({ item: 'Advance paid', desc: 'Paid up front (online / wallet)', amount: model.payment.cod.advance, isDiscount: true });
+      rows.push({ item: model.payment.status === 'paid' ? 'Balance paid in cash' : 'Balance due in cash', desc: 'Collected by the captain', amount: model.payment.cod.balance });
+    }
+
     rows.forEach((r, idx) => {
       const rowH = 19;
       if (idx % 2 === 1) {
@@ -450,7 +463,7 @@ export const renderInvoicePdf = (model) =>
     y += 3;
     const totalBannerH = 30;
     doc.rect(left, y, contentWidth, totalBannerH).fillColor(PRIMARY).fill();
-    doc.font(FONTS.bold).fontSize(9.5).fillColor('#FFFFFF').text('TOTAL AMOUNT PAID', left + 12, y + 9.5);
+    doc.font(FONTS.bold).fontSize(9.5).fillColor('#FFFFFF').text(model.payment?.cod ? 'TOTAL FARE' : 'TOTAL AMOUNT PAID', left + 12, y + 9.5);
     doc.font(FONTS.bold).fontSize(13.5).fillColor('#FFFFFF').text(money(model.fare.total, model.fare.symbol), right - 130, y + 7.5, { width: 120, align: 'right' });
     y += totalBannerH + 10;
 
@@ -464,7 +477,7 @@ export const renderInvoicePdf = (model) =>
     // Col 1: Payment Details
     doc.font(FONTS.bold).fontSize(7.5).fillColor(PRIMARY).text('PAYMENT METHOD', left + 10, y + 7);
     doc.font(FONTS.bold).fontSize(9).fillColor(INK).text(model.payment?.detail || 'Cash Payment', left + 10, y + 18, { width: thirdW - 14, ellipsis: true });
-    doc.font(FONTS.regular).fontSize(7.5).fillColor(TEXT_MUTED).text(`Status: Verified & Completed`, left + 10, y + 30);
+    doc.font(FONTS.regular).fontSize(7.5).fillColor(TEXT_MUTED).text(model.payment?.cod && model.payment.status !== 'paid' ? 'Status: Balance due' : 'Status: Verified & Completed', left + 10, y + 30);
 
     // Col 2: Driver Share
     const col2X = left + thirdW;

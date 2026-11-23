@@ -25,6 +25,7 @@ import { fetchRoadDistancesKm } from '../utils/googleMaps.js';
 import { filterPartnersByOrderCapacity } from './rider-capacity.service.js';
 import { filterPartnersByGig, gigPartnerIdsForTime } from '../../../common/gigs/gig.service.js';
 import { ensureRestaurantCoordinates } from './restaurant-geo.service.js';
+import { getRiderCashSummaries, riderCanTakeWork } from '../../delivery/services/riderCash.service.js';
 
 /**
  * Candidate ordering: live riders first, then nearest.
@@ -80,116 +81,33 @@ async function excludeTaxiModePartners(partners = []) {
   });
 }
 
+/**
+ * Strict cash gate (one rule for Food, Marketplace and Taxi, see riderCash.service.js): a rider at or over
+ * the admin's cash limit gets NO new work until they deposit, and a cash (or COD remainder) order is
+ * offered only to riders with enough headroom for it. No over-limit fallback. Fails open on error so a
+ * lookup problem can never strand every order.
+ */
 async function filterPartnersByCashLimit(partners = [], options = {}) {
   if (!Array.isArray(partners) || partners.length === 0) return [];
   const requiredAmount = Math.max(0, Number(options.requiredAmount || 0));
-  const allowOverLimitFallback = options.allowOverLimitFallback !== false;
-
-  const limitDoc = await FoodDeliveryCashLimit.findOne({ isActive: true })
-    .sort({ createdAt: -1 })
-    .lean();
-  const totalCashLimit = Number(limitDoc?.deliveryCashLimit || 0);
-
-  // Treat missing/non-positive setting as "no cap" to avoid blocking all dispatch.
-  if (!Number.isFinite(totalCashLimit) || totalCashLimit <= 0) {
-    return partners.map((p) => ({
-      ...p,
-      availableCashLimit: Number.MAX_SAFE_INTEGER,
-      allowOverLimit: false,
-      requiredCashForOrder: requiredAmount,
-    }));
+  const idOf = (p) => String(p?.partnerId || p?._id || '');
+  try {
+    const summaries = await getRiderCashSummaries(partners.map(idOf), { excludeOrderId: options.excludeOrderId });
+    return partners
+      .filter((p) => riderCanTakeWork(summaries.get(idOf(p)), requiredAmount))
+      .map((p) => {
+        const s = summaries.get(idOf(p));
+        return {
+          ...p,
+          availableCashLimit: s?.available == null ? Number.MAX_SAFE_INTEGER : s.available,
+          allowOverLimit: false,
+          requiredCashForOrder: requiredAmount,
+        };
+      });
+  } catch (err) {
+    logger.warn(`[CashLimit] filter failed, passing candidates through: ${err?.message || err}`);
+    return partners.map((p) => ({ ...p, availableCashLimit: Number.MAX_SAFE_INTEGER, allowOverLimit: false, requiredCashForOrder: requiredAmount }));
   }
-
-  const partnerIds = partners
-    .map((p) => p?.partnerId || p?._id)
-    .filter(Boolean)
-    .map((id) => new mongoose.Types.ObjectId(String(id)));
-
-  if (partnerIds.length === 0) return [];
-
-  const [cashAgg, depositsAgg] = await Promise.all([
-    // Cash a rider holds from Quick Commerce deliveries counts against the same limit.
-    riderOrders.aggregate([
-      {
-        $match: {
-          'dispatch.deliveryPartnerId': { $in: partnerIds },
-          orderStatus: 'delivered',
-          'payment.method': 'cash',
-        },
-      },
-      {
-        $group: {
-          _id: '$dispatch.deliveryPartnerId',
-          // A COD-with-advance order only put its remaining amount in the rider's hand.
-          grossCashCollected: {
-            $sum: {
-              $cond: [{ $eq: ['$payment.cod.enabled', true] }, { $ifNull: ['$payment.amountDue', 0] }, { $ifNull: ['$pricing.total', 0] }],
-            },
-          },
-        },
-      },
-    ]),
-    FoodDeliveryCashDeposit.aggregate([
-      {
-        $match: {
-          deliveryPartnerId: { $in: partnerIds },
-          status: 'Completed',
-        },
-      },
-      {
-        $group: {
-          _id: '$deliveryPartnerId',
-          depositedCash: { $sum: { $ifNull: ['$amount', 0] } },
-        },
-      },
-    ]),
-  ]);
-
-  const grossCashByPartner = new Map(
-    (cashAgg || []).map((row) => [String(row._id), Number(row.grossCashCollected || 0)]),
-  );
-  const depositedByPartner = new Map(
-    (depositsAgg || []).map((row) => [String(row._id), Number(row.depositedCash || 0)]),
-  );
-
-  const withCapacity = partners.map((p) => {
-    const partnerId = String(p?.partnerId || p?._id || '');
-    if (!partnerId) return null;
-    const grossCash = grossCashByPartner.get(partnerId) || 0;
-    const depositedCash = depositedByPartner.get(partnerId) || 0;
-    const cashInHand = Math.max(0, grossCash - depositedCash);
-    const availableCashLimit = Math.max(0, totalCashLimit - cashInHand);
-    return {
-      ...p,
-      availableCashLimit,
-      allowOverLimit: false,
-      requiredCashForOrder: requiredAmount,
-    };
-  }).filter(Boolean);
-
-  // Cash-in-hand only constrains CASH orders. COD is disabled at order creation, so applying
-  // this to prepaid/wallet orders would strand riders who merely hold historical cash.
-  if (requiredAmount <= 0) return withCapacity;
-
-  // Base block: riders with zero available limit should not receive fresh cash offers.
-  const baseEligible = withCapacity.filter((p) => Number(p.availableCashLimit || 0) > 0);
-  if (baseEligible.length === 0) return [];
-
-  const sufficient = baseEligible.filter(
-    (p) => Number(p.availableCashLimit || 0) >= requiredAmount,
-  );
-  if (sufficient.length > 0) return sufficient;
-
-  if (!allowOverLimitFallback) return [];
-
-  // Fallback: keep order moving by offering to highest available-limit riders.
-  return baseEligible
-    .slice()
-    .sort((a, b) => Number(b.availableCashLimit || 0) - Number(a.availableCashLimit || 0))
-    .map((p) => ({
-      ...p,
-      allowOverLimit: true,
-    }));
 }
 
 export async function listNearbyOnlineDeliveryPartners(
@@ -250,7 +168,7 @@ export async function listNearbyOnlineDeliveryPartners(
 
     const cashEligiblePartners = await filterPartnersByCashLimit(
       partners.map((p) => ({ partnerId: p._id, ...p })),
-      { requiredAmount, allowOverLimitFallback },
+      { requiredAmount, allowOverLimitFallback, excludeOrderId },
     );
     const modeEligible = await excludeTaxiModePartners(cashEligiblePartners);
     const slotEligible = await withFreeSlot(modeEligible);
@@ -358,9 +276,11 @@ export async function listNearbyOnlineDeliveryPartners(
       .limit(Math.max(1, limit))
       .lean();
 
-    const eligible = await excludeTaxiModePartners(
+    const cashOk = await filterPartnersByCashLimit(
       anyOnline.map((p) => ({ partnerId: p._id, ...p })),
+      { requiredAmount, allowOverLimitFallback, excludeOrderId },
     );
+    const eligible = await excludeTaxiModePartners(cashOk);
     const slotEligible = await withFreeSlot(eligible);
 
     return {
@@ -379,6 +299,7 @@ export async function listNearbyOnlineDeliveryPartners(
   const cashEligibleFinal = await filterPartnersByCashLimit(final, {
     requiredAmount,
     allowOverLimitFallback,
+    excludeOrderId,
   });
   const modeEligibleFinal = await excludeTaxiModePartners(cashEligibleFinal);
   const slotEligibleFinal = await withFreeSlot(modeEligibleFinal);
@@ -850,7 +771,7 @@ export async function resendDeliveryNotificationRestaurant(orderId, restaurantId
   }
 
   const paymentMethod = String(order.payment?.method || 'cash').toLowerCase();
-  const requiredAmount = paymentMethod === 'cash' ? Number(order?.pricing?.total || 0) : 0;
+  const requiredAmount = paymentMethod === 'cash' ? Number(order?.payment?.amountDue ?? order?.pricing?.total ?? 0) : 0;
   const preview = await listNearbyOnlineDeliveryPartners(order.restaurantId, {
     maxKm: 15,
     limit: 15,

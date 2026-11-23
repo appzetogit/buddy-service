@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import * as adminService from '../services/admin.service.js';
+import { updateCashLimits, listCashDeposits, getAdminRiderCash } from '../../delivery/services/riderCash.service.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
 import { validateCategoryListQuery, validateCategoryRejectDto, validateCategoryUpsertDto } from '../validators/category.validator.js';
 import { validateCreateOfferDto, validateUpdateOfferDto, validateUpdateOfferCartVisibilityDto } from '../validators/offer.validator.js';
@@ -1995,6 +1996,42 @@ export async function updateDeliveryWithdrawalStatus(req, res, next) {
         const { id } = req.params;
         const data = await adminService.updateDeliveryWithdrawalStatus(id, req.body || {});
         res.status(200).json({ success: true, message: 'Delivery withdrawal status updated successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function getDeliveryCashLimit(req, res, next) {
+    try {
+        const data = await adminService.getDeliveryCashLimitSettings();
+        res.status(200).json({ success: true, message: 'Cash limit fetched successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function updateDeliveryCashLimit(req, res, next) {
+    try {
+        const data = await updateCashLimits(req.body || {});
+        res.status(200).json({ success: true, message: 'Cash limit updated successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function getDeliveryCashDeposits(req, res, next) {
+    try {
+        const data = await listCashDeposits(req.query || {}, { withPartner: true });
+        res.status(200).json({ success: true, message: 'Cash deposits fetched successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function getDeliveryRiderCash(req, res, next) {
+    try {
+        const data = await getAdminRiderCash(req.params.partnerId);
+        res.status(200).json({ success: true, message: 'Rider cash fetched successfully', data });
     } catch (error) {
         next(error);
     }

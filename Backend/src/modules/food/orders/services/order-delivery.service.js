@@ -72,6 +72,7 @@ import {
 } from './rider-capacity.service.js';
 import { assertGigAllowsService, recordGigEarning, riderGigWindows, eligiblePartnerIds } from '../../../common/gigs/gig.service.js';
 import { recordFoodCodCollected } from './codAdvance.service.js';
+import { getRiderCashSummary, CASH_BLOCKED_MESSAGE, CASH_NO_HEADROOM_MESSAGE } from '../../delivery/services/riderCash.service.js';
 
 /**
  * Server-side anti-spoof geofence for "reached pickup" / "reached drop".
@@ -133,196 +134,29 @@ function isOtpMatch(expectedOtp, enteredOtp) {
   return false;
 }
 
-async function getPartnerCashCapacity(deliveryPartnerId) {
-  const partnerObjectId = new mongoose.Types.ObjectId(deliveryPartnerId);
-  const limitDoc = await FoodDeliveryCashLimit.findOne({ isActive: true })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  const totalCashLimit = Number(limitDoc?.deliveryCashLimit || 0);
-  if (!Number.isFinite(totalCashLimit) || totalCashLimit <= 0) {
+/**
+ * Cash capacity of a rider from the unified cash summary (Food + Marketplace + Taxi, COD remainder only).
+ * `hasCapacity` is false only when the rider is blocked (cash in hand at/over the admin's limit).
+ */
+async function getPartnerCashCapacity(deliveryPartnerId, options = {}) {
+  const summary = await getRiderCashSummary(deliveryPartnerId, options);
+  if (!summary || !(summary.limit > 0)) {
     return {
       totalCashLimit: 0,
-      cashInHand: 0,
+      cashInHand: summary?.cashInHand || 0,
       availableCashLimit: Number.MAX_SAFE_INTEGER,
       hasCapacity: true,
+      blocked: false,
+      summary,
     };
   }
-
-  const [ordersAgg, cashAgg, bonusAgg, depositsAgg, withdrawalsAgg] = await Promise.all([
-    // 1. Earnings aggregation
-    FoodOrder.aggregate([
-      {
-        $match: {
-          $and: [
-            {
-              $or: [
-                { 'dispatch.deliveryPartnerId': partnerObjectId },
-                { 'dispatch.sharedPartnerId': partnerObjectId }
-              ]
-            },
-            { orderStatus: 'delivered' }
-          ]
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalEarned: {
-            $sum: {
-              $cond: [
-                { $eq: ["$dispatch.deliveryPartnerId", partnerObjectId] },
-                {
-                  $ifNull: [
-                    "$riderEarning",
-                    {
-                      $ifNull: [
-                        "$pricing.deliveryFeeBreakdown.riderFee",
-                        {
-                          $ifNull: [
-                            "$settlementBreakdown.driver.payout",
-                            { $ifNull: ["$pricing.deliveryFeeBreakdown.deliveryBoyFee", 0] },
-                          ],
-                        },
-                      ],
-                    },
-                  ],
-                },
-                { $ifNull: ["$sharedRiderEarning", 0] }
-              ]
-            }
-          }
-        }
-      }
-    ]),
-    // 2. Cash aggregation (Active orders included)
-    FoodOrder.aggregate([
-      {
-        $match: {
-          $and: [
-            {
-              $or: [
-                { 'dispatch.deliveryPartnerId': partnerObjectId },
-                { 'dispatch.sharedPartnerId': partnerObjectId }
-              ]
-            },
-            {
-              orderStatus: {
-                $in: [
-                  'confirmed', 'preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up', 'reached_drop', 'delivered', 'completed',
-                  'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'REACHED_PICKUP', 'PICKED_UP', 'REACHED_DROP', 'DELIVERED', 'COMPLETED'
-                ]
-              }
-            },
-            {
-              $or: [
-                { 'payment.method': { $in: ['cash', 'cod', 'CASH', 'COD'] } },
-                { 'paymentMethod': { $in: ['cash', 'cod', 'CASH', 'COD'] } },
-                {
-                  $and: [
-                    { 'payment.method': { $exists: false } },
-                    { 'paymentMethod': { $exists: false } }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          actualCashCollected: {
-            $sum: {
-              $cond: [
-                { $in: ["$orderStatus", ["delivered", "completed", "DELIVERED", "COMPLETED"]] },
-                {
-                  $cond: [
-                    { $gt: [{ $ifNull: ["$amountToCollect", 0] }, 0] },
-                    "$amountToCollect",
-                    {
-                      $cond: [
-                        { $gt: [{ $ifNull: ["$payment.amountDue", 0] }, 0] },
-                        "$payment.amountDue",
-                        { $ifNull: ["$pricing.total", { $ifNull: ["$totalAmount", 0] }] }
-                      ]
-                    }
-                  ]
-                },
-                0
-              ]
-            }
-          },
-          pendingCashLiability: {
-            $sum: {
-              $cond: [
-                { $not: { $in: ["$orderStatus", ["delivered", "completed", "DELIVERED", "COMPLETED"]] } },
-                {
-                  $cond: [
-                    { $gt: [{ $ifNull: ["$amountToCollect", 0] }, 0] },
-                    "$amountToCollect",
-                    {
-                      $cond: [
-                        { $gt: [{ $ifNull: ["$payment.amountDue", 0] }, 0] },
-                        "$payment.amountDue",
-                        { $ifNull: ["$pricing.total", { $ifNull: ["$totalAmount", 0] }] }
-                      ]
-                    }
-                  ]
-                },
-                0
-              ]
-            }
-          }
-        }
-      }
-    ]),
-    // 3. Bonuses
-    DeliveryBonusTransaction.aggregate([
-      { $match: { deliveryPartnerId: partnerObjectId, status: 'credited' } },
-      { $group: { _id: null, total: { $sum: '$amount' } } }
-    ]),
-    // 4. Deposits
-    FoodDeliveryCashDeposit.aggregate([
-      { $match: { deliveryPartnerId: partnerObjectId, status: 'Completed' } },
-      { $group: { _id: null, total: { $sum: '$amount' } } }
-    ]),
-    // 5. Withdrawals
-    FoodDeliveryWithdrawal.aggregate([
-      { $match: { deliveryPartnerId: partnerObjectId, status: { $in: ['pending', 'approved', 'processed'] } } },
-      { $group: { _id: '$status', total: { $sum: '$amount' } } }
-    ]),
-  ]);
-
-  const totalEarned = Number(ordersAgg[0]?.totalEarned || 0);
-  const totalBonus = Number(bonusAgg[0]?.total || 0);
-  const actualCashCollected = Number(cashAgg[0]?.actualCashCollected || 0);
-  const pendingCashLiability = Number(cashAgg[0]?.pendingCashLiability || 0);
-  const depositedCash = Number(depositsAgg[0]?.total || 0);
-
-  const withdrawalsMap = (withdrawalsAgg || []).reduce((acc, curr) => {
-    acc[curr._id] = curr.total;
-    return acc;
-  }, {});
-  const totalWithdrawn = Number(withdrawalsMap['approved'] || 0) + Number(withdrawalsMap['processed'] || 0);
-  const pendingWithdrawals = Number(withdrawalsMap['pending'] || 0);
-
-  const rawEarningsBalance = Math.max(0, totalEarned + totalBonus - (totalWithdrawn + pendingWithdrawals));
-  const actualCashInHand = Math.max(0, actualCashCollected - depositedCash);
-
-  const amountSubstituted = Math.min(rawEarningsBalance, actualCashInHand);
-  const netCashInHand = actualCashInHand - amountSubstituted;
-
-  const totalCurrentLiability = netCashInHand + pendingCashLiability;
-  const availableCashLimit = Math.max(0, totalCashLimit - totalCurrentLiability);
-
   return {
-    totalCashLimit,
-    cashInHand: actualCashInHand, // Return Gross for UI transparency
-    availableCashLimit,
-    hasCapacity: availableCashLimit > 0,
-    pocketBalance: rawEarningsBalance - amountSubstituted,
-    amountSubstituted
+    totalCashLimit: summary.limit,
+    cashInHand: summary.cashInHand,
+    availableCashLimit: summary.available,
+    hasCapacity: !summary.blocked,
+    blocked: summary.blocked,
+    summary,
   };
 }
 
@@ -418,7 +252,8 @@ function emitOrderUpdate(order, deliveryPartnerId, options = {}) {
 
       if (order.payment?.method === 'cash' || order.paymentMethod === 'cash') {
         riderTitle = 'Payment collected!';
-        const amt = order.pricing?.total || order.amounts?.totalCustomerPaid || 0;
+        // COD with an advance: the rider collected only the remaining cash.
+        const amt = order.payment?.cod?.enabled ? Number(order.payment.amountDue || 0) : (order.pricing?.total || order.amounts?.totalCustomerPaid || 0);
         riderBody = `You have collected Rs ${amt} cash for Order #${orderId}.`;
       }
     }
@@ -452,7 +287,7 @@ function emitOrderUpdate(order, deliveryPartnerId, options = {}) {
             orderId,
             orderMongoId: order._id?.toString?.() || '',
             paymentMethod: order.payment?.method || order.paymentMethod,
-            amountCollected: String(order.pricing?.total || order.amounts?.totalCustomerPaid || 0),
+            amountCollected: String(order.payment?.cod?.enabled ? Number(order.payment.amountDue || 0) : (order.pricing?.total || order.amounts?.totalCustomerPaid || 0)),
           },
         },
       );
@@ -533,6 +368,16 @@ const activeTripQuery = (filter) =>
     .lean();
 
 /** Overlay the authoritative transaction snapshot (payment/pricing) onto a trip payload. */
+// The transaction's payment block wins, but the order's COD split / amount still due is the live truth
+// (a plain overwrite used to hide a COD-with-advance from the rider).
+const mergeTxPayment = (txPayment, orderPayment) => {
+  if (!txPayment) return orderPayment;
+  const merged = { ...txPayment };
+  if (orderPayment?.cod) merged.cod = orderPayment.cod;
+  if (orderPayment?.amountDue != null) merged.amountDue = orderPayment.amountDue;
+  return merged;
+};
+
 async function decorateTripsWithTransactions(orders = []) {
   if (!orders.length) return [];
   const txRows = await FoodTransaction.find({
@@ -545,7 +390,7 @@ async function decorateTripsWithTransactions(orders = []) {
     const tx = txByOrderId.get(String(order._id));
     if (tx) {
       out.paymentMethod = tx.payment?.method || tx.paymentMethod || out.paymentMethod;
-      out.payment = tx.payment || out.payment;
+      out.payment = mergeTxPayment(tx.payment, out.payment);
       out.pricing = tx.pricing || out.pricing;
       out.amounts = tx.amounts || out.amounts;
       out.transactionStatus = tx.status || out.transactionStatus;
@@ -701,7 +546,7 @@ export async function listOrdersAvailableDelivery(deliveryPartnerId, query) {
       ? {
         ...doc,
         paymentMethod: tx.payment?.method || tx.paymentMethod || doc.paymentMethod,
-        payment: tx.payment || doc.payment,
+        payment: mergeTxPayment(tx.payment, doc.payment),
         pricing,
         amounts: tx.amounts || doc.amounts,
         transactionStatus: tx.status || doc.transactionStatus,
@@ -815,11 +660,10 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
 
   const paymentMethod = String(existingOrder?.payment?.method || 'cash').toLowerCase();
   const isCashOrder = paymentMethod === 'cash';
-  const orderAmount = Math.max(0, Number(existingOrder?.pricing?.total || 0));
-  const offeredEntry = (existingOrder?.dispatch?.offeredTo || []).find(
-    (entry) => String(entry?.partnerId || '') === String(deliveryPartnerId),
-  );
-  const canBypassCashLimit = Boolean(offeredEntry?.allowOverLimit);
+  // A COD-with-advance order only puts its REMAINING cash in the rider's hand.
+  const orderAmount = Math.max(0, Number(isCashOrder ? (existingOrder?.payment?.amountDue ?? existingOrder?.pricing?.total) : existingOrder?.pricing?.total || 0));
+  // An order the admin handed to this rider is theirs; the cash gate does not apply to it.
+  const canBypassCashLimit = Boolean(existingOrder?.dispatch?.assignedByAdmin);
 
   // Order stacking limit. Checked here so a stale offer card or a replayed socket event cannot
   // hand a rider a third order; re-checked after the atomic claim below to close the race where
@@ -827,18 +671,17 @@ export async function acceptOrderDelivery(orderId, deliveryPartnerId) {
   // excluded so re-accepting one the rider already holds stays idempotent.
   await assertRiderHasFreeSlot(deliveryPartnerId, { excludeOrderId: existingOrder._id });
 
-  const partnerCapacity = await getPartnerCashCapacity(deliveryPartnerId);
-  const hasAmountCapacity = Number(partnerCapacity.availableCashLimit || 0) >= orderAmount;
+  // The order being accepted is left out of the rider's pending cash (an assigned order is already theirs).
+  const partnerCapacity = await getPartnerCashCapacity(deliveryPartnerId, { excludeOrderId: existingOrder._id });
 
-  // Cash-in-hand only gates CASH orders. COD is disabled at order creation, so gating prepaid /
-  // wallet orders on it merely punished riders holding historical cash with a nonsensical
-  // "Cash limit reached" error on an order that involves no cash at all.
-  if (isCashOrder && !canBypassCashLimit) {
-    if (!hasAmountCapacity) {
-      throw new ValidationError('Cash limit is not enough for this order amount. Please deposit your amount to get orders.');
-    }
+  // Strict cash gate: a rider at/over the admin limit gets no new order of any kind until they deposit,
+  // and a cash (COD remainder) order also needs enough headroom.
+  if (!canBypassCashLimit) {
     if (!partnerCapacity.hasCapacity) {
-      throw new ValidationError('Cash limit reached. Please deposit your amount to get orders.');
+      throw new ValidationError(CASH_BLOCKED_MESSAGE);
+    }
+    if (isCashOrder && Number(partnerCapacity.availableCashLimit || 0) < orderAmount) {
+      throw new ValidationError(CASH_NO_HEADROOM_MESSAGE);
     }
   }
 
