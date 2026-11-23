@@ -20,7 +20,9 @@ export function useCashSummary() {
   const load = useCallback(async () => {
     try {
       const res = await deliveryAPI.getCashSummary();
-      setSummary(res?.data?.data || null);
+      // The API wraps the figures as data.summary.
+      const body = res?.data?.data || null;
+      setSummary(body?.summary || body);
     } catch {
       setSummary(null);
     } finally {
