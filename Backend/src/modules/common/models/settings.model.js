@@ -70,6 +70,12 @@ const globalSettingsSchema = new mongoose.Schema(
         themeColor: { type: String, default: '#0a0a0a' },
         codEnabled: { type: Boolean, default: true },
         onlineEnabled: { type: Boolean, default: true },
+        // Cash on delivery with an advance, per service (see modules/common/cod/cod.service.js). Off by default.
+        codConfig: {
+            food: { enabled: { type: Boolean, default: false }, advancePercent: { type: Number, default: 20, min: 0, max: 100 } },
+            quickCommerce: { enabled: { type: Boolean, default: false }, advancePercent: { type: Number, default: 20, min: 0, max: 100 } },
+            taxi: { enabled: { type: Boolean, default: false }, advancePercent: { type: Number, default: 20, min: 0, max: 100 } },
+        },
         socialLinks: {
             facebook: { type: String, default: '' },
             instagram: { type: String, default: '' },

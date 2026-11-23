@@ -169,6 +169,13 @@ export const adminSidebarMenu = [
   },
   {
     type: "section",
+    label: "PAYMENT SETTINGS",
+    items: [
+      { type: "link", label: "Cash on Delivery (COD)", path: "/admin/food/cod-settings", icon: "CreditCard" },
+    ],
+  },
+  {
+    type: "section",
     label: "GIGS (RIDER SLOTS)",
     items: [
       { type: "link", label: "Gig Slots", path: "/admin/food/gigs/slots", icon: "Zap" },

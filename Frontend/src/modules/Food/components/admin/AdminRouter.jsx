@@ -73,6 +73,7 @@ const DeliveryEarnings = lazy(() => import("@food/pages/admin/delivery-partners/
 const GigSlots = lazy(() => import("@food/pages/admin/gigs/GigSlots"));
 const GigBookings = lazy(() => import("@food/pages/admin/gigs/GigBookings"));
 const GigScheduled = lazy(() => import("@food/pages/admin/gigs/GigScheduled"));
+const CodSettings = lazy(() => import("@food/pages/admin/CodSettings"));
 // Disbursement Management
 // Report Management
 const ExpenseReport = lazy(() => import("@food/pages/admin/reports/ExpenseReport"));
@@ -252,6 +253,7 @@ export default function AdminRouter() {
             <Route path="gigs/slots" element={<GigSlots />} />
             <Route path="gigs/bookings" element={<GigBookings />} />
             <Route path="gigs/scheduled" element={<GigScheduled />} />
+            <Route path="cod-settings" element={<CodSettings />} />
 
 
             {/* REPORTS & SETTINGS */}

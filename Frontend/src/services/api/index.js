@@ -903,6 +903,8 @@ export const adminAPI = {
   deleteGigSlot: (id) => apiClient.delete(`/gigs/admin/slots/${String(id)}`, { contextModule: "admin" }),
   getGigBookings: (params = {}) => apiClient.get("/gigs/admin/bookings", { params, contextModule: "admin" }),
   getGigEarnings: (params = {}) => apiClient.get("/gigs/admin/earnings", { params, contextModule: "admin" }),
+  getCodSettings: () => apiClient.get("/common/admin/cod-settings", { contextModule: "admin" }),
+  updateCodSettings: (body) => apiClient.put("/common/admin/cod-settings", body ?? {}, { contextModule: "admin" }),
   getGigScheduled: (params = {}) => apiClient.get("/gigs/admin/scheduled", { params, contextModule: "admin" }),
   getGigAssignableDrivers: (params = {}) => apiClient.get("/gigs/admin/scheduled/assignable-drivers", { params, contextModule: "admin" }),
   assignGigScheduled: (body) => apiClient.post("/gigs/admin/scheduled/assign", body ?? {}, { contextModule: "admin" }),
@@ -3325,3 +3327,13 @@ export const diningAPI = {
 };
 export const heroBannerAPI = createStubAPI();
 export const publicAPI = createStubAPI();
+
+/**
+ * Payment options per service (public). `total` adds the exact COD advance / remaining split.
+ * GET /common/payment-options?service=food|quickCommerce|taxi&total=250
+ *   -> { online:{enabled}, wallet:{enabled}, cod:{ enabled, advancePercent, split?:{ advanceAmount, remainingAmount } } }
+ */
+export const paymentOptionsAPI = {
+  get: (service, total) =>
+    apiClient.get("/common/payment-options", { params: { service, ...(total ? { total } : {}) } }),
+};
