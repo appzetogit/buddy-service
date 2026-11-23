@@ -108,8 +108,11 @@ export async function getPaymentOptions(service, total = null) {
   return out;
 }
 
-/** True unless an admin switched COD off for this customer (the existing per-user COD flags). */
-export const isUserCodAllowed = (user) => !(user && (user.isCodEnabled === false || user.isCodAllowed === false));
+/**
+ * True unless this customer is explicitly blocked (`isCodAllowed: false`). The older `isCodEnabled` flag is NOT used:
+ * it defaults to false for every user, so honouring it would block everybody.
+ */
+export const isUserCodAllowed = (user) => !(user && user.isCodAllowed === false);
 
 /** Throws a clear message when COD cannot be used. Returns the service config and split when it can. */
 export async function assertCodAllowed(service, { total, user = null } = {}) {

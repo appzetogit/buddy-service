@@ -106,7 +106,7 @@ export default function CodSettings() {
           })}
         </div>
       )}
-      <p className="rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800">The advance is paid from the wallet and/or online (same as any prepaid order). Admin can still switch COD off for individual customers from the Customers page.</p>
+      <p className="rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800">The advance is paid from the wallet and/or online (same as any prepaid order). If an order is cancelled, the advance is returned to the customer's wallet.</p>
     </div>
   )
 }
