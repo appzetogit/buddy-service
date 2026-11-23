@@ -522,6 +522,7 @@ const placeDelivery = (userId, body, cod) =>
     paymentMethod: 'cash',
     parcel: body.parcel,
     cod,
+    scheduledAt: body.scheduledAt,
   });
 
 const sendBookedParcel = (res, delivery) => res.status(201).json({ success: true, data: delivery });

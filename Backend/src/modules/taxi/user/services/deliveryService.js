@@ -2,7 +2,7 @@ import { ApiError } from '../../../../utils/ApiError.js';
 import { normalizePoint } from '../../../../utils/geo.js';
 import { GoodsType } from '../../admin/models/GoodsType.js';
 import { Vehicle } from '../../admin/models/Vehicle.js';
-import { emitToAdmins, startDispatchFlow } from '../../services/dispatchService.js';
+import { announceScheduledRide, emitToAdmins, startDispatchFlow } from '../../services/dispatchService.js';
 import { findZoneByPickup } from '../../services/matchingService.js';
 import { Delivery } from '../models/Delivery.js';
 import { Ride } from '../models/Ride.js';
@@ -268,6 +268,7 @@ export const createDeliveryRecord = async ({
   paymentMethod,
   parcel,
   cod = null,
+  scheduledAt = null,
 }) => {
   await ensureDeliveryVehicleAllowed({ vehicleTypeId, parcel });
   const pickupCoords = normalizePoint(pickup, 'pickup');
@@ -320,6 +321,8 @@ export const createDeliveryRecord = async ({
     serviceType: 'parcel',
     parcel,
     cod,
+    // createRideRecord validates it (15 min - 30 days ahead) and treats the parcel as a reservation.
+    scheduledAt,
   });
 
   // Waiting at the pickup is charged on the same tariff as the fare, and locked
@@ -336,6 +339,8 @@ export const createDeliveryRecord = async ({
   );
 
   await startDispatchFlow(ride);
+  // A parcel booked for later: nearby drivers can take it in advance (no-op for "now").
+  announceScheduledRide(ride).catch((error) => console.error('Scheduled parcel announcement failed', error));
 
   // Notify admins in real time that a new parcel delivery was booked, so it
   // surfaces on the admin dashboard. Fire-and-forget — never fail the booking.
