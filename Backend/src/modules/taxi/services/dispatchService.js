@@ -1498,37 +1498,36 @@ export const cancelRideByUser = async ({ rideId, userId, reason = '' }) => {
     reason: 'You cancelled the ride',
   });
 
+  // What the driver is told, with the passenger's reason when one was given.
+  const why = String(ride.cancelReason || '').trim();
+  const driverMessage = why && why !== 'Cancelled by user'
+    ? `The passenger cancelled this ride. Reason: ${why}`
+    : 'The passenger cancelled this ride.';
+
   if (ride.driverId) {
     emitToRoom(getDriverRoom(ride.driverId), 'rideRequestClosed', {
       rideId: String(ride._id),
       reason: 'user-cancelled',
-      message: 'User cancelled the ride.',
+      message: driverMessage,
+      cancelReason: why,
     });
 
-    // The socket event above never reaches a killed app — this push does.
+    // A visible push, so a driver whose app is in the background or closed is
+    // told too (the socket event only reaches an open app). One push only: a
+    // ride taken in advance says when it was for.
+    const future = ride.scheduledAt && new Date(ride.scheduledAt).getTime() > Date.now();
     sendPushNotificationToEntities({
       driverIds: [String(ride.driverId)],
-      title: 'Ride cancelled',
-      body: 'The passenger cancelled this ride.',
-      dataOnly: true,
-      data: {
-        type: 'ride_cancelled',
-        rideId: String(ride._id),
-      },
+      title: future ? 'Scheduled ride cancelled' : 'Ride cancelled',
+      body: future
+        ? `The rider cancelled the ride ${scheduleLabel(ride.scheduledAt)}.${why && why !== 'Cancelled by user' ? ` Reason: ${why}` : ''}`
+        : driverMessage,
+      data: future
+        ? { type: 'scheduled_ride_cancelled', scheduledRideId: String(ride._id), cancelReason: why }
+        : { type: 'ride_cancelled', rideId: String(ride._id), message: driverMessage, cancelReason: why },
     }).catch((error) => {
       console.error('Failed to send ride-cancelled push notification', error);
     });
-
-    // A ride they took in advance: the socket event only reaches an open app, and this one may be
-    // days out - tell them with a visible push too.
-    if (ride.scheduledAt && new Date(ride.scheduledAt).getTime() > Date.now()) {
-      sendPushNotificationToEntities({
-        driverIds: [String(ride.driverId)],
-        title: 'Scheduled ride cancelled',
-        body: `The rider cancelled the ride ${scheduleLabel(ride.scheduledAt)}.`,
-        data: { type: 'scheduled_ride_cancelled', scheduledRideId: String(ride._id) },
-      }).catch(() => null);
-    }
   }
 
   for (const driverId of dispatchState.notifiedDriverIds) {
@@ -1557,6 +1556,8 @@ export const cancelRideByUser = async ({ rideId, userId, reason = '' }) => {
     rideId: String(ride._id),
     status: ride.status,
     liveStatus: ride.liveStatus,
+    cancelReason: why,
+    message: driverMessage,
   });
 
   if (cancellationSettlement?.driverWalletResult?.transaction) {
