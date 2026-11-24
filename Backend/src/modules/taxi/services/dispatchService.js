@@ -1500,9 +1500,10 @@ export const cancelRideByUser = async ({ rideId, userId, reason = '' }) => {
 
   // What the driver is told, with the passenger's reason when one was given.
   const why = String(ride.cancelReason || '').trim();
-  const driverMessage = why && why !== 'Cancelled by user'
-    ? `The passenger cancelled this ride. Reason: ${why}`
-    : 'The passenger cancelled this ride.';
+  const parcel = ride.serviceType === 'parcel' || ride.transportType === 'delivery';
+  const what = parcel ? 'parcel' : 'ride';
+  const driverMessage = `${parcel ? 'The customer' : 'The passenger'} cancelled this ${what}.${
+    why && why !== 'Cancelled by user' ? ` Reason: ${why}` : ''}`;
 
   if (ride.driverId) {
     emitToRoom(getDriverRoom(ride.driverId), 'rideRequestClosed', {
@@ -1518,9 +1519,9 @@ export const cancelRideByUser = async ({ rideId, userId, reason = '' }) => {
     const future = ride.scheduledAt && new Date(ride.scheduledAt).getTime() > Date.now();
     sendPushNotificationToEntities({
       driverIds: [String(ride.driverId)],
-      title: future ? 'Scheduled ride cancelled' : 'Ride cancelled',
+      title: `${future ? 'Scheduled ' : ''}${parcel ? 'parcel' : 'ride'} cancelled`.replace(/^./, (c) => c.toUpperCase()),
       body: future
-        ? `The rider cancelled the ride ${scheduleLabel(ride.scheduledAt)}.${why && why !== 'Cancelled by user' ? ` Reason: ${why}` : ''}`
+        ? `The ${parcel ? 'customer' : 'rider'} cancelled the ${what} ${scheduleLabel(ride.scheduledAt)}.${why && why !== 'Cancelled by user' ? ` Reason: ${why}` : ''}`
         : driverMessage,
       data: future
         ? { type: 'scheduled_ride_cancelled', scheduledRideId: String(ride._id), cancelReason: why }
