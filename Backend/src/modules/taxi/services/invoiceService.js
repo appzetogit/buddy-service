@@ -184,6 +184,7 @@ export const buildInvoiceModel = async ({ rideId }) => {
       website: 'www.sooperbuddy.in',
     },
     trip: {
+      isParcel: String(ride.serviceType || '').toLowerCase() === 'parcel',
       serviceType: String(ride.serviceType || 'Daily Ride').toUpperCase(),
       customerName: String(ride.userId?.name || 'Customer').trim(),
       customerPhone: String(ride.userId?.phone || ride.userId?.mobile || '-').trim(),
@@ -307,7 +308,7 @@ export const renderInvoicePdf = (model) =>
     doc.roundedRect(custX, y, colW, cardH, 4).fillColor(CARD_BG).fill();
     doc.roundedRect(custX, y, colW, cardH, 4).lineWidth(0.75).strokeColor(BORDER_COLOR).stroke();
 
-    doc.font(FONTS.bold).fontSize(7.5).fillColor(PRIMARY).text('BILLED TO (PASSENGER)', custX + 10, y + 8);
+    doc.font(FONTS.bold).fontSize(7.5).fillColor(PRIMARY).text(model.trip.isParcel ? 'BILLED TO' : 'BILLED TO (PASSENGER)', custX + 10, y + 8);
     doc.font(FONTS.bold).fontSize(9.5).fillColor(INK).text(model.trip.customerName, custX + 10, y + 19);
     doc.font(FONTS.regular).fontSize(8).fillColor(TEXT_MUTED).text(`Mobile: ${model.trip.customerPhone || '-'}`, custX + 10, y + 31);
     doc.font(FONTS.regular).fontSize(8).fillColor(TEXT_MUTED).text(`Email: ${model.trip.customerEmail || 'N/A'}`, custX + 10, y + 41);
@@ -329,7 +330,7 @@ export const renderInvoicePdf = (model) =>
     drawStat(0, 'Captain (Driver)', model.trip.driverName);
     drawStat(1, 'Vehicle Number', model.trip.vehicleNumber);
     drawStat(2, 'Distance Covered', model.trip.distanceKm > 0 ? `${model.trip.distanceKm} km` : '-');
-    drawStat(3, 'Ride Duration', model.trip.durationMins > 0 ? `${model.trip.durationMins} mins` : '-');
+    drawStat(3, model.trip.isParcel ? 'Trip Duration' : 'Ride Duration', model.trip.durationMins > 0 ? `${model.trip.durationMins} mins` : '-');
 
     y += statsH + 10;
 
@@ -369,7 +370,7 @@ export const renderInvoicePdf = (model) =>
     // Table Rows
     const rows = [
       {
-        item: 'Base Ride Fare',
+        item: model.trip.isParcel ? 'Base Delivery Fare' : 'Base Ride Fare',
         desc: 'Standard base booking fare',
         amount: model.fare.baseFare > 0 ? model.fare.baseFare : model.fare.tripFare,
       },
@@ -479,6 +480,8 @@ export const renderInvoicePdf = (model) =>
     doc.font(FONTS.bold).fontSize(9).fillColor(INK).text(model.payment?.detail || 'Cash Payment', left + 10, y + 18, { width: thirdW - 14, ellipsis: true });
     doc.font(FONTS.regular).fontSize(7.5).fillColor(TEXT_MUTED).text(model.payment?.cod && model.payment.status !== 'paid' ? 'Status: Balance due' : 'Status: Verified & Completed', left + 10, y + 30);
 
+    // The customer's own copy never shows the driver's earnings or our commission.
+    if (!model.forCustomer) {
     // Col 2: Driver Share
     const col2X = left + thirdW;
     doc.font(FONTS.bold).fontSize(7.5).fillColor(TEXT_MUTED).text("CAPTAIN'S SHARE (NET EARNINGS)", col2X + 10, y + 7);
@@ -490,11 +493,12 @@ export const renderInvoicePdf = (model) =>
     doc.font(FONTS.bold).fontSize(7.5).fillColor(TEXT_MUTED).text('PLATFORM / ADMIN COMMISSION', col3X + 10, y + 7);
     doc.font(FONTS.bold).fontSize(10).fillColor(PRIMARY_DARK).text(money(model.settlement?.commission || 0, model.fare.symbol), col3X + 10, y + 18);
     doc.font(FONTS.regular).fontSize(7.5).fillColor(TEXT_MUTED).text('Company Revenue Share', col3X + 10, y + 30);
+    }
 
     y += splitH + 12;
 
     // 8. Notice & Footer
-    doc.font(FONTS.bold).fontSize(8.5).fillColor(INK).text(`Thank you for riding with ${model.company.name}!`, left, y, { width: contentWidth, align: 'center' });
+    doc.font(FONTS.bold).fontSize(8.5).fillColor(INK).text(`Thank you for ${model.trip.isParcel ? 'sending with' : 'riding with'} ${model.company.name}!`, left, y, { width: contentWidth, align: 'center' });
     doc.font(FONTS.regular).fontSize(7.5).fillColor(TEXT_MUTED).text('This is a computer-generated tax invoice and requires no physical signature.', left, y + 12, { width: contentWidth, align: 'center' });
 
     // Bottom Bar - disable bottom margin check so footer fits cleanly on single page
@@ -507,8 +511,8 @@ export const renderInvoicePdf = (model) =>
     doc.end();
   });
 
-export const buildRideInvoicePdf = async ({ rideId }) => {
-  const model = await buildInvoiceModel({ rideId });
+export const buildRideInvoicePdf = async ({ rideId, forCustomer = false }) => {
+  const model = { ...(await buildInvoiceModel({ rideId })), forCustomer };
   const buffer = await renderInvoicePdf(model);
   const stamp = model.invoiceDate.replace(/\s+/g, '_');
   const slug = model.company.name.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'Invoice';
@@ -521,7 +525,7 @@ export const buildRideInvoicePdf = async ({ rideId }) => {
  */
 export const sendRideInvoiceEmail = async ({ rideId }) => {
   try {
-    const { buffer, model, filename } = await buildRideInvoicePdf({ rideId });
+    const { buffer, model, filename } = await buildRideInvoicePdf({ rideId, forCustomer: true });
     const to = model.trip.customerEmail;
 
     if (!to) {

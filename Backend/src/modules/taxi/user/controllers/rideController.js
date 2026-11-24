@@ -34,6 +34,7 @@ import {
   startDispatchFlow,
   announceScheduledRide,
 } from '../../services/dispatchService.js';
+import { buildRideInvoicePdf } from '../../services/invoiceService.js';
 import { getTipSettings } from '../../services/appSettingsService.js';
 import { getBidRideSettings, getTransportRideSettings } from '../../services/transportSettingsService.js';
 import { matchDrivers } from '../../services/matchingService.js';
@@ -767,6 +768,23 @@ export const getRideById = async (req, res) => {
     success: true,
     data: ride,
   });
+};
+
+/** The customer's own invoice PDF of a completed ride or parcel. */
+export const getRideInvoice = async (req, res) => {
+  const { rideId } = req.params;
+  if (!mongoose.isValidObjectId(rideId)) {
+    throw new ApiError(404, 'Ride not found');
+  }
+  const ride = await ensureRideParticipantAccess({ rideId, role: req.auth.role, entityId: req.auth.sub });
+  if (ride.status !== RIDE_STATUS.COMPLETED) {
+    throw new ApiError(409, 'The invoice is ready once the trip is completed');
+  }
+
+  const { buffer, filename } = await buildRideInvoicePdf({ rideId, forCustomer: true });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buffer);
 };
 
 export const getMyActiveRide = async (req, res) => {

@@ -19,6 +19,7 @@ import {
   getRideBiddingSettings,
   getMyActiveRide,
   getRideById,
+  getRideInvoice,
   listMyRides,
   listAvailableDrivers,
   listPopularPlaces,
@@ -48,6 +49,7 @@ rideRouter.patch('/:rideId/cancel', authenticate(['user']), asyncHandler(cancelR
 rideRouter.get('/:rideId/bids', authenticate(['user']), asyncHandler(getRideBids));
 rideRouter.patch('/:rideId/bids/ceiling', authenticate(['user']), asyncHandler(updateRideBidCeiling));
 rideRouter.post('/:rideId/bids/:bidId/accept', authenticate(['user']), asyncHandler(acceptRideBid));
+rideRouter.get('/:rideId/invoice', authenticate(['user']), asyncHandler(getRideInvoice));
 rideRouter.get('/:rideId', authenticate(['user', 'driver']), asyncHandler(getRideById));
 rideRouter.patch('/:rideId/status', authenticate(['driver']), asyncHandler(updateRideStatus));
 // Parcel handover photos. The delivery cannot start or complete without them.
