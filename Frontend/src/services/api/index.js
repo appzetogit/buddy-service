@@ -3090,9 +3090,27 @@ export const orderAPI = {
     };
   })(),
   cancelOrder: (orderId, body = {}) =>
-    apiClient.patch(`/food/orders/${String(orderId)}/cancel`, body ?? {}, {
-      contextModule: "user",
-    }),
+    apiClient
+      .patch(`/food/orders/${String(orderId)}/cancel`, body ?? {}, {
+        contextModule: "user",
+      })
+      // Quick Commerce orders live in their own collection (same fallback as getOrderDetails):
+      // a food cancel finds nothing, so only on 404 try the QC cancel with the same reason.
+      .catch(async (err) => {
+        if (err?.response?.status !== 404) throw err;
+        const { reason, refundDestination } = body ?? {};
+        try {
+          return await apiClient.post(
+            `/quick-commerce/orders/${String(orderId)}/cancel`,
+            { reason, refundTo: refundDestination === "source" ? "gateway" : "wallet" },
+            { contextModule: "user" },
+          );
+        } catch (qcErr) {
+          // Not a QC order either: surface the original food error.
+          if (qcErr?.response?.status === 404) throw err;
+          throw qcErr;
+        }
+      }),
   updateOrderInstructions: (orderId, instructions) =>
     apiClient.patch(`/food/orders/${String(orderId)}/instructions`, { instructions }, {
       contextModule: "user",

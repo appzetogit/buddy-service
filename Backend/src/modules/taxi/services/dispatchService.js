@@ -1398,7 +1398,7 @@ export const cancelRideByAdmin = async (rideId) => {
   return ride;
 };
 
-export const cancelRideByUser = async ({ rideId, userId }) => {
+export const cancelRideByUser = async ({ rideId, userId, reason = '' }) => {
   const dispatchState = getDispatchState(rideId);
   stopDispatchFlow(rideId, { releaseLease: false });
 
@@ -1432,6 +1432,10 @@ export const cancelRideByUser = async ({ rideId, userId }) => {
   const cancelUpdate = {
     status: RIDE_STATUS.CANCELLED,
     liveStatus: RIDE_LIVE_STATUS.CANCELLED,
+    // Who cancelled and why, so admin Trips and the rider's history can show it.
+    cancelledBy: 'user',
+    cancelReason: String(reason || '').trim().slice(0, 300) || 'Cancelled by user',
+    cancelledAt: new Date(),
   };
   if (existing.bookingMode === 'bidding') {
     cancelUpdate.biddingStatus = 'cancelled';
@@ -1572,7 +1576,7 @@ export const cancelRideByUser = async ({ rideId, userId }) => {
   return ride;
 };
 
-export const cancelScheduledRideByDriver = async ({ rideId, driverId }) => {
+export const cancelScheduledRideByDriver = async ({ rideId, driverId, reason = '' }) => {
   const dispatchState = getDispatchState(rideId);
   stopDispatchFlow(rideId, { releaseLease: false });
 
@@ -1650,7 +1654,11 @@ export const cancelScheduledRideByDriver = async ({ rideId, driverId }) => {
 
   await Driver.findByIdAndUpdate(driverId, { isOnRide: false });
   await persistDispatchTrackingProgress({ rideId, reset: true }).catch(() => null);
-  await Ride.updateOne({ _id: rideId }, { $addToSet: { 'dispatchTracking.rejectedDriverIds': String(driverId) } });
+  await Ride.updateOne({ _id: rideId }, {
+    $addToSet: { 'dispatchTracking.rejectedDriverIds': String(driverId) },
+    // The ride is not cancelled (the passenger keeps it), so the driver's reason is kept as history.
+    $push: { driverGiveBacks: { driverId, reason: String(reason || '').trim().slice(0, 300) || 'Given back by driver', at: new Date() } },
+  });
 
   emitToRoom(getDriverRoom(driverId), 'rideRequestClosed', {
     rideId: String(ride._id),

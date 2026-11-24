@@ -38,10 +38,10 @@ The advance is paid the same way as any prepaid order. **If nothing has to be pa
 - Online part: `201 { requiresPayment:true, checkoutId, amount:<advance>, total, walletAmount, onlineAmount, cod:{percent,advanceAmount,remainingAmount}, razorpay:{key,orderId,amount,currency}, expiresAt, result:null }`. Pay Razorpay, then `POST /quick-commerce/checkout/verify-payment { checkoutId, razorpay_order_id, razorpay_payment_id, razorpay_signature }` -> `{ success, result: order }`. The shop sees the order only after the advance is paid.
 
 ### Taxi (rides)
-`POST /taxi/user/rides` - same body with `"paymentMethod": "cod"` and optional `"useWallet"`.
+`POST /taxi/rides` - same body with `"paymentMethod": "cod"` and optional `"useWallet"`.
 - Immediate: `201 { data:{ ride, realtime } }` (`ride.cod` is set).
-- Online part: `201 { data:{ requiresPayment:true, checkoutId, kind, percent, fare, advanceAmount, remainingAmount, walletAmount, onlineAmount, expiresAt, razorpay:{keyId,orderId,amount,currency} } }`. **No ride exists and no driver search starts yet.** Pay Razorpay, then `POST /taxi/user/rides/cod-advance/verify { checkoutId, razorpay_order_id, razorpay_payment_id, razorpay_signature }` -> `201 { data:{ ride, realtime } }` and the driver search starts. The checkout is valid ~30 minutes; if booking fails the advance returns to the wallet.
-- Parcel: `POST /taxi/user/deliveries` with `"paymentMethod":"cod"`, verify at `POST /taxi/user/deliveries/cod-advance/verify` (same payload).
+- Online part: `201 { data:{ requiresPayment:true, checkoutId, kind, percent, fare, advanceAmount, remainingAmount, walletAmount, onlineAmount, expiresAt, razorpay:{keyId,orderId,amount,currency} } }`. **No ride exists and no driver search starts yet.** Pay Razorpay, then `POST /taxi/rides/cod-advance/verify { checkoutId, razorpay_order_id, razorpay_payment_id, razorpay_signature }` -> `201 { data:{ ride, realtime } }` and the driver search starts. The checkout is valid ~30 minutes; if booking fails the advance returns to the wallet.
+- Parcel: `POST /taxi/deliveries` with `"paymentMethod":"cod"`, verify at `POST /taxi/deliveries/cod-advance/verify` (same payload).
 
 ## 4. Order / ride JSON (what to render)
 Food and Marketplace orders: `payment.method = "cash"`, `payment.status = "cod_pending"` until the cash is collected (then `"paid"`), `payment.amountDue` = remaining. Taxi rides: `ride.paymentMethod = "cash"`, `ride.cod`, `ride.amountDue`.

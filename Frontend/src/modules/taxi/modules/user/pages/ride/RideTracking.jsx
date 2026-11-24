@@ -15,6 +15,7 @@ import bikeIcon from '../../../../assets/icons/bike.png';
 import autoIcon from '../../../../assets/icons/auto.png';
 import deliveryIcon from '../../../../assets/icons/Delivery.png';
 import { useSettings } from '../../../../shared/context/SettingsContext';
+import CancelReasonPicker, { useCancelReason } from '../../components/CancelReasonPicker';
 
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
@@ -413,6 +414,7 @@ const mergeDriverSnapshot = (baseDriver = {}, incomingDriver = {}) => {
 const RideTracking = () => {
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const cancelReason = useCancelReason();
   const [shareToast, setShareToast] = useState(false);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [rideRealtime, setRideRealtime] = useState(null);
@@ -579,7 +581,7 @@ const RideTracking = () => {
   const handleCancelRide = async () => {
     try {
       if (rideId) {
-        await api.patch(`/rides/${rideId}/cancel`);
+        await api.patch(`/rides/${rideId}/cancel`, { reason: cancelReason.text });
       }
     } catch (_error) {
       // If the ride has already advanced or ended, we still clear the local state below.
@@ -1770,12 +1772,14 @@ const RideTracking = () => {
                 <AlertTriangle size={26} className="text-red-400" strokeWidth={2} />
               </div>
               <h3 className="text-[18px] font-bold text-slate-900 mb-1.5">Cancel your ride?</h3>
-              <p className="text-[13px] font-bold text-slate-400 mb-6 leading-relaxed">Your captain is already on the way.</p>
+              <p className="text-[13px] font-bold text-slate-400 mb-4 leading-relaxed">Your captain is already on the way. Please tell us why.</p>
+              <CancelReasonPicker {...cancelReason} />
               <div className="space-y-2.5">
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   onClick={handleCancelRide}
-                  className="w-full bg-slate-900 text-white py-3.5 rounded-[16px] text-[13px] font-bold uppercase tracking-widest"
+                  disabled={!cancelReason.text}
+                  className="w-full bg-slate-900 text-white py-3.5 rounded-[16px] text-[13px] font-bold uppercase tracking-widest disabled:opacity-40"
                 >
                   Yes, Cancel
                 </motion.button>

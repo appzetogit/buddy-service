@@ -24,6 +24,7 @@ import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
 import { subscribeRideRealtime } from '../../../../shared/services/rideRealtime';
 import { computeDrivingRoute } from '../../../../shared/utils/googleRoutes';
 import { clearCurrentRide, getCurrentRide, saveCurrentRide } from '../../services/currentRideService';
+import CancelReasonPicker, { useCancelReason } from '../../components/CancelReasonPicker';
 
 // Assets (Using the same icons as RideTracking)
 import carIcon from '../../../../assets/icons/car.png';
@@ -238,6 +239,7 @@ const ParcelTracking = () => {
   const [routePath, setRoutePath] = useState([]);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const cancelReason = useCancelReason();
   const [shareToast, setShareToast] = useState(false);
   const [map, setMap] = useState(null);
   const [socketRealtimeHealthy, setSocketRealtimeHealthy] = useState(() => socketService.isConnected());
@@ -1230,17 +1232,19 @@ const ParcelTracking = () => {
                 <AlertTriangle size={32} strokeWidth={2.5} />
               </div>
               <h3 className="text-xl font-black text-gray-900 mb-2">Cancel Delivery?</h3>
-              <p className="text-sm font-bold text-gray-400 mb-8 leading-relaxed">Your delivery agent is already moving. Cancellation may incur charges.</p>
+              <p className="text-sm font-bold text-gray-400 mb-4 leading-relaxed">Your delivery agent is already moving. Cancellation may incur charges. Please tell us why.</p>
+              <CancelReasonPicker {...cancelReason} />
               <div className="flex flex-col gap-3">
                 <motion.button
                   whileTap={{ scale: 0.96 }}
+                  disabled={!cancelReason.text}
                   onClick={() => {
-                    api.patch(`/rides/${rideId}/cancel`).finally(() => {
+                    api.patch(`/rides/${rideId}/cancel`, { reason: cancelReason.text }).finally(() => {
                       clearCurrentRide();
                       navigate(userHomeRoute, { replace: true });
                     });
                   }}
-                  className="w-full bg-red-500 text-white py-5 rounded-[24px] text-sm font-black uppercase tracking-widest shadow-xl shadow-red-500/20"
+                  className="w-full bg-red-500 text-white py-5 rounded-[24px] text-sm font-black uppercase tracking-widest shadow-xl shadow-red-500/20 disabled:opacity-40"
                 >
                   Yes, Cancel
                 </motion.button>

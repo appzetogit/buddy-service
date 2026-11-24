@@ -848,7 +848,7 @@ const SearchingDriver = () => {
 
     try {
       if (rideId) {
-        await api.patch(`/rides/${rideId}/cancel`);
+        await api.patch(`/rides/${rideId}/cancel`, { reason: 'Cancelled while searching for a driver' });
       }
     } catch (_error) {
       // Navigation still proceeds even if the cancel request races with another state update.
@@ -948,7 +948,7 @@ const SearchingDriver = () => {
 
     try {
       if (rideId) {
-        await api.patch(`/rides/${rideId}/cancel`);
+        await api.patch(`/rides/${rideId}/cancel`, { reason: 'Cancelled while searching for a driver' });
       }
     } catch {
       // Navigation should still proceed even if cancellation races with another update.

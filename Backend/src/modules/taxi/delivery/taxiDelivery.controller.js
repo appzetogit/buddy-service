@@ -245,7 +245,7 @@ export const giveBackRideController = async (req, res) => {
 
     let ride;
     try {
-      ride = await cancelScheduledRideByDriver({ rideId: req.params.rideId, driverId: partnerId });
+      ride = await cancelScheduledRideByDriver({ rideId: req.params.rideId, driverId: partnerId, reason: req.body?.reason });
     } catch (error) {
       // The service throws plain Errors for "not upcoming" / "already completed".
       throw error instanceof ApiError ? error : new ApiError(400, error.message || 'Could not give this ride back');

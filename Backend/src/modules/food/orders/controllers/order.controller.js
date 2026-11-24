@@ -234,6 +234,10 @@ export async function updateOrderStatusRestaurantController(req, res, next) {
         const restaurantId = req.user?.userId;
         const orderId = req.params.orderId;
         const dto = validateOrderStatusDto(req.body);
+        // A restaurant must say why it is cancelling (shown to the customer and admin).
+        if (dto.orderStatus === 'cancelled_by_restaurant' && !String(dto.note || '').trim()) {
+            throw new ValidationError('Cancellation reason is required');
+        }
         const order = await orderService.updateOrderStatusRestaurant(orderId, restaurantId, dto.orderStatus, dto.note, dto.packingMinutes);
         return sendResponse(res, 200, 'Order status updated', { order });
     } catch (err) {

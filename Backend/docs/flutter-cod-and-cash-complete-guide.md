@@ -58,12 +58,12 @@ Rule for all three services: if nothing has to be paid online (advance is 0, or 
   After payment: `POST /quick-commerce/checkout/verify-payment { checkoutId, razorpay_order_id, razorpay_payment_id, razorpay_signature }` -> `{ success, result: order }`. The shop sees the order only after the advance is paid.
 
 #### Taxi (rides)
-`POST /taxi/user/rides` with `"paymentMethod": "cod"` and optional `"useWallet"`.
+`POST /taxi/rides` with `"paymentMethod": "cod"` and optional `"useWallet"`.
 - Created now: `201 { data:{ ride, realtime } }` (`ride.cod` is set).
 - Online part: `201 { data:{ requiresPayment:true, checkoutId, kind, percent, fare, advanceAmount, remainingAmount, walletAmount, onlineAmount, expiresAt, razorpay:{ keyId, orderId, amount, currency } } }`.
-  **No ride exists and no driver search starts yet.** Pay Razorpay, then `POST /taxi/user/rides/cod-advance/verify { checkoutId, razorpay_order_id, razorpay_payment_id, razorpay_signature }` -> `201 { data:{ ride, realtime } }`, driver search starts.
+  **No ride exists and no driver search starts yet.** Pay Razorpay, then `POST /taxi/rides/cod-advance/verify { checkoutId, razorpay_order_id, razorpay_payment_id, razorpay_signature }` -> `201 { data:{ ride, realtime } }`, driver search starts.
   The checkout is valid ~30 minutes. If booking fails after payment the advance returns to the wallet automatically.
-- Parcel: `POST /taxi/user/deliveries` with `"paymentMethod":"cod"`, verify at `POST /taxi/user/deliveries/cod-advance/verify` (same payload).
+- Parcel: `POST /taxi/deliveries` with `"paymentMethod":"cod"`, verify at `POST /taxi/deliveries/cod-advance/verify` (same payload).
 - Note the Razorpay key field name differs: Food/QC use `key`, Taxi uses `keyId`.
 
 If the user closes Razorpay without paying, **do nothing else**: no order exists, nothing was charged.

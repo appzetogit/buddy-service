@@ -430,6 +430,16 @@ const rideSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // A scheduled ride a driver gave back (the ride itself is not cancelled): who and why.
+    driverGiveBacks: {
+      type: [{
+        driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'Driver' },
+        reason: { type: String, default: '', trim: true },
+        at: { type: Date, default: Date.now },
+        _id: false,
+      }],
+      default: [],
+    },
     // Removed from the admin trip lists by an admin. The ride itself is kept,
     // so earnings, wallet history and reports still add up.
     adminDeletedAt: {
