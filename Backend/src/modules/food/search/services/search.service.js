@@ -3,6 +3,7 @@ import { attachOutletTimingsToRestaurants } from '../../restaurant/services/outl
 import { FoodItem } from '../../admin/models/food.model.js';
 import { FoodCategory } from '../../admin/models/category.model.js';
 import { ACTIVE_PUBLIC_CATEGORY_FILTER, buildFoodVisibleCategoryFilter } from '../../shared/categoryWorkflow.js';
+import { zoneRestaurantIds } from '../../shared/zoneRestaurants.js';
 import mongoose from 'mongoose';
 
 const RESTAURANT_LIST_FIELDS = [
@@ -73,9 +74,9 @@ export const searchUnified = async (query = {}) => {
 
     const restaurantFilter = { status: 'approved' };
 
-    if (zoneId && mongoose.Types.ObjectId.isValid(zoneId)) {
-        restaurantFilter.zoneId = new mongoose.Types.ObjectId(zoneId);
-    }
+    // Only this zone's restaurants and their dishes; nothing from other zones when it has none.
+    const inZone = await zoneRestaurantIds(zoneId);
+    if (inZone) restaurantFilter.$and = [{ _id: { $in: inZone } }];
 
     if (isVeg === 'true') {
         restaurantFilter.pureVegRestaurant = true;
@@ -142,6 +143,7 @@ export const searchUnified = async (query = {}) => {
         });
 
         const foodFilters = { approvalStatus: 'approved', name: nameMatcher };
+        if (inZone) foodFilters.restaurantId = { $in: inZone };
         if (isVeg === 'true') foodFilters.foodType = 'Veg';
         const visibleCategoryFilter = await buildFoodVisibleCategoryFilter();
         if (visibleCategoryFilter) {
@@ -215,17 +217,9 @@ export const searchUnified = async (query = {}) => {
             total: results.length,
             page: parseInt(page, 10),
             limit: parseInt(limit, 10),
-            zoneFiltered: !!(zoneId && mongoose.Types.ObjectId.isValid(zoneId)),
+            zoneFiltered: !!inZone,
         },
     };
-
-    if (results.length === 0 && zoneId && mongoose.Types.ObjectId.isValid(zoneId)) {
-        const fallbackResults = await searchUnified({ ...query, zoneId: null });
-        if (fallbackResults.data.total > 0) {
-            fallbackResults.data.wasFallback = true;
-            return fallbackResults;
-        }
-    }
 
     return finalResult;
 };

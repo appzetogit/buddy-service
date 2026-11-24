@@ -1,4 +1,5 @@
 import { getRestaurantOrderableStatus } from '../../shared/utils/restaurantAvailability.js';
+import { zoneRestaurantIds } from '../../shared/zoneRestaurants.js';
 import { FoodRestaurant } from '../models/restaurant.model.js';
 import { FoodFeeSettings } from '../../admin/models/feeSettings.model.js';
 import { uploadFileBuffer } from '../../../../services/localUpload.service.js';
@@ -22,7 +23,6 @@ import { getRestaurantAddressSummary } from '../../shared/utils/restaurantAddres
 import { enrichRestaurantsWithDistance, formatDistanceLabel } from '../../shared/utils/restaurantDistance.js';
 import { reverseGeocode } from '../../../../core/location/geocode.service.js';
 import mongoose from 'mongoose';
-import { FoodZone } from '../../admin/models/zone.model.js';
 import { FoodOffer } from '../../admin/models/offer.model.js';
 import { FoodOfferUsage } from '../../admin/models/offerUsage.model.js';
 import {
@@ -297,19 +297,6 @@ const parseSortBy = (value) => {
     const v = String(value || '').trim();
     const allowed = new Set(['nearest', 'rating', 'newest', 'deliveryTime', 'price-low', 'price-high', 'rating-high', 'rating-low']);
     return allowed.has(v) ? v : null;
-};
-
-const zoneToPolygon = (zoneDoc) => {
-    const coords = Array.isArray(zoneDoc?.coordinates) ? zoneDoc.coordinates : [];
-    if (coords.length < 3) return null;
-    const ring = coords
-        .map((c) => [Number(c.longitude), Number(c.latitude)])
-        .filter((pair) => pair.every((n) => Number.isFinite(n)));
-    if (ring.length < 3) return null;
-    const first = ring[0];
-    const last = ring[ring.length - 1];
-    if (first[0] !== last[0] || first[1] !== last[1]) ring.push(first);
-    return { type: 'Polygon', coordinates: [ring] };
 };
 
 const notifyAdminsAboutRestaurantProfileReview = async (restaurantId, restaurantName) => {
@@ -1649,15 +1636,9 @@ export const listApprovedRestaurants = async (query = {}) => {
 
     // Zone filter applies to discovery views; home feed is scoped by city only.
     const zoneIdRaw = String(query.zoneId || '').trim();
-    if (!homeScope && zoneIdRaw && mongoose.Types.ObjectId.isValid(zoneIdRaw)) {
-        // Try fast path (precomputed restaurant.zoneId).
-        filter.$or = [{ zoneId: new mongoose.Types.ObjectId(zoneIdRaw) }];
-        const zoneDoc = await FoodZone.findOne({ _id: zoneIdRaw, isActive: true }).lean();
-        const polygon = zoneToPolygon(zoneDoc);
-        if (polygon) {
-            filter.$or.push({ location: { $geoWithin: { $geometry: polygon } } });
-        }
-    }
+    const inZone = homeScope ? null : await zoneRestaurantIds(zoneIdRaw);
+    // $and: a search term already uses $or, the two must both hold.
+    if (inZone) filter.$and = [...(filter.$and || []), { _id: { $in: inZone } }];
 
     const lat = toFiniteNumber(query.lat);
     const lng = toFiniteNumber(query.lng);
@@ -1849,15 +1830,8 @@ export const listPublicFoods = async (query = {}) => {
     const limit = Math.min(Math.max(parseInt(query.limit, 10) || 200, 1), 1000);
 
     const restaurantFilter = { status: 'approved' };
-    const zoneIdRaw = String(query.zoneId || '').trim();
-    if (zoneIdRaw && mongoose.Types.ObjectId.isValid(zoneIdRaw)) {
-        restaurantFilter.$or = [{ zoneId: new mongoose.Types.ObjectId(zoneIdRaw) }];
-        const zoneDoc = await FoodZone.findOne({ _id: zoneIdRaw, isActive: true }).lean();
-        const polygon = zoneToPolygon(zoneDoc);
-        if (polygon) {
-            restaurantFilter.$or.push({ location: { $geoWithin: { $geometry: polygon } } });
-        }
-    }
+    const inZone = await zoneRestaurantIds(query.zoneId);
+    if (inZone) restaurantFilter._id = { $in: inZone };
 
     const restaurantDocs = await FoodRestaurant.find(restaurantFilter)
         .select('_id status isAcceptingOrders')
@@ -1967,8 +1941,11 @@ export const getApprovedRestaurantByIdOrSlug = async (idOrSlug, origin = {}) => 
     return enriched;
 };
 
-export const listPublicOffers = async () => {
+/// [zoneId]: leaves out coupons of restaurants outside that zone (all-restaurant coupons stay).
+export const listPublicOffers = async (query = {}) => {
     const now = new Date();
+    const inZone = await zoneRestaurantIds(query.zoneId);
+    const zoneSet = inZone && new Set(inZone.map(String));
     const filter = {
         ...buildBaseActiveOfferFilter(now),
     };
@@ -1978,7 +1955,12 @@ export const listPublicOffers = async () => {
         .populate({ path: 'restaurantId', select: 'restaurantName restaurantNameNormalized profileImage estimatedDeliveryTime rating' })
         .lean();
 
-    const allOffers = list.map((o) => {
+    const visible = !zoneSet ? list : list.filter((o) => {
+        if (o.restaurantScope !== 'selected') return true;
+        return zoneSet.has(String(o.restaurantId?._id || o.restaurantId));
+    });
+
+    const allOffers = visible.map((o) => {
         const restaurant = o.restaurantId && typeof o.restaurantId === 'object' ? o.restaurantId : null;
         const restaurantSlug = restaurant?.restaurantNameNormalized || undefined;
         const restaurantName =

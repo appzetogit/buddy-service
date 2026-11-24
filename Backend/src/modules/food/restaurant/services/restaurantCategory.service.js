@@ -3,7 +3,7 @@ import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodCategory } from '../../admin/models/category.model.js';
 import { FoodItem } from '../../admin/models/food.model.js';
 import { FoodRestaurant } from '../models/restaurant.model.js';
-import { FoodZone } from '../../admin/models/zone.model.js';
+import { zoneRestaurantIds } from '../../shared/zoneRestaurants.js';
 import { deleteFoodImageAsset } from '../../services/foodImage.service.js';
 import {
     ACTIVE_PUBLIC_CATEGORY_FILTER,
@@ -197,23 +197,8 @@ export async function listPublicCategories(query = {}) {
         isDeleted: { $ne: true }
     };
 
-    if (zoneIdRaw && mongoose.Types.ObjectId.isValid(zoneIdRaw)) {
-        const zoneObjId = new mongoose.Types.ObjectId(zoneIdRaw);
-        restaurantFilter.$or = [{ zoneId: zoneObjId }];
-        const zoneDoc = await FoodZone.findOne({ _id: zoneIdRaw, isActive: true }).lean();
-        const coords = Array.isArray(zoneDoc?.coordinates) ? zoneDoc.coordinates : [];
-        if (coords.length >= 3) {
-            const ring = coords
-                .map((c) => [Number(c.longitude), Number(c.latitude)])
-                .filter((pair) => pair.every((n) => Number.isFinite(n)));
-            if (ring.length >= 3) {
-                const first = ring[0];
-                const last = ring[ring.length - 1];
-                if (first[0] !== last[0] || first[1] !== last[1]) ring.push(first);
-                restaurantFilter.$or.push({ location: { $geoWithin: { $geometry: { type: 'Polygon', coordinates: [ring] } } } });
-            }
-        }
-    }
+    const inZone = await zoneRestaurantIds(zoneIdRaw);
+    if (inZone) restaurantFilter._id = { $in: inZone };
 
     const activeRestaurantIds = await FoodRestaurant.find(restaurantFilter).distinct('_id');
 
