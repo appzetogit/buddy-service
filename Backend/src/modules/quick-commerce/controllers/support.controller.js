@@ -98,7 +98,7 @@ export const createSupportTicketController = async (req, res, next) => {
         .lean();
 
       if (!order) {
-        return res.status(404).json({ success: false, message: 'Quick order not found' });
+        return res.status(404).json({ success: false, message: 'Marketplace order not found' });
       }
 
       doc.orderId = order._id;

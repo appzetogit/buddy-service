@@ -8,7 +8,7 @@ import { syncTaxiProfileToPartner } from './taxiPartnerSync.js';
 const VALID_MODES = ['off', 'food', 'taxi'];
 const OFF_ALIASES = new Set(['off', 'none', 'offline', '', null, undefined]);
 const DELIVERY_SERVICES = ['food', 'quickCommerce', 'taxi'];
-const SERVICE_LABEL = { food: 'Food', quickCommerce: 'Quick Commerce', taxi: 'Taxi' };
+const SERVICE_LABEL = { food: 'Food', quickCommerce: 'Marketplace', taxi: 'Taxi' };
 
 /**
  * `services` picks which delivery jobs the rider takes while online (food,

@@ -280,8 +280,8 @@ export async function dispatchQuickOrder(orderId, options = {}) {
     if (attempt >= settings.adminAlertFromAttempt && !order.dispatch?.crisisAlertedAt) {
       logger.error(`[CRITICAL] Quick order ${order._id} unassigned after ${attempt} rounds. Alerting admin.`);
       void notifyOwnersSafely([{ ownerType: 'ADMIN', ownerId: 'GLOBAL' }], {
-        title: 'Unassigned Quick Order!',
-        body: `Quick order #${order.orderId || order._id} still has no rider.`,
+        title: 'Unassigned Marketplace Order!',
+        body: `Marketplace order #${order.orderId || order._id} still has no rider.`,
         data: { type: 'admin_alert_unassigned', orderId: String(order._id), orderKind: 'quick' },
       }).catch(() => {});
       await QuickOrder.updateOne({ _id: order._id }, { $set: { 'dispatch.crisisAlertedAt': new Date() } });
@@ -340,7 +340,7 @@ export async function dispatchQuickOrder(orderId, options = {}) {
     void notifyOwnersSafely(
       partnerIds.map((partnerId) => ({ ownerType: 'DELIVERY_PARTNER', ownerId: partnerId })),
       {
-        title: 'New Quick Commerce order!',
+        title: 'New Marketplace order!',
         body: `You have ${settings.offerTimeoutSec} seconds to accept order #${order.orderId || order._id}.`,
         ring: true,
         sendToAllDevices: true,

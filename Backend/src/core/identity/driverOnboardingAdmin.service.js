@@ -8,7 +8,7 @@ export const ONBOARDING_SERVICES = ['food', 'quickCommerce', 'taxi'];
 
 const SERVICE_LABELS = {
   food: 'Food',
-  quickCommerce: 'Quick Commerce',
+  quickCommerce: 'Marketplace',
   taxi: 'Taxi',
 };
 

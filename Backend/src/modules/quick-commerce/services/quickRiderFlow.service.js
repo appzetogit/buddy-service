@@ -407,7 +407,7 @@ export async function completeDelivery(orderId, partnerId, { otp = '' } = {}) {
       pushHistory(order, partnerId, order.orderStatus, order.orderStatus, `No second partner joined in time; primary completing solo with full earning Rs ${restored}.`);
       void notifyOwnersSafely([{ ownerType: 'ADMIN', ownerId: 'GLOBAL' }], {
         title: 'Bulk order completed solo',
-        body: `Quick order #${order.orderId} had no second rider join in time; the primary partner is completing it alone.`,
+        body: `Marketplace order #${order.orderId} had no second rider join in time; the primary partner is completing it alone.`,
         data: { type: 'bulk_solo_complete', orderId: toId(order._id), orderKind: 'quick' },
       }).catch(() => {});
     }

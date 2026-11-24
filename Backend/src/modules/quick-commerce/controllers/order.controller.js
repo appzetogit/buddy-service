@@ -1430,7 +1430,7 @@ export async function placeOrderCore(req, res, { verifiedPrepaid = null } = {}) 
           {
             title: awaitingOnline
               ? 'Complete Payment to Confirm Order'
-              : 'Quick Order Confirmed!',
+              : 'Marketplace Order Confirmed!',
             body: awaitingOnline
               ? `Order #${order.orderId} is created. Please complete payment to confirm.`
               : `Your Marketplace order #${order.orderId} has been placed successfully.`,

@@ -984,7 +984,7 @@ export async function sweepQuickSellerAcknowledgements() {
       if (!order.dispatch?.sellerAckAlertedAt) {
         await notifyOwnersSafely([{ ownerType: 'ADMIN', ownerId: 'GLOBAL' }], {
           title: 'Store not responding',
-          body: `Quick order #${order.orderId} has a rider waiting; the store has not accepted yet.`,
+          body: `Marketplace order #${order.orderId} has a rider waiting; the store has not accepted yet.`,
           data: { type: 'seller_ack_pending', orderId: toId(order._id) },
         });
       }
@@ -1090,7 +1090,7 @@ export async function dropSellerFromQuickOrder(parentOrder, sellerId, sellerOrde
       logger.error(`[QuickFlows] partial refund failed for ${parentOrder.orderId}: ${err.message}`);
       void notifyOwnersSafely([{ ownerType: 'ADMIN', ownerId: 'GLOBAL' }], {
         title: 'Partial refund FAILED',
-        body: `Quick order #${parentOrder.orderId}: could not refund Rs ${refundAmount} for a store that dropped out.`,
+        body: `Marketplace order #${parentOrder.orderId}: could not refund Rs ${refundAmount} for a store that dropped out.`,
         data: { type: 'quick_partial_refund_failed', orderId: toId(parentOrder._id) },
       }).catch(() => {});
     }
