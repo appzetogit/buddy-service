@@ -2185,10 +2185,15 @@ export const announceScheduledRide = async (ride) => {
     body: `Pickup ${scheduleLabel(ride.scheduledAt)}${toPlace ? ` to ${toPlace}` : ''}. Open Scheduled Rides to take it.`,
     // `scheduledRideId`, not `rideId`: the driver app treats a push with a
     // `rideId` as a ride offer.
+    // Enough for the rider app to ring and show the trip card while closed.
     data: {
       type: 'scheduled_ride_available',
       scheduledRideId: String(ride._id),
       scheduledAt: new Date(ride.scheduledAt).toISOString(),
+      serviceType: ride.serviceType || 'ride',
+      pickupAddress: ride.pickupAddress || '',
+      dropAddress: ride.dropAddress || '',
+      fare: ride.fare ?? '',
     },
   });
 };
