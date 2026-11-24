@@ -421,6 +421,12 @@ export const createDeliveryCashDepositOrder = async (rawPartnerId, amountInr) =>
         };
     }
 
+    // An earlier attempt the rider opened but never paid is closed now, so it does not sit as "Pending" next to the new one.
+    // A late payment on it can still complete it (verify, or the captured webhook below).
+    await FoodDeliveryCashDeposit.updateMany(
+        { deliveryPartnerId, status: 'Pending', razorpayPaymentId: { $in: [null, ''] } },
+        { $set: { status: 'Failed', adminNote: 'Not paid - replaced by a new attempt' } },
+    );
     const order = await createRazorpayOrder(amountPaise, 'INR', receipt);
     // A Pending row from the start: a deposit paid but never verified by the app can be found and reconciled.
     await FoodDeliveryCashDeposit.create({
@@ -541,10 +547,10 @@ export const verifyDeliveryCashDepositPayment = async (rawPartnerId, payload = {
  */
 export const reconcileCashDepositFromWebhook = async (razorpayOrderId, razorpayPaymentId, amountPaise) => {
     if (!razorpayOrderId) return null;
-    const row = await FoodDeliveryCashDeposit.findOne({ razorpayOrderId, status: 'Pending' }).lean();
+    const row = await FoodDeliveryCashDeposit.findOne({ razorpayOrderId, status: { $in: ['Pending', 'Failed'] } }).lean();
     if (!row || Math.round(Number(row.amount) * 100) !== Math.round(Number(amountPaise))) return null;
     return FoodDeliveryCashDeposit.findOneAndUpdate(
-        { _id: row._id, status: 'Pending' },
+        { _id: row._id, status: { $in: ['Pending', 'Failed'] } },
         { $set: { status: 'Completed', razorpayPaymentId: String(razorpayPaymentId || '') } },
         { new: true },
     );

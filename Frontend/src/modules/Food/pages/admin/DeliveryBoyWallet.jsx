@@ -243,7 +243,7 @@ export default function DeliveryBoyWallet() {
               <table className="w-full min-w-[1000px]">
                 <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
-                    {["#", "Rider", `Cash in hand${service === "all" ? "" : ` (${svcLabel(service)})`}`, "Pending", "Limit", "Available", "Status", "Deposited", "Cash by service", "Pocket balance"].map((h) => (
+                    {["#", "Rider", `Cash in hand${service === "all" ? "" : ` (${svcLabel(service)})`}`, "Pending", "Limit", "Available", "Status", "Deposited", "Total collected by service", "Pocket balance"].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-700">{h}</th>
                     ))}
                   </tr>

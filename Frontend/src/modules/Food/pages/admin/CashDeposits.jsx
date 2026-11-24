@@ -24,7 +24,7 @@ export default function CashDeposits() {
       const res = await adminAPI.getCashDeposits(params)
       const d = res?.data?.data || {}
       setRows(d.deposits || [])
-      setMeta({ total: d.total || 0, totals: d.totals || null })
+      setMeta({ total: d.pagination?.total ?? d.total ?? 0, totals: d.totals || null })
     } catch (e) {
       toast.error(e?.response?.data?.message || "Failed to load cash deposits")
     } finally {
