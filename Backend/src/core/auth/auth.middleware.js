@@ -86,7 +86,7 @@ export const authMiddleware = (req, res, next) => {
                     return sendError(res, 401, 'User account is deactivated');
                 }
                 next();
-            }).catch(() => sendError(res, 401, 'Authentication failed'));
+            }).catch(() => sendError(res, 503, 'Service temporarily unavailable. Please retry.')); // not 401: a DB hiccup must not log the person out
             return;
         }
         if (decoded.role === 'RESTAURANT') {
@@ -95,7 +95,7 @@ export const authMiddleware = (req, res, next) => {
                     return sendError(res, 403, 'Restaurant account has been banned');
                 }
                 next();
-            }).catch(() => sendError(res, 401, 'Authentication failed'));
+            }).catch(() => sendError(res, 503, 'Service temporarily unavailable. Please retry.')); // not 401: a DB hiccup must not log the person out
             return;
         }
         return next();

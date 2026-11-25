@@ -260,6 +260,9 @@ const applySellerSessionUpgrade = (response) => {
   const accessToken = response?.data?.accessToken;
   if (!accessToken) return;
   localStorage.setItem("auth_seller", accessToken);
+  if (typeof response?.data?.refreshToken === "string" && response.data.refreshToken) {
+    localStorage.setItem("seller_refreshToken", response.data.refreshToken);
+  }
   window.dispatchEvent(new Event("sellerAuthChanged"));
 };
 

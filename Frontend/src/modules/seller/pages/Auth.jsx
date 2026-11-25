@@ -290,6 +290,10 @@ export default function SellerAuth() {
       if (!accessToken) {
         throw new Error("Login succeeded but no access token was returned");
       }
+      // Kept so an expired access token is renewed silently instead of logging the seller out.
+      if (typeof data?.refreshToken === "string" && data.refreshToken) {
+        localStorage.setItem("seller_refreshToken", data.refreshToken);
+      }
 
       // Drop another seller's half-filled onboarding draft before this session continues.
       const loginPhone =

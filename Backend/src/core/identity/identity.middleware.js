@@ -67,6 +67,7 @@ export const authenticateIdentity = (options = {}) => async (req, res, next) => 
 
     return next();
   } catch (error) {
-    return sendError(res, 401, 'Authentication failed');
+    // Not 401: a DB hiccup here is not an expired session and must not log the person out.
+    return sendError(res, 503, 'Service temporarily unavailable. Please retry.');
   }
 };

@@ -173,7 +173,7 @@ const optionalAuth = (req, res, next) => {
           next();
         })
         .catch(() =>
-          res.status(401).json({ success: false, message: "Authentication failed" }),
+          res.status(503).json({ success: false, message: "Service temporarily unavailable. Please retry." }),
         );
       return;
     }

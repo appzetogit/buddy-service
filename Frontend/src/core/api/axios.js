@@ -117,6 +117,31 @@ axiosInstance.interceptors.request.use(
     }
 );
 
+// Seller session renewal: one refresh at a time, shared by every request that hit 401 meanwhile.
+let sellerRefreshPromise = null;
+const refreshSellerSession = () => {
+    const refreshToken = localStorage.getItem('seller_refreshToken');
+    if (!refreshToken) return Promise.resolve({ token: null, transient: false });
+    if (!sellerRefreshPromise) {
+        const base = String(axiosInstance.defaults.baseURL || '/api/v1').replace(/\/$/, '');
+        sellerRefreshPromise = axios
+            .post(`${base}/food/auth/refresh-token`, { refreshToken }, { timeout: 10000 })
+            .then(({ data }) => {
+                const token = data?.data?.accessToken || data?.accessToken;
+                const next = data?.data?.refreshToken || data?.refreshToken;
+                if (!token) return { token: null, transient: false };
+                localStorage.setItem('auth_seller', token);
+                if (typeof next === 'string' && next) localStorage.setItem('seller_refreshToken', next);
+                window.dispatchEvent(new Event('sellerAuthChanged'));
+                return { token, transient: false };
+            })
+            // No response / timeout / 5xx / 429 = the server or network, not a dead session: keep the login.
+            .catch((err) => ({ token: null, transient: !err.response || err.response.status >= 500 || err.response.status === 429 || err.response.status === 408 }))
+            .finally(() => { sellerRefreshPromise = null; });
+    }
+    return sellerRefreshPromise;
+};
+
 // Response interceptor for API calls
 axiosInstance.interceptors.response.use(
     (response) => response,
@@ -129,6 +154,16 @@ axiosInstance.interceptors.response.use(
             // Skip redirect for authentication endpoints to allow components to handle invalid credentials/OTP
             if (requestUrl.includes('/auth/')) {
                 return Promise.reject(error);
+            }
+
+            // A seller whose access token ran out gets a new one silently and the request is retried.
+            if (window.location.pathname.startsWith('/seller') && localStorage.getItem('seller_refreshToken')) {
+                const { token, transient } = await refreshSellerSession();
+                if (token) {
+                    originalRequest.headers = { ...(originalRequest.headers || {}), Authorization: `Bearer ${token}` };
+                    return axiosInstance(originalRequest);
+                }
+                if (transient) return Promise.reject(error);
             }
 
             // Only reload when we had a token that's now invalid (expired/logged out elsewhere).
