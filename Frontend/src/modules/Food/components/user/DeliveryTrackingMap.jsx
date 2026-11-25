@@ -9,7 +9,7 @@ import {
 import io from 'socket.io-client';
 import { API_BASE_URL } from '@food/api/config';
 import bikeLogo from '@food/assets/bikelogo.png';
-import { riderMapIcon } from '@/shared/utils/riderMapIcon';
+import { riderMapIcon, riderIconRotates } from '@/shared/utils/riderMapIcon';
 import { subscribeOrderTracking } from '@food/realtimeTracking';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Navigation } from 'lucide-react';
@@ -569,7 +569,10 @@ const DeliveryTrackingMap = ({
         </OverlayView>
 
         {/* ── RIDER MARKER(S) — one per driver on dual orders ── */}
-        {riderMarkerList.map(([riderId, loc], idx) => (
+        {riderMarkerList.map(([riderId, loc], idx) => {
+          const riderIcon = riderMapIcon(order?.deliveryPartner || { vehicleType: order?.vehicleType });
+          const spin = riderIconRotates(riderIcon) ? (loc.heading || 0) : 0;
+          return (
           <OverlayView
             key={`rider-${riderId}`}
             position={loc}
@@ -577,14 +580,14 @@ const DeliveryTrackingMap = ({
           >
             <div
               style={{
-                transform: `translate(-50%, -50%) rotate(${loc.heading || 0}deg)`,
+                transform: `translate(-50%, -50%) rotate(${spin}deg)`,
                 transition: 'transform 0.2s linear',
                 willChange: 'transform',
               }}
               className="relative w-16 h-16"
             >
               <img
-                src={riderMapIcon(order?.deliveryPartner || { vehicleType: order?.vehicleType })}
+                src={riderIcon}
                 alt={`Rider ${idx + 1}`}
                 className="w-full h-full object-contain drop-shadow-2xl"
                 onError={(e) => { e.target.src = bikeLogo; }}
@@ -592,14 +595,15 @@ const DeliveryTrackingMap = ({
               {riderMarkerList.length > 1 && (
                 <span
                   className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#16A34A] text-white text-[10px] font-bold flex items-center justify-center shadow"
-                  style={{ transform: `rotate(-${loc.heading || 0}deg)` }}
+                  style={{ transform: `rotate(-${spin}deg)` }}
                 >
                   {idx + 1}
                 </span>
               )}
             </div>
           </OverlayView>
-        ))}
+          );
+        })}
       </GoogleMap>
 
       {/* LIVE ARRIVAL BADGE */}

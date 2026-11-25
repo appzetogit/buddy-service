@@ -10,7 +10,7 @@ import {
 } from '@react-google-maps/api';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { zoneAPI } from '@food/api';
-import { riderMapIcon, RIDER_MAP_FALLBACK } from '@/shared/utils/riderMapIcon';
+import { riderMapIcon, riderIconRotates, RIDER_MAP_FALLBACK } from '@/shared/utils/riderMapIcon';
 
 const mapContainerStyle = {
   width: '100%',
@@ -372,7 +372,7 @@ export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineRecei
 
         {parsedRiderLocation && (
           <OverlayView position={parsedRiderLocation} mapPaneName={OverlayView.MARKER_LAYER}>
-            <div style={{ transform: `translate(-50%, -50%) rotate(${parsedRiderLocation.heading || 0}deg)`, transition: 'transform 0.5s linear' }} className="relative w-[72px] h-[72px]">
+            <div style={{ transform: `translate(-50%, -50%) rotate(${riderIconRotates(riderIcon) ? (parsedRiderLocation.heading || 0) : 0}deg)`, transition: 'transform 0.5s linear' }} className="relative w-[72px] h-[72px]">
               <img src={riderIcon} alt="Rider" className="w-full h-full object-contain" onError={(e) => { if (!e.target.src.endsWith(RIDER_MAP_FALLBACK)) e.target.src = RIDER_MAP_FALLBACK; }} />
             </div>
           </OverlayView>

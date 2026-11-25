@@ -1,67 +1,51 @@
-// Clean top-view vehicle markers (all pointing up, rotated by the map with the rider's heading).
-// Drawn as SVG so they stay sharp at any size and need no image files.
-const G = '#16A34A'; // body
-const GD = '#0F7A37'; // darker edge
-const GL = '#34C46A'; // highlight
-const GLASS = '#1F2937';
-const SHADOW = '<ellipse cx="24" cy="52" rx="17" ry="44" fill="#000" opacity=".09"/>';
-const LIGHTS = (y1, y2, x1 = 12, x2 = 36) =>
-  `<rect x="${x1}" y="${y1}" width="6" height="3" rx="1.5" fill="#FDE047"/><rect x="${x2 - 6}" y="${y1}" width="6" height="3" rx="1.5" fill="#FDE047"/>` +
-  `<rect x="${x1}" y="${y2}" width="6" height="3" rx="1.5" fill="#EF4444"/><rect x="${x2 - 6}" y="${y2}" width="6" height="3" rx="1.5" fill="#EF4444"/>`;
-const WHEEL = (x, y, h = 14) => `<rect x="${x}" y="${y}" width="5" height="${h}" rx="2.5" fill="#111827"/>`;
+// Round badge with a bold side-view vehicle, readable at a glance (like Uber / Zomato map pins).
+// Drawn as SVG: sharp at any size, no image files. The badge stays upright (see riderIconRotates).
+const GREEN = '#16A34A';
+const wheel = (x, y, r = 5.5) =>
+  `<circle cx="${x}" cy="${y}" r="${r + 1.8}" fill="${GREEN}"/><circle cx="${x}" cy="${y}" r="${r}" fill="#fff"/><circle cx="${x}" cy="${y}" r="${r * 0.38}" fill="${GREEN}"/>`;
 
-const svg = (inner) =>
-  `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 100">${SHADOW}${inner}</svg>`)}`;
+const badge = (glyph) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="35" r="28" fill="#000" opacity=".18"/><circle cx="32" cy="32" r="29" fill="${GREEN}" stroke="#fff" stroke-width="3"/>${glyph}</svg>`,
+  )}`;
 
-const car = (wide = 0, long = 0) => {
-  const x = 8 - wide, w = 32 + wide * 2, y = 8 - long, h = 84 + long * 2;
-  return svg(
-    WHEEL(x - 2, y + 14) + WHEEL(x + w - 3, y + 14) + WHEEL(x - 2, y + h - 30) + WHEEL(x + w - 3, y + h - 30) +
-      `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="15" fill="${G}" stroke="${GD}" stroke-width="1.5"/>` +
-      `<path d="M${x + 5} ${y + 26} Q24 ${y + 17} ${x + w - 5} ${y + 26} L${x + w - 7} ${y + 38} L${x + 7} ${y + 38} Z" fill="${GLASS}"/>` +
-      `<rect x="${x + 5}" y="${y + 38}" width="${w - 10}" height="${h - 66 - long}" rx="6" fill="${GL}"/>` +
-      `<path d="M${x + 7} ${y + h - 28} L${x + w - 7} ${y + h - 28} L${x + w - 5} ${y + h - 20} Q24 ${y + h - 14} ${x + 5} ${y + h - 20} Z" fill="${GLASS}"/>` +
-      `<rect x="${x - 3}" y="${y + 30}" width="4" height="7" rx="2" fill="${GD}"/><rect x="${x + w - 1}" y="${y + 30}" width="4" height="7" rx="2" fill="${GD}"/>` +
-      LIGHTS(y + 3, y + h - 6, x + 3, x + w - 3),
-  );
-};
-
-const bike = (box = false) =>
-  svg(
-    `<rect x="21.5" y="6" width="5" height="26" rx="2.5" fill="#111827"/>` + // front wheel
-      `<rect x="21.5" y="66" width="5" height="26" rx="2.5" fill="#111827"/>` + // rear wheel
-      `<rect x="5" y="24" width="38" height="3.5" rx="1.75" fill="#374151"/>` + // handlebar
-      `<rect x="3" y="22.5" width="5" height="6.5" rx="2.5" fill="#111827"/><rect x="40" y="22.5" width="5" height="6.5" rx="2.5" fill="#111827"/>` +
-      `<path d="M16 30 Q24 24 32 30 L33 54 Q24 60 15 54 Z" fill="${G}" stroke="${GD}" stroke-width="1.5"/>` + // body
-      `<rect x="15" y="52" width="18" height="20" rx="7" fill="${GL}" stroke="${GD}" stroke-width="1.2"/>` + // seat
-      `<ellipse cx="24" cy="48" rx="9" ry="10" fill="${GLASS}"/>` + // rider body
-      `<circle cx="24" cy="41" r="7.5" fill="#F9FAFB" stroke="${GD}" stroke-width="1.5"/>` + // helmet
-      `<path d="M19.5 38.5 Q24 35.5 28.5 38.5 L28 41 L20 41 Z" fill="${GLASS}"/>` +
-      (box ? `<rect x="10" y="68" width="28" height="22" rx="4" fill="#F59E0B" stroke="#B45309" stroke-width="1.5"/><path d="M10 79 H38 M24 68 V90" stroke="#B45309" stroke-width="1.2"/>` : '') +
-      `<rect x="20" y="7" width="8" height="3" rx="1.5" fill="#FDE047"/>`,
+const scooter = (box) =>
+  badge(
+    `<circle cx="31" cy="15" r="5" fill="#fff"/>` + // helmet
+      `<path d="M27 21 L35 21 L38 31 L24 31 Z" fill="#fff"/>` + // rider
+      `<path d="M44 21 H50" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M46 22 L48 40" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>` + // handle + fork
+      `<path d="M14 36 Q14 31 20 31 H36 Q42 31 42 37 V40 H18 Q14 40 14 36 Z" fill="#fff"/>` + // body
+      (box ? `<rect x="6" y="20" width="14" height="12" rx="2" fill="#F59E0B" stroke="#fff" stroke-width="1.5"/><path d="M6 26 H20 M13 20 V32" stroke="#fff" stroke-width="1.3"/>` : '') +
+      wheel(18, 43) + wheel(46, 43),
   );
 
-const auto = () =>
-  svg(
-    WHEEL(21.5, 10, 12) + WHEEL(7, 66, 14) + WHEEL(36, 66, 14) +
-      `<path d="M24 6 Q36 6 37 26 L40 88 Q40 94 34 94 L14 94 Q8 94 8 88 L11 26 Q12 6 24 6 Z" fill="${G}" stroke="${GD}" stroke-width="1.5"/>` +
-      `<path d="M15 24 Q24 18 33 24 L34 36 L14 36 Z" fill="${GLASS}"/>` +
-      `<rect x="11" y="40" width="26" height="46" rx="6" fill="#FDE047" stroke="#CA8A04" stroke-width="1.2"/>` + // canopy
-      `<path d="M16 46 H32 M16 54 H32 M16 62 H32 M16 70 H32" stroke="#CA8A04" stroke-width="1"/>` +
-      `<rect x="20" y="7" width="8" height="3" rx="1.5" fill="#FDE047"/><rect x="14" y="90" width="6" height="3" rx="1.5" fill="#EF4444"/><rect x="28" y="90" width="6" height="3" rx="1.5" fill="#EF4444"/>`,
+const autoRickshaw = () =>
+  badge(
+    `<path d="M11 43 V26 Q11 17 21 17 H36 Q42 17 44 23 L51 34 Q53 37 53 43 Z" fill="#fff"/>` +
+      `<path d="M17 23 H30 V32 H17 Z M33 23 H38 L43 32 H33 Z" fill="${GREEN}"/>` +
+      `<rect x="11" y="13" width="26" height="4" rx="2" fill="#FDE047"/>` + // roof stripe
+      wheel(21, 44) + wheel(45, 44),
   );
 
-const truck = () =>
-  svg(
-    WHEEL(4, 14, 14) + WHEEL(39, 14, 14) + WHEEL(4, 68, 18) + WHEEL(39, 68, 18) +
-      `<rect x="8" y="4" width="32" height="28" rx="9" fill="${G}" stroke="${GD}" stroke-width="1.5"/>` + // cab
-      `<path d="M12 14 Q24 8 36 14 L36 22 L12 22 Z" fill="${GLASS}"/>` +
-      `<rect x="9" y="34" width="30" height="62" rx="4" fill="#F3F4F6" stroke="#9CA3AF" stroke-width="1.5"/>` + // cargo
-      `<path d="M9 50 H39 M9 66 H39 M9 82 H39" stroke="#D1D5DB" stroke-width="1.2"/><rect x="14" y="40" width="20" height="4" rx="2" fill="${G}"/>` +
-      `<rect x="12" y="5" width="6" height="3" rx="1.5" fill="#FDE047"/><rect x="30" y="5" width="6" height="3" rx="1.5" fill="#FDE047"/>`,
+const carSide = (suv) =>
+  badge(
+    `<path d="M9 40 V34 Q9 31 13 30 L20 28 L24 21 Q25 19 28 19 H${suv ? 42 : 38} Q41 19 43 21 L${suv ? 49 : 47} 28 L51 30 Q55 31 55 34 V40 Q55 42 53 42 H11 Q9 42 9 40 Z" fill="#fff"/>` +
+      `<path d="M25 28 L28 22 H33 V28 Z M36 28 V22 H${suv ? 41 : 39} L${suv ? 46 : 44} 28 Z" fill="${GREEN}"/>` +
+      wheel(20, 43, 5) + wheel(44, 43, 5),
   );
 
-const ICONS = { bike: bike(), parcel: bike(true), auto: auto(), car: car(), suv: car(2, 3), truck: truck() };
+const truckSide = () =>
+  badge(
+    `<rect x="8" y="17" width="29" height="23" rx="2.5" fill="#fff"/>` +
+      `<path d="M39 24 H47 L54 32 V40 H39 Z" fill="#fff"/><path d="M42 27 H46 L50 32 H42 Z" fill="${GREEN}"/>` +
+      `<rect x="13" y="23" width="19" height="5" rx="2" fill="${GREEN}"/>` +
+      wheel(17, 43, 5) + wheel(31, 43, 5) + wheel(47, 43, 5),
+  );
+
+const ICONS = { bike: scooter(false), parcel: scooter(true), auto: autoRickshaw(), car: carSide(false), suv: carSide(true), truck: truckSide() };
+
+/** Badges stay upright; only the old top-view pictures (admin URL / MapRider.png) turn with the heading. */
+export const riderIconRotates = (src) => !String(src || '').startsWith('data:image/svg+xml');
 
 const DEFAULT_ICON = '/MapRider.png';
 
