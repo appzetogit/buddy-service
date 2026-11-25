@@ -9,6 +9,7 @@ import {
 import io from 'socket.io-client';
 import { API_BASE_URL } from '@food/api/config';
 import bikeLogo from '@food/assets/bikelogo.png';
+import { riderMapIcon } from '@/shared/utils/riderMapIcon';
 import { subscribeOrderTracking } from '@food/realtimeTracking';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Navigation } from 'lucide-react';
@@ -583,7 +584,7 @@ const DeliveryTrackingMap = ({
               className="relative w-16 h-16"
             >
               <img
-                src="/MapRider.png"
+                src={riderMapIcon(order?.deliveryPartner || { vehicleType: order?.vehicleType })}
                 alt={`Rider ${idx + 1}`}
                 className="w-full h-full object-contain drop-shadow-2xl"
                 onError={(e) => { e.target.src = bikeLogo; }}

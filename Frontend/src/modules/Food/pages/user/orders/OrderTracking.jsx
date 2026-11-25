@@ -432,7 +432,9 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
         || '',
       avatar: (apiOrder.deliveryPartnerId || apiOrder.dispatch?.deliveryPartnerId)?.avatar
         || (apiOrder.deliveryPartnerId || apiOrder.dispatch?.deliveryPartnerId)?.profileImage
-        || null
+        || null,
+      // Drives the rider picture on the live map (bike / auto / car ...).
+      vehicleType: (apiOrder.deliveryPartnerId || apiOrder.dispatch?.deliveryPartnerId)?.vehicleType || '',
     } : (previousOrder?.deliveryPartner || null),
     deliveryPartnerId: apiOrder?.deliveryPartnerId?._id || apiOrder?.deliveryPartnerId || apiOrder?.dispatch?.deliveryPartnerId?._id || apiOrder?.dispatch?.deliveryPartnerId || apiOrder?.assignmentInfo?.deliveryPartnerId || null,
     // Dual-driver partners for customer UI (reuse same shape as deliveryPartner)

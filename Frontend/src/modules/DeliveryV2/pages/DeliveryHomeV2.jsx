@@ -1496,6 +1496,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
             {isOnline && (
               <div className="absolute inset-0">
                 <LiveMap
+                  riderProfile={riderProfile}
                   onMapLoad={(m) => mapRef.current = m}
                   onMapClick={handleMapClick}
                   onPathReceived={setSimPath}

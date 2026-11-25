@@ -160,6 +160,7 @@ export const buildRideJob = async (ride, { riderPosition = null, partnerId = nul
       parcel: raw.parcel || null,
       stops: raw.stops || [],
       vehicleIconType: raw.vehicleIconType || '',
+      vehicleIconUrl: raw.vehicleIconUrl || '',
       pickupAddress: raw.pickupAddress || '',
       dropAddress: raw.dropAddress || '',
       acceptedAt: raw.acceptedAt || null,

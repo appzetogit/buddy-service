@@ -10,6 +10,7 @@ import {
 } from '@react-google-maps/api';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { zoneAPI } from '@food/api';
+import { riderMapIcon, RIDER_MAP_FALLBACK } from '@/shared/utils/riderMapIcon';
 
 const mapContainerStyle = {
   width: '100%',
@@ -40,8 +41,15 @@ const mapOptions = {
 };
 const LIBRARIES = ['places', 'geometry', 'drawing'];
 
-export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineReceived, zoom = 12 }) => {
+export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineReceived, zoom = 12, riderProfile = null }) => {
   const { riderLocation, activeOrder, tripStatus } = useDeliveryStore();
+  // Taxi job: the taxi vehicle the ride asked for; Food / Marketplace: the vehicle the rider delivers on.
+  const riderIcon = useMemo(() => {
+    const taxiJob = activeOrder && (activeOrder.orderKind === 'taxi' || activeOrder.serviceType === 'ride' || activeOrder.vehicleIconType);
+    if (taxiJob && (activeOrder.vehicleIconUrl || activeOrder.vehicleIconType)) return riderMapIcon(activeOrder, { parcel: activeOrder.serviceType === 'parcel' });
+    const own = riderProfile || (() => { try { return JSON.parse(localStorage.getItem('delivery_user') || '{}'); } catch { return {}; } })();
+    return riderMapIcon({ vehicleType: own?.vehicleType });
+  }, [activeOrder, riderProfile]);
   const showRoute = Boolean(
     activeOrder &&
     tripStatus !== 'COMPLETED' &&
@@ -365,7 +373,7 @@ export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineRecei
         {parsedRiderLocation && (
           <OverlayView position={parsedRiderLocation} mapPaneName={OverlayView.MARKER_LAYER}>
             <div style={{ transform: `translate(-50%, -50%) rotate(${parsedRiderLocation.heading || 0}deg)`, transition: 'transform 0.5s linear' }} className="relative w-[72px] h-[72px]">
-              <img src="/MapRider.png" alt="Rider" className="w-full h-full object-contain" />
+              <img src={riderIcon} alt="Rider" className="w-full h-full object-contain" onError={(e) => { if (!e.target.src.endsWith(RIDER_MAP_FALLBACK)) e.target.src = RIDER_MAP_FALLBACK; }} />
             </div>
           </OverlayView>
         )}
