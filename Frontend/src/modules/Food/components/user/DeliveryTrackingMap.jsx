@@ -570,7 +570,7 @@ const DeliveryTrackingMap = ({
 
         {/* ── RIDER MARKER(S) — one per driver on dual orders ── */}
         {riderMarkerList.map(([riderId, loc], idx) => {
-          const riderIcon = riderMapIcon(order?.deliveryPartner || { vehicleType: order?.vehicleType });
+          const riderIcon = riderMapIcon(order?.deliveryPartner || { vehicleType: order?.vehicleType }, { parcel: true });
           const spin = riderIconRotates(riderIcon) ? (loc.heading || 0) : 0;
           return (
           <OverlayView

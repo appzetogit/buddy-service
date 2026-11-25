@@ -48,7 +48,7 @@ export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineRecei
     const taxiJob = activeOrder && (activeOrder.orderKind === 'taxi' || activeOrder.serviceType === 'ride' || activeOrder.vehicleIconType);
     if (taxiJob && (activeOrder.vehicleIconUrl || activeOrder.vehicleIconType)) return riderMapIcon(activeOrder, { parcel: activeOrder.serviceType === 'parcel' });
     const own = riderProfile || (() => { try { return JSON.parse(localStorage.getItem('delivery_user') || '{}'); } catch { return {}; } })();
-    return riderMapIcon({ vehicleType: own?.vehicleType });
+    return riderMapIcon({ vehicleType: own?.vehicleType }, { parcel: true }); // Food / Marketplace: delivery scooter
   }, [activeOrder, riderProfile]);
   const showRoute = Boolean(
     activeOrder &&
