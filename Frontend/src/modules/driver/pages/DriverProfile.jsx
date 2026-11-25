@@ -22,6 +22,7 @@ import {
   History,
   Info,
   Landmark,
+  Car,
   Loader2,
   LogOut,
   MapPin,
