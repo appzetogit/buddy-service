@@ -48,9 +48,18 @@ export const createOrUpdateOtp = async (phone) => {
     }
 
     const demoOtp = demoOtpFor(phone);
+    // A resend while the last code is still valid sends the SAME code again. WhatsApp delivery is
+    // sometimes slow; with a fresh code each time, the late message held an already-replaced OTP.
+    const reusable =
+        existing &&
+        existing.otp &&
+        existing.expiresAt > new Date(now.getTime() + 60 * 1000) &&
+        existing.attempts < (config.otpMaxAttempts || 5);
     let otp;
     if (demoOtp) {
         otp = demoOtp;
+    } else if (reusable) {
+        otp = existing.otp;
     } else if (config.useDefaultOtp) {
         otp = '1234';
         logger.info(`Default OTP mode enabled – OTP is ${otp} for phone ${phone}`);
@@ -72,7 +81,7 @@ export const createOrUpdateOtp = async (phone) => {
     if (existing) {
         existing.otp = otp;
         existing.expiresAt = expiresAt;
-        existing.attempts = 0;
+        if (!reusable) existing.attempts = 0; // a re-sent code keeps its wrong-attempt count
         existing.lastRequestAt = now;
         await existing.save();
     } else {
@@ -87,8 +96,9 @@ export const createOrUpdateOtp = async (phone) => {
 
     // USE_DEFAULT_OTP=true -> fixed 1234, nothing sent. Otherwise the OTP goes out on WhatsApp.
     // Failure is logged, not thrown: the OTP is already stored and the user can resend.
+    // Sent in the background: the provider can take 10-20 s, and the app should show "OTP sent" at once.
     if (!config.useDefaultOtp && !demoOtp) {
-        await sendWhatsappOtp(phone, otp);
+        void sendWhatsappOtp(phone, otp).catch(() => {});
     }
 
     return otp;

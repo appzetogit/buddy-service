@@ -32,16 +32,23 @@ const callBhash = async ({ phone, template, params, stype }) => {
     // shortcut: a comma inside a param would split it into two; names/ids/statuses here never contain one.
     url.searchParams.set('Params', params.map((p) => String(p ?? '').replace(/[,\r\n]+/g, ' ').trim()).join(','));
 
-    try {
-        const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-        const body = (await res.text()).trim();
-        const ok = res.ok && !/error|invalid|fail|unauthor|reject|blank|not\s*approved|incorrect|deactivated|insufficient|no\s+sufficient|credit|balance/i.test(body);
-        if (!ok) logger.error(`[WhatsApp] ${template} to ${to} rejected: ${res.status} ${body.slice(0, 200)}`);
-        return ok;
-    } catch (error) {
-        logger.error(`[WhatsApp] ${template} to ${to} failed: ${error.message}`);
-        return false;
+    // The provider is sometimes slow (10 s+): wait up to 25 s, and retry once if the connection
+    // itself failed. A provider rejection (bad template, no credit...) is not retried.
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+        const started = Date.now();
+        try {
+            const res = await fetch(url, { signal: AbortSignal.timeout(25000) });
+            const body = (await res.text()).trim();
+            const ok = res.ok && !/error|invalid|fail|unauthor|reject|blank|not\s*approved|incorrect|deactivated|insufficient|no\s+sufficient|credit|balance/i.test(body);
+            if (!ok) logger.error(`[WhatsApp] ${template} to ${to} rejected: ${res.status} ${body.slice(0, 200)}`);
+            else if (Date.now() - started > 8000) logger.warn(`[WhatsApp] ${template} to ${to} slow provider: ${Date.now() - started} ms`);
+            return ok;
+        } catch (error) {
+            logger.error(`[WhatsApp] ${template} to ${to} failed (try ${attempt}, ${Date.now() - started} ms): ${error.message}`);
+            if (error?.name === 'TimeoutError' || attempt === 2) return false; // a timed-out call may still be delivered; don't send twice
+        }
     }
+    return false;
 };
 
 export const sendWhatsappOtp = (phone, otp) =>
