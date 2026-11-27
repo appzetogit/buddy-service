@@ -1,3 +1,4 @@
+import https from 'node:https';
 import { config } from '../config/env.js';
 import { logger } from './logger.js';
 
@@ -32,24 +33,52 @@ const callBhash = async ({ phone, template, params, stype }) => {
     // shortcut: a comma inside a param would split it into two; names/ids/statuses here never contain one.
     url.searchParams.set('Params', params.map((p) => String(p ?? '').replace(/[,\r\n]+/g, ' ').trim()).join(','));
 
-    // The provider is sometimes slow (10 s+): wait up to 25 s, and retry once if the connection
-    // itself failed. A provider rejection (bad template, no credit...) is not retried.
+    // BhashSMS takes 5-10 s to open a NEW connection (TLS), then answers in under a second. Node's
+    // fetch gives up on a connection after 10 s ("fetch failed"), so the OTP was often never sent.
+    // Plain https waits up to 30 s, and the keep-alive agent reuses an open connection (the provider
+    // keeps it 5 s), so back-to-back messages are fast. One retry if the connection itself fails.
     for (let attempt = 1; attempt <= 2; attempt += 1) {
         const started = Date.now();
         try {
-            const res = await fetch(url, { signal: AbortSignal.timeout(25000) });
-            const body = (await res.text()).trim();
-            const ok = res.ok && !/error|invalid|fail|unauthor|reject|blank|not\s*approved|incorrect|deactivated|insufficient|no\s+sufficient|credit|balance/i.test(body);
-            if (!ok) logger.error(`[WhatsApp] ${template} to ${to} rejected: ${res.status} ${body.slice(0, 200)}`);
+            const { status, body } = await httpsGet(url, 30000);
+            const ok = status >= 200 && status < 300 && !/error|invalid|fail|unauthor|reject|blank|not\s*approved|incorrect|deactivated|insufficient|no\s+sufficient|credit|balance/i.test(body);
+            if (!ok) logger.error(`[WhatsApp] ${template} to ${to} rejected: ${status} ${body.slice(0, 200)}`);
             else if (Date.now() - started > 8000) logger.warn(`[WhatsApp] ${template} to ${to} slow provider: ${Date.now() - started} ms`);
             return ok;
         } catch (error) {
             logger.error(`[WhatsApp] ${template} to ${to} failed (try ${attempt}, ${Date.now() - started} ms): ${error.message}`);
-            if (error?.name === 'TimeoutError' || attempt === 2) return false; // a timed-out call may still be delivered; don't send twice
+            // A timeout after the request went out may still be delivered: don't send it twice.
+            if (error?.code === 'REQUEST_TIMEOUT' || attempt === 2) return false;
         }
     }
     return false;
 };
+
+const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
+
+/** GET over a reusable connection. Resolves { status, body }; rejects on a network error or timeout. */
+const httpsGet = (url, timeoutMs) =>
+    new Promise((resolve, reject) => {
+        const req = https.get(url, { agent: keepAliveAgent }, (res) => {
+            let body = '';
+            res.setEncoding('utf8');
+            res.on('data', (chunk) => { body += chunk; });
+            res.on('end', () => resolve({ status: res.statusCode || 0, body: body.trim() }));
+            res.on('error', reject);
+        });
+        // Connected = the request reached the provider; a timeout after that is not retried.
+        let connected = false;
+        req.on('socket', (socket) => {
+            if (!socket.connecting) connected = true;
+            else socket.once('secureConnect', () => { connected = true; });
+        });
+        req.setTimeout(timeoutMs, () => {
+            const err = new Error(`no answer in ${timeoutMs} ms`);
+            err.code = connected ? 'REQUEST_TIMEOUT' : 'CONNECT_TIMEOUT';
+            req.destroy(err);
+        });
+        req.on('error', reject);
+    });
 
 export const sendWhatsappOtp = (phone, otp) =>
     callBhash({ phone, template: config.whatsapp.otpTemplate, params: [otp], stype: 'auth' });
