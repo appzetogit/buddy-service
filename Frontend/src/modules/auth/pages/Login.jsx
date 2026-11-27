@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react"
+import { warmOtpChannel } from "@/shared/utils/warmOtp"
 import { motion, AnimatePresence } from "framer-motion"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import {
@@ -49,6 +50,9 @@ export default function UnifiedOTPFastLogin() {
   const navigate = useNavigate()
   const loginLocation = useLocation()
   const submitting = useRef(false)
+
+  // Login screen open: let the server get the WhatsApp OTP connection ready (faster OTP).
+  useEffect(() => { warmOtpChannel(); }, []);
 
   useEffect(() => {
     try {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { warmOtpChannel } from "@/shared/utils/warmOtp";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -35,6 +36,9 @@ export default function DriverLogin() {
   const navigate = useNavigate();
   const location = useLocation();
   const intendedRedirect = String(location.state?.redirect || "");
+
+  // Login screen open: let the server get the WhatsApp OTP connection ready (faster OTP).
+  useEffect(() => { warmOtpChannel(); }, []);
 
   useEffect(() => {
     try {
