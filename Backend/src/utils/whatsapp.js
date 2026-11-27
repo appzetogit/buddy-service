@@ -80,6 +80,32 @@ const httpsGet = (url, timeoutMs) =>
         req.on('error', reject);
     });
 
+/**
+ * Keeps one connection to BhashSMS open while someone is on a login screen, so "Send OTP" goes out
+ * over a ready connection (~0.5 s) instead of paying the provider's 5-10 s connection setup.
+ * The provider closes idle connections after 5 s, so a light request is made every 4 s until
+ * WARM_WINDOW_MS after the last login screen asked for it. One loop for the whole server.
+ */
+const WARM_WINDOW_MS = 3 * 60 * 1000;
+let warmUntil = 0;
+let warmTimer = null;
+export const warmWhatsappConnection = () => {
+    if (!isWhatsappConfigured()) return;
+    warmUntil = Date.now() + WARM_WINDOW_MS;
+    if (warmTimer) return;
+    const ping = () => {
+        if (Date.now() > warmUntil) {
+            warmTimer = null;
+            return;
+        }
+        // No credentials: the provider answers with an error page, which is all that is needed.
+        httpsGet(new URL(config.whatsapp.baseUrl), 30000)
+            .catch(() => {})
+            .finally(() => { warmTimer = setTimeout(ping, 4000); });
+    };
+    warmTimer = setTimeout(ping, 0);
+};
+
 export const sendWhatsappOtp = (phone, otp) =>
     callBhash({ phone, template: config.whatsapp.otpTemplate, params: [otp], stype: 'auth' });
 

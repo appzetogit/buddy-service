@@ -1,3 +1,4 @@
+import { warmWhatsappConnection } from '../utils/whatsapp.js';
 import express from 'express';
 import authRoutes from '../core/auth/auth.routes.js';
 import deliveryRoutes from '../modules/food/delivery/routes/delivery.routes.js';
@@ -98,6 +99,8 @@ router.use('/v1/quick-commerce', quickCommerceRoutes);
 router.use('/v1/seller', quickCommerceSellerRoutes);
 router.use('/v1/common/onboarding-fees', commonOnboardingFeeRoutes);
 router.use('/v1/common/maps', commonMapsRoutes);
+// A login screen opened: get the WhatsApp OTP connection ready (public, cheap, one shared loop).
+router.post('/v1/common/otp/warm', (req, res) => { warmWhatsappConnection(); res.json({ success: true }); });
 router.use('/v1/common/home-config', homeConfigPublicRouter);
 router.use('/v1/common/payment-options', codPublicRouter);
 router.use('/v1/common/admin/cod-settings', authMiddleware, requireRoles('ADMIN'), adminAccessGuard, codAdminRouter);

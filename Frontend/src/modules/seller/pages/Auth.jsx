@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
+import { warmOtpChannel } from "@/shared/utils/warmOtp";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, ShieldCheck, Store, KeyRound, X, ShieldAlert } from "lucide-react";
@@ -110,6 +111,9 @@ export default function SellerAuth() {
   ];
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [generatedOtp, setGeneratedOtp] = useState(null);
+
+  // Login screen open: let the server get the WhatsApp OTP connection ready (faster OTP).
+  useEffect(() => { warmOtpChannel(); }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
