@@ -23,64 +23,42 @@ const box = (x, y, s, rot = 0) => (
   </g>
 );
 
+const DEFS = (
+  <defs>
+    <linearGradient id="slBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stopColor="#064E24" />
+      <stop offset=".5" stopColor="#15803D" />
+      <stop offset="1" stopColor="#22C55E" />
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stopColor="#fff" stopOpacity=".28" />
+      <stop offset=".55" stopColor="#fff" stopOpacity="0" />
+    </linearGradient>
+    <pattern id="slDots" width="30" height="30" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.6" fill="#fff" fillOpacity=".28" />
+    </pattern>
+    <filter id="slBlur" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="14" floodColor="#022c12" floodOpacity=".35" />
+    </filter>
+  </defs>
+);
+
 export default function SellerLoginArt({ className = "" }) {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 800 900"
-      preserveAspectRatio="xMidYMax slice"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient id="slBg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#064E24" />
-          <stop offset=".5" stopColor="#15803D" />
-          <stop offset="1" stopColor="#22C55E" />
-        </linearGradient>
-        <linearGradient id="shine" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#fff" stopOpacity=".28" />
-          <stop offset=".55" stopColor="#fff" stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id="slGlass" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#fff" stopOpacity=".28" />
-          <stop offset="1" stopColor="#fff" stopOpacity=".1" />
-        </linearGradient>
-        <pattern id="slDots" width="30" height="30" patternUnits="userSpaceOnUse">
-          <circle cx="2" cy="2" r="1.6" fill="#fff" fillOpacity=".28" />
-        </pattern>
-        <filter id="slBlur" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="14" stdDeviation="14" floodColor="#022c12" floodOpacity=".35" />
-        </filter>
-      </defs>
+    <div className={className}>
+      {/* background: fills the whole panel */}
+      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 800 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        {DEFS}
+        <rect width="800" height="900" fill="url(#slBg)" />
+        <rect width="800" height="560" fill="url(#slDots)" />
+        <circle cx="710" cy="110" r="270" fill="#fff" fillOpacity=".07" />
+        <circle cx="60" cy="780" r="320" fill="#fff" fillOpacity=".06" />
+        <circle cx="430" cy="420" r="230" fill="#BBF7D0" fillOpacity=".07" />
+      </svg>
+      {/* illustration: bottom 40% of the panel, desktop only (on a phone it would sit behind the company name) */}
+      <svg className="absolute bottom-0 left-0 hidden h-[40%] w-full lg:block" viewBox="60 440 700 440" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        {DEFS}
 
-      <rect width="800" height="900" fill="url(#slBg)" />
-      <rect width="800" height="520" fill="url(#slDots)" />
-      <circle cx="710" cy="110" r="270" fill="#fff" fillOpacity=".07" />
-      <circle cx="60" cy="780" r="320" fill="#fff" fillOpacity=".06" />
-      <circle cx="430" cy="420" r="230" fill="#BBF7D0" fillOpacity=".07" />
-
-      {/* illustration: desktop only (on a phone it would sit behind the company name) */}
-      <g className="max-lg:hidden">
-      {/* floating dashboard cards */}
-      <g filter="url(#slBlur)">
-        <rect x="70" y="120" width="236" height="104" rx="22" fill="url(#slGlass)" stroke="#fff" strokeOpacity=".45" />
-        <text x="94" y="156" fill="#fff" fillOpacity=".85" fontSize="15" fontWeight="600">Today&apos;s sales</text>
-        <text x="94" y="196" fill="#fff" fontSize="30" fontWeight="800">₹ 24,580</text>
-        <g fill="#fff" fillOpacity=".85">
-          <rect x="226" y="176" width="9" height="22" rx="3" />
-          <rect x="241" y="164" width="9" height="34" rx="3" />
-          <rect x="256" y="170" width="9" height="28" rx="3" />
-          <rect x="271" y="150" width="9" height="48" rx="3" />
-        </g>
-      </g>
-      <g filter="url(#slBlur)">
-        <rect x="498" y="214" width="226" height="82" rx="22" fill="url(#slGlass)" stroke="#fff" strokeOpacity=".45" />
-        <circle cx="540" cy="255" r="20" fill="#fff" />
-        <path d="M531 255.5 l7 7 l13-14.5" fill="none" stroke="#16A34A" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-        <text x="572" y="249" fill="#fff" fontSize="16" fontWeight="800">New order</text>
-        <text x="572" y="273" fill="#fff" fillOpacity=".85" fontSize="14" fontWeight="500">#1024 · 3 items</text>
-      </g>
 
       {/* storefront */}
       <ellipse cx="400" cy="858" rx="300" ry="26" fill="#022c12" fillOpacity=".28" />
@@ -114,11 +92,11 @@ export default function SellerLoginArt({ className = "" }) {
       {box(120, 574, 1.05, -8)}
       {box(628, 514, 0.8, 10)}
       <g filter="url(#slBlur)">
-        <circle cx="590" cy="400" r="40" fill="#FDE047" />
-        <circle cx="590" cy="400" r="31" fill="none" stroke="#CA8A04" strokeOpacity=".6" strokeWidth="3" />
-        <text x="590" y="413" textAnchor="middle" fill="#A16207" fontSize="36" fontWeight="800">₹</text>
+        <circle cx="600" cy="492" r="40" fill="#FDE047" />
+        <circle cx="600" cy="492" r="31" fill="none" stroke="#CA8A04" strokeOpacity=".6" strokeWidth="3" />
+        <text x="600" y="505" textAnchor="middle" fill="#A16207" fontSize="36" fontWeight="800">₹</text>
       </g>
-      </g>
-    </svg>
+      </svg>
+    </div>
   );
 }

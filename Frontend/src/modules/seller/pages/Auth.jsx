@@ -427,7 +427,7 @@ export default function SellerAuth() {
   return (
     <div className="min-h-screen bg-white flex flex-col lg:flex-row pt-0 sm:pt-0 font-sans">
       {/* Top Banner section with Image Slider and Curve */}
-      <div className="w-full lg:w-1/2 relative h-[350px] md:h-[450px] lg:h-screen flex flex-col items-center justify-center text-center text-white lg:shadow-2xl z-10">
+      <div className="w-full lg:w-1/2 relative h-[350px] md:h-[450px] lg:h-screen flex flex-col items-center justify-center lg:justify-start lg:pt-[9vh] text-center text-white lg:shadow-2xl z-10">
         {/* Brand-green illustrated background (photo slider below is kept, switched off) */}
         {!USE_PHOTO_SLIDER && <SellerLoginArt className="absolute inset-0 h-full w-full" />}
         {/* Background Image Slider */}
@@ -454,7 +454,7 @@ export default function SellerAuth() {
           </button>
         )}
 
-        <div className="relative z-10 flex flex-col items-center mt-[-40px]">
+        <div className="relative z-10 flex flex-col items-center mt-[-40px] lg:mt-0">
           <motion.div 
             animate={{ rotate: currentImageIndex * 360 }}
             transition={{ duration: 0.8, ease: "easeInOut" }}
