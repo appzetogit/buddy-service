@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Search, Send, Settings, Plus, X, ArrowLeft, MessageSquare, Loader2 } from "lucide-react"
-import { adminChatApi, errMsg, fmtTime, isChatOpen, newClientId, useChatSocket } from "../../../../shared/supportChat/chatCore"
+import { adminChatApi, errMsg, fmt12, fmtTime, isChatOpen, newClientId, useChatSocket } from "../../../../shared/supportChat/chatCore"
 
 const TABS = [
   { key: "", label: "All" },
@@ -156,12 +156,13 @@ export default function Chattings() {
           {/* ───── list ───── */}
           <div className={`${selectedId ? "hidden lg:flex" : "flex"} flex-col border-r border-slate-200`}>
             <div className="space-y-3 border-b border-slate-200 p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <h1 className="text-xl font-bold text-slate-900">Chats</h1>
                 <div className="flex items-center gap-1">
-                  <span className={`mr-1 rounded-full px-2 py-0.5 text-xs font-medium ${open ? "bg-green-100 text-green-700" : "bg-slate-200 text-slate-600"}`}>
-                    {open ? "Open" : "Closed"}{status ? ` · ${status.startTime}–${status.endTime}` : ""}
-                  </span>
+                  <button onClick={() => setShowSettings(true)} title="Change chat hours"
+                    className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${open ? "bg-green-100 text-green-700" : "bg-slate-200 text-slate-600"}`}>
+                    {open ? "Open" : "Closed"}{status ? ` · ${fmt12(status.startTime)} – ${fmt12(status.endTime)}` : ""}
+                  </button>
                   <button onClick={() => setShowNew(true)} title="New chat" className="rounded-lg p-2 hover:bg-slate-100"><Plus className="h-4 w-4" /></button>
                   <button onClick={() => setShowSettings(true)} title="Chat hours" className="rounded-lg p-2 hover:bg-slate-100"><Settings className="h-4 w-4" /></button>
                 </div>
@@ -171,17 +172,19 @@ export default function Chattings() {
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or phone"
                   className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
               </div>
-              <div className="flex flex-wrap items-center gap-1">
-                {TABS.map((t) => (
-                  <button key={t.key} onClick={() => setTab(t.key)}
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${tab === t.key ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
-                    {t.label}
-                  </button>
-                ))}
-                <label className="ml-auto flex items-center gap-1 text-xs text-slate-600">
-                  <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} /> Unread
-                </label>
+              <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="flex w-max items-center gap-1.5">
+                  {TABS.map((t) => (
+                    <button key={t.key} onClick={() => setTab(t.key)}
+                      className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${tab === t.key ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
+              <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-slate-600">
+                <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} className="h-3.5 w-3.5 rounded border-slate-300" /> Show unread only
+              </label>
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -305,8 +308,8 @@ function SettingsModal({ initial, onClose, onSaved }) {
       <div className="space-y-4 text-sm">
         <label className="flex items-center gap-2"><input type="checkbox" checked={f.enabled} onChange={(e) => setF({ ...f, enabled: e.target.checked })} /> Chat enabled (turn off to close for everyone)</label>
         <div className="grid grid-cols-2 gap-3">
-          <label className="block">Start<input type="time" value={f.startTime} onChange={(e) => setF({ ...f, startTime: e.target.value })} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" /></label>
-          <label className="block">End<input type="time" value={f.endTime} onChange={(e) => setF({ ...f, endTime: e.target.value })} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" /></label>
+          <div>Start<TimeSelect12 value={f.startTime} onChange={(v) => setF({ ...f, startTime: v })} /></div>
+          <div>End<TimeSelect12 value={f.endTime} onChange={(v) => setF({ ...f, endTime: v })} /></div>
         </div>
         <div>
           Days
@@ -322,6 +325,29 @@ function SettingsModal({ initial, onClose, onSaved }) {
         <button onClick={save} disabled={saving} className="w-full rounded-lg bg-blue-600 py-2 text-white disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
       </div>
     </Modal>
+  )
+}
+
+/** 12-hour picker (hour / minute / AM-PM) that stores "HH:mm" 24h, regardless of the browser's locale. */
+function TimeSelect12({ value, onChange }) {
+  const [h24, m] = value.split(":").map(Number)
+  const pm = h24 >= 12
+  const h12 = h24 % 12 || 12
+  const set = (nh12, nm, npm) => onChange(`${String((nh12 % 12) + (npm ? 12 : 0)).padStart(2, "0")}:${String(nm).padStart(2, "0")}`)
+  const cls = "rounded border border-slate-300 px-1.5 py-1.5"
+  return (
+    <div className="mt-1 flex items-center gap-1">
+      <select value={h12} onChange={(e) => set(Number(e.target.value), m, pm)} className={cls}>
+        {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+      </select>
+      <span>:</span>
+      <select value={m} onChange={(e) => set(h12, Number(e.target.value), pm)} className={cls}>
+        {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 59].map((n) => <option key={n} value={n}>{String(n).padStart(2, "0")}</option>)}
+      </select>
+      <select value={pm ? "PM" : "AM"} onChange={(e) => set(h12, m, e.target.value === "PM")} className={cls}>
+        <option>AM</option><option>PM</option>
+      </select>
+    </div>
   )
 }
 

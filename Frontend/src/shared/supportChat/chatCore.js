@@ -65,6 +65,12 @@ export function isChatOpen(s, now = new Date()) {
   return (cur >= start && s.days.includes(day)) || (cur < end && s.days.includes((day + 6) % 7));
 }
 
+/** "14:30" -> "2:30 PM" (server keeps 24h HH:mm; people read 12h). */
+export const fmt12 = (hhmm) => {
+  const [h, m] = String(hhmm || "00:00").split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+};
+
 export const fmtTime = (d) => {
   try { return new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch { return ""; }
 };

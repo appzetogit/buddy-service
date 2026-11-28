@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Send, Clock, Loader2 } from "lucide-react";
-import { chatApi, errMsg, fmtTime, isChatOpen, newClientId, useChatSocket } from "./chatCore";
+import { chatApi, errMsg, fmt12, fmtTime, isChatOpen, newClientId, useChatSocket } from "./chatCore";
 
 /** Add/replace by id or clientId so socket echo + HTTP response + refetch never duplicate a bubble. */
 const upsert = (list, m) => {
@@ -135,7 +135,7 @@ export default function SupportChatScreen({ module, title = "Chat with Admin" })
           {status && (
             <p className="flex items-center gap-1 text-xs text-slate-500">
               <span className={`h-2 w-2 rounded-full ${open ? "bg-green-500" : "bg-slate-400"}`} />
-              {open ? "Open" : "Closed"} · {status.startTime}–{status.endTime}
+              {open ? "Open" : "Closed"} · {fmt12(status.startTime)} – {fmt12(status.endTime)}
             </p>
           )}
         </div>
@@ -170,7 +170,7 @@ export default function SupportChatScreen({ module, title = "Chat with Admin" })
       {status && !open && (
         <div className="flex items-start gap-2 border-t bg-amber-50 px-4 py-2 text-xs text-amber-800">
           <Clock className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{status.enabled ? `${status.closedMessage} Chat hours: ${status.startTime}–${status.endTime}.` : status.closedMessage}</span>
+          <span>{status.enabled ? `${status.closedMessage} Chat hours: ${fmt12(status.startTime)} – ${fmt12(status.endTime)}.` : status.closedMessage}</span>
         </div>
       )}
       {error && <div className="bg-red-50 px-4 py-2 text-xs text-red-700">{error}</div>}
