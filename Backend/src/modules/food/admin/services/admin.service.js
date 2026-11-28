@@ -6287,7 +6287,7 @@ export async function rejectDeliveryPartnerAllServices(id, reason) {
 export async function deleteDeliveryPartner(id) {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
     const { deleteDeliveryAccount } = await import('../../delivery/services/deleteAccount.service.js');
-    return await deleteDeliveryAccount(id);
+    return await deleteDeliveryAccount(id, { source: 'admin', reason: 'Deleted by admin' });
 }
 
 // ----- Zones CRUD -----

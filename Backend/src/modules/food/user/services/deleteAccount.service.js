@@ -10,7 +10,7 @@ import { AccountDeletion } from '../../admin/models/accountDeletion.model.js';
  * 3. Delete user-specific data (wallet, tickets, addresses, etc.)
  * 4. Delete the user document itself
  */
-export async function deleteUserAccount(userId) {
+export async function deleteUserAccount(userId, opts = {}) {
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -63,7 +63,9 @@ export async function deleteUserAccount(userId) {
                         walletBalance,
                         pendingRefunds: stats.pendingRefunds
                     },
-                    orderCount: stats.count
+                    orderCount: stats.count,
+                    source: opts.source === 'admin' ? 'admin' : 'self',
+                    reason: String(opts.reason || '').slice(0, 300)
                 }
             ],
             { session }
@@ -123,7 +125,7 @@ export async function deleteUserAccount(userId) {
         await FoodUser.deleteOne({ _id: userId }, { session });
 
         await session.commitTransaction();
-        return { success: true, message: 'Account deleted successfully' };
+        return { success: true, message: 'Account deleted successfully', deleted: { name: user.name || '', phone: user.phone || '' } };
     } catch (error) {
         await session.abortTransaction();
         throw error;

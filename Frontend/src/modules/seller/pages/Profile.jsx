@@ -146,6 +146,7 @@ const SellerProfile = () => {
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
   const [uploadingImageKey, setUploadingImageKey] = useState(null);
   const [zones, setZones] = useState([]);
   const [zonesLoading, setZonesLoading] = useState(true);
@@ -455,7 +456,7 @@ const SellerProfile = () => {
     if (isDeleting) return;
     setIsDeleting(true);
     try {
-      await sellerApi.deleteAccount();
+      await sellerApi.deleteAccount(deleteReason.trim());
       clearModuleAuth("seller");
       toast.success("Account deleted successfully");
       window.location.href = "/seller/auth";
@@ -970,6 +971,14 @@ const SellerProfile = () => {
             <p className="text-xs font-normal text-slate-500 leading-relaxed">
               This disables your shop and catalog listings. Transaction records remain archived.
             </p>
+            <input
+              type="text"
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              placeholder="Why are you leaving? (optional)"
+              maxLength={200}
+              className="mt-3 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-slate-400"
+            />
             <div className="mt-4 flex gap-2">
               <button
                 type="button"
@@ -981,7 +990,7 @@ const SellerProfile = () => {
               </button>
               <button
                 type="button"
-                className="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold disabled:opacity-70"
+                className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold disabled:opacity-70"
                 onClick={handleDeleteAccount}
                 disabled={isDeleting}
               >

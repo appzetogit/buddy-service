@@ -9,7 +9,7 @@ const accountDeletionSchema = new mongoose.Schema(
     {
         accountType: {
             type: String,
-            enum: ['USER', 'DELIVERY_PARTNER', 'RESTAURANT'],
+            enum: ['USER', 'DELIVERY_PARTNER', 'RESTAURANT', 'SELLER'],
             required: true,
             index: true
         },
@@ -29,7 +29,12 @@ const accountDeletionSchema = new mongoose.Schema(
             pendingWithdrawals: { type: Number, default: 0 },
             totalCommissionPaid: { type: Number, default: 0 }
         },
-        orderCount: { type: Number, default: 0 }
+        orderCount: { type: Number, default: 0 },
+        // Who deleted it and why (shown to the admin on the Deleted Accounts page).
+        source: { type: String, enum: ['self', 'admin'], default: 'self' },
+        reason: { type: String, default: '' },
+        // Extra labels worth keeping, e.g. a seller's shop name.
+        details: { type: mongoose.Schema.Types.Mixed, default: null }
     },
     {
         collection: 'account_deletions',

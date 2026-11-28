@@ -164,6 +164,7 @@ export default function DriverProfile() {
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
   const [deleteCaptcha, setDeleteCaptcha] = useState("");
+  const [deleteReason, setDeleteReason] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
@@ -499,7 +500,7 @@ export default function DriverProfile() {
     if (isDeleting) return;
     setIsDeleting(true);
     try {
-      await deliveryAPI.deleteAccount();
+      await deliveryAPI.deleteAccount(deleteReason.trim());
       toast.success("Account deleted");
       clearSessionLocally();
       navigate("/driver/login", { replace: true });
@@ -1238,6 +1239,16 @@ export default function DriverProfile() {
                   <p className="text-[12px] text-slate-500 mb-4 font-medium">
                     Type <span className="text-rose-500 font-bold">DELETE MY ACCOUNT</span> below.
                   </p>
+                  <input
+                    type="text"
+                    value={deleteReason}
+                    onChange={(e) => setDeleteReason(e.target.value)}
+                    placeholder="Why are you leaving? (optional)"
+                    maxLength={200}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-3"
+                    autoComplete="off"
+                  />
+
                   <input
                     type="text"
                     value={deleteCaptcha}

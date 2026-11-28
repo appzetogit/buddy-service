@@ -97,6 +97,7 @@ export default function Profile() {
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
   const [deleteCaptcha, setDeleteCaptcha] = useState("");
+  const [deleteReason, setDeleteReason] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Trigger web push registration when profile mounts to ensure FCM token is saved
@@ -427,7 +428,7 @@ export default function Profile() {
     if (isDeleting) return;
     setIsDeleting(true);
     try {
-      await userAPI.deleteAccount();
+      await userAPI.deleteAccount(deleteReason.trim());
       toast.success("Account deleted successfully");
       // Clear all local data
       clearModuleAuth("user");
@@ -1288,6 +1289,16 @@ export default function Profile() {
               <div className="p-5">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Confirm Deletion</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Type <span className="font-bold text-red-500">DELETE MY ACCOUNT</span> to confirm.</p>
+                <input
+                  type="text"
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="Why are you leaving? (optional)"
+                  maxLength={200}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-3"
+                  autoComplete="off"
+                />
+
                 <input
                   type="text"
                   value={deleteCaptcha}

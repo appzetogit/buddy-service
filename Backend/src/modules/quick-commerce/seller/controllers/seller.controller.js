@@ -4060,19 +4060,62 @@ export const deleteSellerAccountController = async (req, res, next) => {
     if (!seller) {
       return sendError(res, 404, "Seller profile not found");
     }
+    if (seller.isDeleted === true || seller.accountStatus === "deleted") {
+      return sendError(res, 409, "This account is already deleted");
+    }
 
-    // Soft delete
+    const reason = String(req.body?.reason || "").trim().slice(0, 300);
+    // Orders in progress must be finished first (the customer would be left hanging).
+    const { assertCanDeleteAccount, announceAccountDeleted } = await import("../../../../core/accountDeletion/accountDeletion.guard.js");
+    await assertCanDeleteAccount("SELLER", sellerId);
+
+    // The admin keeps a record of who deleted what (orders and money history stay in their own tables).
+    try {
+      const { AccountDeletion } = await import("../../../food/admin/models/accountDeletion.model.js");
+      const stats = await SellerOrder.aggregate([
+        { $match: { sellerId: new mongoose.Types.ObjectId(String(sellerId)) } },
+        { $group: { _id: null, count: { $sum: 1 }, total: { $sum: { $ifNull: ["$totalAmount", { $ifNull: ["$pricing.total", 0] }] } } } },
+      ]);
+      await AccountDeletion.create({
+        accountType: "SELLER",
+        originalId: seller._id,
+        phone: seller.phone || "",
+        name: seller.name || seller.shopName || "Unknown",
+        email: seller.email || "",
+        financialSnapshot: { totalOrderAmount: stats[0]?.total || 0 },
+        orderCount: stats[0]?.count || 0,
+        source: "self",
+        reason,
+        details: { shopName: seller.shopName || "" },
+      });
+    } catch (recordErr) {
+      logger.warn(`Seller delete: could not write the deletion record: ${recordErr?.message || recordErr}`);
+    }
+
+    // Soft delete. Login is refused for a deleted seller (see the login check on accountStatus).
     seller.isDeleted = true;
     seller.accountStatus = "deleted";
     seller.isActive = false;
     await seller.save();
 
+    // Their products disappear from the customer app at once (kept in the database for order history).
+    await SellerProduct.updateMany(
+      { sellerId: seller._id },
+      { $set: { status: "inactive", isActive: false } },
+    );
+    try {
+      const { invalidateCache } = await import("../../../../middleware/cache.js");
+      await Promise.all(["*quick*", "*product*", "*catalog*", "*home*"].map((p) => invalidateCache(p).catch(() => {})));
+    } catch (_) { /* cache clearing must never block a deletion */ }
+
     // Invalidate/delete all active refresh tokens for this seller
     const { FoodRefreshToken } = await import("../../../../core/refreshTokens/refreshToken.model.js");
     await FoodRefreshToken.deleteMany({ userId: sellerId });
 
-    return sendResponse(res, 200, "Seller account soft deleted successfully");
+    void announceAccountDeleted({ type: "SELLER", name: seller.shopName || seller.name, phone: seller.phone, reason });
+    return sendResponse(res, 200, "Seller account deleted successfully");
   } catch (error) {
+    if (error?.statusCode === 409) return sendError(res, 409, error.message);
     next(error);
   }
 };

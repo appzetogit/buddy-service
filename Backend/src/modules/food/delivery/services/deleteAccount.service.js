@@ -10,7 +10,7 @@ import { AccountDeletion } from '../../admin/models/accountDeletion.model.js';
  * 3. Delete delivery-specific data (wallet, tickets, deposits, etc.)
  * 4. Delete the delivery partner document itself
  */
-export async function deleteDeliveryAccount(userId) {
+export async function deleteDeliveryAccount(userId, opts = {}) {
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
         return null;
     }
@@ -100,7 +100,9 @@ export async function deleteDeliveryAccount(userId) {
                             totalEarnings,
                             pendingWithdrawals
                         },
-                        orderCount: stats.count
+                        orderCount: stats.count,
+                        source: opts.source === 'admin' ? 'admin' : 'self',
+                        reason: String(opts.reason || '').slice(0, 300)
                     }
                 ],
                 sessionOpt
@@ -204,7 +206,7 @@ export async function deleteDeliveryAccount(userId) {
         if (session) {
             await session.commitTransaction();
         }
-        return { success: true, message: 'Delivery partner deleted successfully' };
+        return { success: true, message: 'Delivery partner deleted successfully', deleted: { name: partner.name || '', phone: partner.phone || '' } };
     } catch (error) {
         if (session) {
             try {

@@ -904,6 +904,8 @@ export const adminAPI = {
   getGigBookings: (params = {}) => apiClient.get("/gigs/admin/bookings", { params, contextModule: "admin" }),
   getGigEarnings: (params = {}) => apiClient.get("/gigs/admin/earnings", { params, contextModule: "admin" }),
   getCodSettings: () => apiClient.get("/common/admin/cod-settings", { contextModule: "admin" }),
+  /** Deleted accounts (customer / seller / restaurant / driver), for the admin. */
+  getDeletedAccounts: (params = {}) => apiClient.get("/common/admin/account-deletions", { params, contextModule: "admin" }),
   /** Rider cash limit (admin): GET/PUT /food/admin/delivery/cash-limit  { deliveryCashLimit, deliveryWithdrawalLimit } */
   getCashLimitSettings: () => apiClient.get("/food/admin/delivery/cash-limit", { contextModule: "admin" }),
   updateCashLimitSettings: (body) => apiClient.put("/food/admin/delivery/cash-limit", body ?? {}, { contextModule: "admin" }),
@@ -1815,8 +1817,8 @@ export const restaurantAPI = {
       contextModule: "restaurant",
     }),
   /** DELETE /food/restaurant/account - permanently delete restaurant account */
-  deleteAccount: () =>
-    apiClient.delete("/food/restaurant/account", { contextModule: "restaurant" }),
+  deleteAccount: (reason) =>
+    apiClient.delete("/food/restaurant/account", { data: reason ? { reason } : undefined, contextModule: "restaurant" }),
 };
 
 // Public user-app endpoints can be called by multiple components/effects on refresh (and React StrictMode in dev).
@@ -2636,8 +2638,8 @@ export const deliveryAPI = {
       contextModule: "delivery",
     }),
   /** DELETE /food/delivery/account - permanently delete delivery partner account */
-  deleteAccount: () =>
-    apiClient.delete("/food/delivery/account", { contextModule: "delivery" }),
+  deleteAccount: (reason) =>
+    apiClient.delete("/food/delivery/account", { data: reason ? { reason } : undefined, contextModule: "delivery" }),
   shareOrder: (orderId) =>
     apiClient.post(`/food/delivery/orders/${String(orderId)}/share`, {}, {
       contextModule: "delivery",
@@ -2839,8 +2841,8 @@ export const userAPI = {
     return apiClient.post("/fcm-tokens/test", { platform }, { contextModule: "user" });
   },
   /** DELETE /food/user/account - permanently delete user account */
-  deleteAccount: () =>
-    apiClient.delete("/food/user/account", { contextModule: "user" }),
+  deleteAccount: (reason) =>
+    apiClient.delete("/food/user/account", { data: reason ? { reason } : undefined, contextModule: "user" }),
 };
 export const locationAPI = {
   /**

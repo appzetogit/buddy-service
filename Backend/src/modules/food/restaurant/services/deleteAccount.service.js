@@ -10,7 +10,7 @@ import { AccountDeletion } from '../../admin/models/accountDeletion.model.js';
  * 3. Delete restaurant-specific data (foods, addons, menus, wallet, tickets, etc.)
  * 4. Delete the restaurant document itself
  */
-export async function deleteRestaurantAccount(userId) {
+export async function deleteRestaurantAccount(userId, opts = {}) {
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -87,7 +87,9 @@ export async function deleteRestaurantAccount(userId) {
                         pendingWithdrawals,
                         totalCommissionPaid
                     },
-                    orderCount: stats.count
+                    orderCount: stats.count,
+                    source: opts.source === 'admin' ? 'admin' : 'self',
+                    reason: String(opts.reason || '').slice(0, 300)
                 }
             ],
             { session }
@@ -147,7 +149,7 @@ export async function deleteRestaurantAccount(userId) {
         await FoodRestaurant.deleteOne({ _id: userId }, { session });
 
         await session.commitTransaction();
-        return { success: true, message: 'Account deleted successfully' };
+        return { success: true, message: 'Account deleted successfully', deleted: { name: restaurant.restaurantName || restaurant.name || '', phone: restaurant.phone || '' } };
     } catch (error) {
         await session.abortTransaction();
         throw error;

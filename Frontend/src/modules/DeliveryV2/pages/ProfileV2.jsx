@@ -37,6 +37,7 @@ export const ProfileV2 = () => {
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
   const [deleteStep, setDeleteStep] = useState(1)
   const [deleteCaptcha, setDeleteCaptcha] = useState("")
+  const [deleteReason, setDeleteReason] = useState("");
   const [isDeleting, setIsDeleting] = useState(false)
 
   // Fetch profile data
@@ -327,6 +328,16 @@ export const ProfileV2 = () => {
                   <p className="text-[11px] text-gray-500 mb-6 font-bold uppercase tracking-wide">Type <span className="text-red-500">DELETE MY ACCOUNT</span> below.</p>
                   <input
                     type="text"
+                    value={deleteReason}
+                    onChange={(e) => setDeleteReason(e.target.value)}
+                    placeholder="Why are you leaving? (optional)"
+                    maxLength={200}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-3"
+                    autoComplete="off"
+                  />
+
+                  <input
+                    type="text"
                     value={deleteCaptcha}
                     onChange={(e) => setDeleteCaptcha(e.target.value)}
                     placeholder="Type here..."
@@ -339,7 +350,7 @@ export const ProfileV2 = () => {
                         if (isDeleting) return;
                         setIsDeleting(true);
                         try {
-                          await deliveryAPI.deleteAccount();
+                          await deliveryAPI.deleteAccount(deleteReason.trim());
                           toast.success("Account deleted");
                           clearModuleAuth("delivery");
                           localStorage.removeItem("app:isOnline");

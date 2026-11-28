@@ -278,7 +278,7 @@ export const sellerApi = {
     bustSellerGetCache("/seller/coupons");
     return res;
   }),
-  deleteAccount: () => call(axiosInstance.delete("/seller/profile")),
+  deleteAccount: (reason) => call(axiosInstance.delete("/seller/profile", { data: reason ? { reason } : undefined })),
   getCODDeposits: () => call(axiosInstance.get("/seller/finance/cod-verification")),
   processCODDeposit: (id, formData) =>
     call(

@@ -77,6 +77,7 @@ const GigScheduled = lazy(() => import("@food/pages/admin/gigs/GigScheduled"));
 const CodSettings = lazy(() => import("@food/pages/admin/CodSettings"));
 const RiderCashLimit = lazy(() => import("@food/pages/admin/RiderCashLimit"));
 const CashDeposits = lazy(() => import("@food/pages/admin/CashDeposits"));
+const DeletedAccounts = lazy(() => import("@food/pages/admin/DeletedAccounts"));
 // Disbursement Management
 // Report Management
 const ExpenseReport = lazy(() => import("@food/pages/admin/reports/ExpenseReport"));
@@ -259,6 +260,7 @@ export default function AdminRouter() {
             <Route path="cod-settings" element={<CodSettings />} />
             <Route path="rider-cash-limit" element={<RiderCashLimit />} />
             <Route path="cash-deposits" element={<CashDeposits />} />
+            <Route path="deleted-accounts" element={<DeletedAccounts />} />
 
 
             {/* REPORTS & SETTINGS */}

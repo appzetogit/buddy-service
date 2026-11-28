@@ -143,6 +143,7 @@ export const adminSidebarMenu = [
         path: "/admin/food/support-tickets",
         icon: "MessageSquare",
       },
+      { type: "link", label: "Deleted Accounts", path: "/admin/food/deleted-accounts", icon: "Users" },
     ],
   },
   {
