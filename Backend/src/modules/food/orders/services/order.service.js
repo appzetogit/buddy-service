@@ -2070,7 +2070,66 @@ export async function cancelOrder(orderId, userId, reason, refundDestination = "
   return normalizeOrderForClient(order);
 }
 
+/**
+ * Customer rating after a delivered order: the dishes they got (each 1-5) and, if a rider delivered, the rider.
+ * The restaurant is not rated directly: its average is built from the ratings of its dishes (see core/ratings).
+ */
 export async function submitOrderRatings(orderId, userId, dto) {
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError("Order id required");
+
+  const order = await FoodOrder.findOne({
+    ...identity,
+    userId: new mongoose.Types.ObjectId(userId),
+  });
+  if (!order) throw new NotFoundError("Order not found");
+  if (String(order.orderStatus) !== "delivered") {
+    throw new ValidationError("You can rate only delivered orders");
+  }
+
+  const items = Array.isArray(dto.items) ? dto.items : [];
+  const wantsRider = dto.deliveryPartnerRating !== undefined && dto.deliveryPartnerRating !== null;
+  if (!items.length && !wantsRider) {
+    throw new ValidationError("Rate at least one item or the delivery partner");
+  }
+  const partnerId = order.dispatch?.deliveryPartnerId || null;
+  if (wantsRider && !partnerId) {
+    throw new ValidationError("This order had no delivery partner to rate");
+  }
+  const riderAlreadyRated = Number.isFinite(Number(order?.ratings?.deliveryPartner?.rating));
+  if (wantsRider && riderAlreadyRated) {
+    throw new ValidationError("You have already rated the delivery partner for this order");
+  }
+
+  const { rateOrderItems, bumpAverage } = await import("../../../../core/ratings/orderRatings.service.js");
+  const savedItems = await rateOrderItems({ orderKind: "food", order, userId, items });
+  if (!savedItems.length && !wantsRider) {
+    throw new ValidationError("These items are already rated for this order");
+  }
+
+  if (wantsRider) {
+    order.ratings = order.ratings || {};
+    order.ratings.deliveryPartner = {
+      rating: dto.deliveryPartnerRating,
+      comment: dto.deliveryPartnerComment || "",
+      ratedAt: new Date(),
+    };
+    await bumpAverage(FoodDeliveryPartner, partnerId, dto.deliveryPartnerRating);
+  }
+
+  await order.save();
+  enqueueOrderEvent('order_ratings_submitted', {
+    orderMongoId: order._id?.toString?.(),
+    orderId: order._id.toString(),
+    userId,
+    itemRatings: savedItems.length,
+    deliveryPartnerRating: wantsRider ? dto.deliveryPartnerRating : null
+  });
+  return normalizeOrderForClient(order);
+}
+
+/** The original restaurant + rider rating (kept for reference; no longer used - restaurants are rated through their dishes). */
+export async function submitOrderRatingsLegacy(orderId, userId, dto) {
   const identity = buildOrderIdentityFilter(orderId);
   if (!identity) throw new ValidationError("Order id required");
 

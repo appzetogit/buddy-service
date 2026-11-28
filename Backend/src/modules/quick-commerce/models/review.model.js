@@ -29,9 +29,10 @@ const quickReviewSchema = new mongoose.Schema({
   },
   comment: {
     type: String,
-    required: true,
+    default: '',
     trim: true,
   },
+  orderId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
   status: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],

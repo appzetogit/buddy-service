@@ -78,6 +78,7 @@ const CodSettings = lazy(() => import("@food/pages/admin/CodSettings"));
 const RiderCashLimit = lazy(() => import("@food/pages/admin/RiderCashLimit"));
 const CashDeposits = lazy(() => import("@food/pages/admin/CashDeposits"));
 const DeletedAccounts = lazy(() => import("@food/pages/admin/DeletedAccounts"));
+const ItemRatings = lazy(() => import("@food/pages/admin/ItemRatings"));
 // Disbursement Management
 // Report Management
 const ExpenseReport = lazy(() => import("@food/pages/admin/reports/ExpenseReport"));
@@ -261,6 +262,7 @@ export default function AdminRouter() {
             <Route path="rider-cash-limit" element={<RiderCashLimit />} />
             <Route path="cash-deposits" element={<CashDeposits />} />
             <Route path="deleted-accounts" element={<DeletedAccounts />} />
+            <Route path="item-ratings" element={<ItemRatings />} />
 
 
             {/* REPORTS & SETTINGS */}

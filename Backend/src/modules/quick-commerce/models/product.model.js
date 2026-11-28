@@ -40,6 +40,9 @@ const quickProductSchema = new mongoose.Schema({
   deliveryTime: { type: String, default: '10 mins' },
   badge: { type: String, default: '' },
   rating: { type: Number, default: 4.2 },
+  /** Real customer ratings (from delivered orders). `rating` stays the shown average (4.2 until the first rating). */
+  totalRatings: { type: Number, default: 0, min: 0 },
+  ratingSum: { type: Number, min: 0 },
   sellerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Seller', default: null, index: true },
   isActive: { type: Boolean, default: true },
   /** Set when a category deactivation switched this product off — see categoryCascade.service.js. */

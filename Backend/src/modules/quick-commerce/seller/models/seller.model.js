@@ -216,6 +216,8 @@ const sellerSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    /** Sum of all product ratings (rating = ratingSum / totalRatings). */
+    ratingSum: { type: Number, min: 0 },
     finance: {
       ledgerBalance: { type: Number, default: 0 },
       ledgerSeeded: { type: Boolean, default: false },

@@ -905,6 +905,8 @@ export const adminAPI = {
   getGigEarnings: (params = {}) => apiClient.get("/gigs/admin/earnings", { params, contextModule: "admin" }),
   getCodSettings: () => apiClient.get("/common/admin/cod-settings", { contextModule: "admin" }),
   /** Deleted accounts (customer / seller / restaurant / driver), for the admin. */
+  /** Every dish / product rating customers gave (restaurant and seller scores are built from these). */
+  getItemReviews: (params = {}) => apiClient.get("/common/admin/item-reviews", { params, contextModule: "admin" }),
   getDeletedAccounts: (params = {}) => apiClient.get("/common/admin/account-deletions", { params, contextModule: "admin" }),
   /** Rider cash limit (admin): GET/PUT /food/admin/delivery/cash-limit  { deliveryCashLimit, deliveryWithdrawalLimit } */
   getCashLimitSettings: () => apiClient.get("/food/admin/delivery/cash-limit", { contextModule: "admin" }),
@@ -1819,6 +1821,9 @@ export const restaurantAPI = {
   /** DELETE /food/restaurant/account - permanently delete restaurant account */
   deleteAccount: (reason) =>
     apiClient.delete("/food/restaurant/account", { data: reason ? { reason } : undefined, contextModule: "restaurant" }),
+  /** GET /food/restaurant/dish-ratings - what customers rated this restaurant's dishes (per-dish averages + reviews). */
+  getDishRatings: (params = {}) =>
+    apiClient.get("/food/restaurant/dish-ratings", { params, contextModule: "restaurant" }),
 };
 
 // Public user-app endpoints can be called by multiple components/effects on refresh (and React StrictMode in dev).
@@ -3125,7 +3130,18 @@ export const orderAPI = {
       contextModule: "user",
     }),
   submitOrderRatings: (orderId, body = {}) =>
-    apiClient.patch(`/food/orders/${String(orderId)}/ratings`, body ?? {}, { contextModule: "user" }),
+    apiClient
+      .patch(`/food/orders/${String(orderId)}/ratings`, body ?? {}, { contextModule: "user" })
+      // Marketplace orders live in their own collection (same fallback as getOrderDetails / cancelOrder).
+      .catch((err) => {
+        if (err?.response?.status !== 404) throw err;
+        return apiClient
+          .patch(`/quick-commerce/orders/${String(orderId)}/ratings`, body ?? {}, { contextModule: "user" })
+          .catch((qcErr) => {
+            if (qcErr?.response?.status === 404) throw err;
+            throw qcErr;
+          });
+      }),
   /** Submit a complaint for an order (user). */
   submitComplaint: (payload) =>
     apiClient.post(

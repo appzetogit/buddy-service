@@ -134,6 +134,17 @@ router.put(
 );
 router.delete("/profile", ...sellerOnly, deleteSellerAccountController);
 
+// Ratings customers gave to this seller's products (the seller's average is built from them).
+router.get("/ratings", ...sellerOnly, async (req, res, next) => {
+  try {
+    const { getOwnerRatings } = await import("../../../core/ratings/orderRatings.service.js");
+    const { sendResponse } = await import("../../../utils/response.js");
+    return sendResponse(res, 200, "Product ratings", await getOwnerRatings("seller", req.user.userId, req.query));
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/notifications", ...sellerOnly, getSellerNotificationsController);
 router.put(
   "/notifications/mark-all-read",

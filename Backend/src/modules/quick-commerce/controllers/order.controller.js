@@ -227,7 +227,13 @@ function validateOrderRatingsDto(body) {
     deliveryPartnerRating: z.number().min(1).max(5).optional(),
     restaurantComment: z.string().max(500).optional(),
     sellerComment: z.string().max(500).optional(),
-    deliveryPartnerComment: z.string().max(500).optional()
+    deliveryPartnerComment: z.string().max(500).optional(),
+    // The products (and any food items) in the order, each rated 1-5; a subset is fine.
+    items: z.array(z.object({
+      itemId: z.union([z.string().min(1), z.number()]).transform(String),
+      rating: z.number().int().min(1).max(5),
+      comment: z.string().max(500).optional()
+    })).max(60).optional()
   });
   const result = schema.safeParse(body || {});
   if (!result.success) {
@@ -2288,7 +2294,63 @@ function resolveSingleSellerId(order) {
   return sellerIds.size === 1 ? [...sellerIds][0] : null;
 }
 
+/**
+ * Rating after a delivered Marketplace order: the products the customer got (each 1-5) and the rider.
+ * The seller is not rated directly: its average is built from the ratings of its products (see core/ratings).
+ */
 export async function submitOrderRatingsController(req, res, next) {
+  try {
+    const userId = req.user?.userId;
+    const orderId = req.params.orderId;
+    const dto = validateOrderRatingsDto(req.body);
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ success: false, message: 'Invalid order id' });
+    }
+    const order = await QuickOrder.findOne({ _id: orderId, userId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+    if (String(order.orderStatus) !== 'delivered') {
+      return res.status(400).json({ success: false, message: 'You can rate only delivered orders' });
+    }
+
+    const items = Array.isArray(dto.items) ? dto.items : [];
+    const wantsRider = dto.deliveryPartnerRating !== undefined && dto.deliveryPartnerRating !== null;
+    if (!items.length && !wantsRider) {
+      return res.status(400).json({ success: false, message: 'Rate at least one product or the delivery partner' });
+    }
+    const partnerId = order.dispatch?.deliveryPartnerId || null;
+    if (wantsRider && !partnerId) {
+      return res.status(400).json({ success: false, message: 'This order had no delivery partner to rate' });
+    }
+    if (wantsRider && Number.isFinite(Number(order?.ratings?.deliveryPartner?.rating))) {
+      return res.status(400).json({ success: false, message: 'You have already rated the delivery partner for this order' });
+    }
+
+    const { rateOrderItems, bumpAverage } = await import('../../../core/ratings/orderRatings.service.js');
+    const saved = await rateOrderItems({ orderKind: 'quick', order, userId, items });
+    if (!saved.length && !wantsRider) {
+      return res.status(400).json({ success: false, message: 'These products are already rated for this order' });
+    }
+    if (wantsRider) {
+      order.ratings = order.ratings || {};
+      order.ratings.deliveryPartner = {
+        rating: dto.deliveryPartnerRating,
+        comment: dto.deliveryPartnerComment || '',
+        ratedAt: new Date(),
+      };
+      await bumpAverage(FoodDeliveryPartner, partnerId, dto.deliveryPartnerRating);
+    }
+    await order.save();
+    return sendResponse(res, 200, 'Ratings submitted successfully', { order });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** The original seller + rider rating (kept for reference; no longer routed - sellers are rated through their products). */
+export async function submitOrderRatingsLegacyController(req, res, next) {
   try {
     const userId = req.user?.userId;
     const orderId = req.params.orderId;

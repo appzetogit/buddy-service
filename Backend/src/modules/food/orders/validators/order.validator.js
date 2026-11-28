@@ -214,9 +214,16 @@ export function validateRestaurantChainDto(body) {
 
 export function validateOrderRatingsDto(body) {
     const schema = z.object({
-        restaurantRating: z.number().min(1).max(5),
-        deliveryPartnerRating: z.number().min(1).max(5).optional(),
+        // The restaurant is no longer rated directly (old apps may still send these; they are ignored).
+        restaurantRating: z.number().min(1).max(5).optional(),
         restaurantComment: z.string().max(500).optional(),
+        // The dishes in the order, each rated 1-5 (a subset is fine).
+        items: z.array(z.object({
+            itemId: z.union([z.string().min(1), z.number()]).transform(String),
+            rating: z.number().int().min(1).max(5),
+            comment: z.string().max(500).optional()
+        })).max(60).optional(),
+        deliveryPartnerRating: z.number().int().min(1).max(5).optional(),
         deliveryPartnerComment: z.string().max(500).optional()
     });
     const result = schema.safeParse(body || {});

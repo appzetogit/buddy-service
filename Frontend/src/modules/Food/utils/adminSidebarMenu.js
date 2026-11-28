@@ -145,6 +145,7 @@ export const adminSidebarMenu = [
       },
       { type: "link", label: "Chattings", path: "/admin/food/chattings", icon: "MessageSquare" },
       { type: "link", label: "Deleted Accounts", path: "/admin/food/deleted-accounts", icon: "Users" },
+      { type: "link", label: "Item Ratings", path: "/admin/food/item-ratings", icon: "MessageSquare" },
     ],
   },
   {

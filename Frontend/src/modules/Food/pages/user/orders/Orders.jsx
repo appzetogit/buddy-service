@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { ArrowLeft, Search, MoreVertical, ChevronRight, Star, RotateCcw, AlertCircle, Loader2, Clock, X, Share2, MessageCircle, Send, Copy, Mail, MessagesSquare, Link2 } from "lucide-react"
+import OrderRatingDialog from "@food/components/user/OrderRatingDialog"
 import { orderAPI } from "@food/api"
 import { useCart } from "@food/context/CartContext"
 import { toast } from "sonner"
@@ -10,6 +11,20 @@ const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
 
+
+// An order counts as rated when every dish / product in it is rated (and the rider too, if one delivered it).
+const isOrderFullyRated = (order) => {
+  const done = new Set((order?.ratings?.items || []).map((r) => String(r.itemId)))
+  const lines = (order?.items || []).filter((it) => it?.itemId || it?.id || it?._id)
+  const itemsDone = lines.length > 0 && lines.every((it) => done.has(String(it.itemId || it.id || it._id)))
+  const hasPartner = !!(order?.deliveryPartnerId || order?.deliveryPartnerName)
+  return itemsDone && (!hasPartner || Number.isFinite(Number(order?.deliveryPartnerRating)))
+}
+const averageItemRating = (order) => {
+  const list = order?.ratings?.items || []
+  if (!list.length) return null
+  return (list.reduce((a, r) => a + Number(r.rating || 0), 0) / list.length).toFixed(1)
+}
 
 export default function Orders() {
   const navigate = useNavigate()
@@ -122,10 +137,7 @@ export default function Orders() {
         transformedStatus.toLowerCase() === 'delivered' ||
         transformedStatus.toLowerCase() === 'completed'
 
-      const hasRestaurantRating = Number.isFinite(Number(order.restaurantRating))
-      const hasDeliveryPartner = !!(order.deliveryPartnerId || order.deliveryPartnerName)
-      const hasDeliveryRating = Number.isFinite(Number(order.deliveryPartnerRating))
-      const hasRating = hasRestaurantRating && (!hasDeliveryPartner || hasDeliveryRating)
+      const hasRating = isOrderFullyRated(order)
 
       const orderId = order.id || order._id || order.mongoId
       const hasShownPopup = shownRatingForOrders.has(orderId)
@@ -1028,12 +1040,12 @@ Order again from this restaurant in the ${companyName} app.`
                       </div>
                       <span className="text-xs font-semibold text-red-500 dark:text-red-400">Payment failed</span>
                     </div>
-                  ) : isDelivered && order.restaurantRating && (!order.deliveryPartnerId || order.deliveryPartnerRating) ? (
+                  ) : isDelivered && isOrderFullyRated(order) ? (
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm text-gray-800 dark:text-gray-200">You rated</span>
                         <div className="flex bg-yellow-400 text-white px-1 rounded text-[10px] items-center gap-0.5 h-4">
-                          R {order.restaurantRating}<Star className="w-2 h-2 fill-current" />
+                          Items {averageItemRating(order)}<Star className="w-2 h-2 fill-current" />
                         </div>
                         {order.deliveryPartnerId && (
                           <div className="flex bg-blue-500 text-white px-1 rounded text-[10px] items-center gap-0.5 h-4">
@@ -1050,7 +1062,7 @@ Order again from this restaurant in the ${companyName} app.`
                         onClick={() => handleOpenRating(order)}
                         className="text-xs text-[#16A34A] font-medium mt-0.5 flex items-center"
                       >
-                        Rate restaurant & delivery <span className="ml-0.5">&gt;</span>
+                        {(order.ratings?.items || []).length ? "Rate remaining items" : "Rate your items"}{order.deliveryPartnerId ? " & delivery" : ""} <span className="ml-0.5">&gt;</span>
                       </button>
                     </div>
                   ) : (
@@ -1089,123 +1101,27 @@ Order again from this restaurant in the ${companyName} app.`
       </div>
 
       {/* Rating & Feedback Modal */}
-      {ratingModal.open && ratingModal.order && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-md rounded-3xl bg-white dark:bg-[#121212] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border dark:border-gray-800">
-            {/* Header with gradient */}
-            <div className="bg-gradient-to-r from-[#16A34A] to-[#15803D] px-6 py-5">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <Star className="w-5 h-5 fill-white" />
-                  Rate Your Delivery
-                </h2>
-                <button
-                  type="button"
-                  onClick={handleCloseRating}
-                  className="text-white/80 hover:text-white transition-colors p-1 rounded-full hover:bg-white/20"
-                >
-                  <span className="text-xl">x</span>
-                </button>
-              </div>
-              <p className="text-sm text-white/90">{ratingModal.order.restaurant}</p>
-            </div>
-
-            <div className="px-6 py-6 font-sans">
-              <div className="mb-6">
-                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                  Restaurant rating (out of 5)
-                </p>
-                <div className="flex items-center justify-center gap-2 mb-3">
-                  {Array.from({ length: 5 }, (_, i) => i + 1).map((num) => {
-                    const isActive = (selectedRestaurantRating || 0) >= num
-                    return (
-                      <button
-                        key={`restaurant-${num}`}
-                        type="button"
-                        onClick={() => setSelectedRestaurantRating(num)}
-                        className="p-2 transition-transform hover:scale-125 active:scale-95"
-                      >
-                        <Star
-                          className={`w-10 h-10 transition-all ${isActive
-                              ? "text-yellow-400 fill-yellow-400 drop-shadow-lg"
-                              : "text-gray-300 hover:text-yellow-200"
-                            }`}
-                        />
-                      </button>
-                    )
-                  })}
-                </div>
-                <textarea
-                  rows={2}
-                  value={restaurantFeedbackText}
-                  onChange={(e) => setRestaurantFeedbackText(e.target.value)}
-                  className="w-full rounded-xl border-2 border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] px-4 py-2 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#16A34A] focus:border-[#16A34A] resize-none transition-all"
-                  placeholder="Restaurant feedback (optional)"
-                />
-              </div>
-
-              {ratingModalHasDeliveryPartner && (
-                <div className="mb-6">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                    Delivery partner rating (out of 5)
-                  </p>
-                  <div className="flex items-center justify-center gap-2 mb-3">
-                    {Array.from({ length: 5 }, (_, i) => i + 1).map((num) => {
-                      const isActive = (selectedDeliveryRating || 0) >= num
-                      return (
-                        <button
-                          key={`delivery-${num}`}
-                          type="button"
-                          onClick={() => setSelectedDeliveryRating(num)}
-                          className="p-2 transition-transform hover:scale-125 active:scale-95"
-                        >
-                          <Star
-                            className={`w-10 h-10 transition-all ${isActive
-                                ? "text-yellow-400 fill-yellow-400 drop-shadow-lg"
-                                : "text-gray-300 hover:text-yellow-200"
-                              }`}
-                          />
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <textarea
-                    rows={2}
-                    value={deliveryFeedbackText}
-                    onChange={(e) => setDeliveryFeedbackText(e.target.value)}
-                    className="w-full rounded-xl border-2 border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] px-4 py-2 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#16A34A] focus:border-[#16A34A] resize-none transition-all"
-                    placeholder="Delivery partner feedback (optional)"
-                  />
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <button
-                type="button"
-                disabled={ratingSubmitDisabled}
-                onClick={handleSubmitRating}
-                className="w-full rounded-xl bg-gradient-to-r from-[#16A34A] to-[#15803D] text-white text-base font-bold py-3.5 hover:from-[#15803D] hover:to-[#C44409] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-[#16A34A]/30 flex items-center justify-center gap-2"
-              >
-                {submittingRating ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <Star className="w-5 h-5 fill-white" />
-                    Submit Ratings
-                  </>
-                )}
-              </button>
-
-              {ratingSubmitDisabled && (
-                <p className="text-xs text-center text-red-500 mt-2">Please select all required ratings to continue</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <OrderRatingDialog
+        open={ratingModal.open && !!ratingModal.order}
+        onOpenChange={(v) => { if (!v) handleCloseRating() }}
+        order={ratingModal.order}
+        onRated={(updated, sent) => {
+          const target = ratingModal.order
+          const orderId = target?.id || target?._id || target?.mongoId
+          setOrders((prev) =>
+            prev.map((o) => {
+              if ((o.id || o._id || o.mongoId) !== orderId) return o
+              const nextRatings = updated?.ratings || {
+                ...(o.ratings || {}),
+                items: [...((o.ratings?.items) || []), ...sent.items],
+                ...(sent.deliveryPartner ? { deliveryPartner: { rating: sent.deliveryPartner.rating, comment: sent.deliveryPartner.comment } } : {}),
+              }
+              return { ...o, ratings: nextRatings, deliveryPartnerRating: nextRatings?.deliveryPartner?.rating ?? o.deliveryPartnerRating }
+            }),
+          )
+          setShownRatingForOrders((prev) => new Set([...prev, orderId]))
+        }}
+      />
 
       {showShareModal && sharePayload && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm px-4 pb-4 pt-10 sm:items-center">

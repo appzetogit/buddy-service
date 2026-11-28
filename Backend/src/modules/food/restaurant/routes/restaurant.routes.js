@@ -257,4 +257,15 @@ router.get('/download-menu-pdf/:id', authMiddleware, (req, res, next) => {
 
 router.delete('/account', authMiddleware, requireRestaurant, deleteRestaurantAccountController);
 
+// Ratings customers gave to this restaurant's dishes (its average is built from them): per-dish averages + reviews.
+router.get('/dish-ratings', authMiddleware, requireRestaurant, async (req, res, next) => {
+    try {
+        const { getOwnerRatings } = await import('../../../../core/ratings/orderRatings.service.js');
+        const { sendResponse } = await import('../../../../utils/response.js');
+        return sendResponse(res, 200, 'Dish ratings', await getOwnerRatings('restaurant', req.user.userId, req.query));
+    } catch (error) {
+        next(error);
+    }
+});
+
 export default router;

@@ -23,6 +23,10 @@ const foodSchema = new mongoose.Schema(
         foodType: { type: String, enum: ['Veg', 'Non-Veg'], default: 'Non-Veg' },
         isAvailable: { type: Boolean, default: true, index: true },
         preparationTime: { type: String, trim: true, default: '' },
+        // Customer ratings of this dish (from delivered orders). `rating` is the average, rounded to 1 decimal.
+        rating: { type: Number, default: 0, min: 0, max: 5 },
+        totalRatings: { type: Number, default: 0, min: 0 },
+        ratingSum: { type: Number, min: 0 },
         approvalStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'approved', index: true },
         rejectionReason: { type: String, trim: true, default: '' },
         requestedAt: { type: Date },

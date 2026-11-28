@@ -404,7 +404,6 @@ const ProductDetailSheet = () => {
 
     const handleReviewSubmit = useCallback(async (e) => {
         e.preventDefault();
-        if (!newReview.comment.trim()) return;
         try {
             setIsSubmittingReview(true);
             const res = await customerApi.submitReview({
@@ -413,7 +412,7 @@ const ProductDetailSheet = () => {
                 comment: newReview.comment,
             });
             if (res.data.success) {
-                showToast('Review submitted for moderation', 'success');
+                showToast('Thanks for your rating', 'success');
                 setNewReview({ rating: 5, comment: '' });
             }
         } catch (err) {

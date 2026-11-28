@@ -341,7 +341,22 @@ const orderEntityRatingSchema = new mongoose.Schema(
 const orderRatingsSchema = new mongoose.Schema(
     {
         restaurant: { type: orderEntityRatingSchema, default: undefined },
-        deliveryPartner: { type: orderEntityRatingSchema, default: undefined }
+        deliveryPartner: { type: orderEntityRatingSchema, default: undefined },
+        /** What the customer rated, item by item (restaurant / seller scores come from these). */
+        items: {
+            type: [new mongoose.Schema(
+                {
+                    itemId: { type: String, required: true },
+                    itemType: { type: String, enum: ['food', 'quick'], default: 'food' },
+                    name: { type: String, default: '' },
+                    rating: { type: Number, min: 1, max: 5, required: true },
+                    comment: { type: String, default: '', trim: true },
+                    ratedAt: { type: Date, default: Date.now }
+                },
+                { _id: false }
+            )],
+            default: undefined
+        }
     },
     { _id: false }
 );

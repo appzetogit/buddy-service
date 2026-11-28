@@ -23,6 +23,7 @@ import {
   HiOutlineTag,
   HiOutlineInbox,
   HiOutlineQuestionMarkCircle,
+  HiOutlineStar,
 } from "react-icons/hi2";
 
 const Dashboard = React.lazy(() => import("../pages/Dashboard"));
@@ -44,6 +45,7 @@ const PendingApproval = React.lazy(() => import("../pages/PendingApproval"));
 const Coupons = React.lazy(() => import("../pages/Coupons"));
 const SellerSupportPage = React.lazy(() => import("../pages/SellerSupportPage"));
 const Notifications = React.lazy(() => import("../pages/Notifications"));
+const Ratings = React.lazy(() => import("../pages/Ratings"));
 
 const navItems = [
   { label: "Dashboard", path: "/seller", icon: HiOutlineSquares2X2, end: true },
@@ -77,6 +79,7 @@ const navItems = [
     path: "/seller/earnings",
     icon: HiOutlineCurrencyDollar,
   },
+  { label: "Ratings", path: "/seller/ratings", icon: HiOutlineStar },
   { label: "Profile", path: "/seller/profile", icon: HiOutlineUser },
   { label: "Notifications", path: "/seller/notifications", icon: HiOutlineInbox },
   { label: "Help Center", path: "/seller/support", icon: HiOutlineQuestionMarkCircle },
@@ -105,6 +108,7 @@ const SellerWorkspace = () => (
       <Route path="coupons" element={<Coupons />} />
       <Route path="profile" element={<Profile />} />
       <Route path="notifications" element={<Notifications />} />
+      <Route path="ratings" element={<Ratings />} />
       <Route path="support" element={<SellerSupportPage />} />
       <Route path="chat" element={<SupportChatScreen module="seller" />} />
       <Route path="*" element={<Navigate to="/seller" replace />} />

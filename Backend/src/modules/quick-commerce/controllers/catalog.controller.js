@@ -1283,7 +1283,55 @@ export const getProductReviews = async (req, res) => {
   }
 };
 
+/**
+ * Rate a product you received. Only for a delivered order that contained it, once per order (the same rule as
+ * the order rating screen); the star rating raises the product's and its seller's average.
+ */
 export const submitProductReview = async (req, res) => {
+  const { productId, rating, comment, orderId } = req.body || {};
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    return res.status(401).json({ success: false, message: 'Authentication required to submit a review' });
+  }
+  const stars = Number(rating);
+  if (!productId || !mongoose.Types.ObjectId.isValid(String(productId)) || !Number.isInteger(stars) || stars < 1 || stars > 5) {
+    return res.status(400).json({ success: false, message: 'A product and a rating from 1 to 5 are required' });
+  }
+
+  try {
+    const { rateOrderItems } = await import('../../../core/ratings/orderRatings.service.js');
+    const query = {
+      userId,
+      orderStatus: 'delivered',
+      items: { $elemMatch: { itemId: String(productId), type: 'quick' } },
+      'ratings.items.itemId': { $ne: String(productId) },
+    };
+    if (orderId && mongoose.Types.ObjectId.isValid(String(orderId))) query._id = orderId;
+    const order = await QuickOrder.findOne(query).sort({ createdAt: -1 });
+    if (!order) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can rate a product only after it has been delivered to you, and only once per order',
+      });
+    }
+    const saved = await rateOrderItems({
+      orderKind: 'quick',
+      order,
+      userId,
+      items: [{ itemId: String(productId), rating: stars, comment: String(comment || '') }],
+    });
+    await order.save();
+    return res.status(201).json({ success: true, message: 'Thanks for your rating', result: saved[0] || null });
+  } catch (error) {
+    if (error?.statusCode === 422) return res.status(422).json({ success: false, message: error.message });
+    console.error('Error submitting review:', error);
+    return res.status(500).json({ success: false, message: 'Failed to submit review' });
+  }
+};
+
+/** The original open review endpoint (kept for reference; no longer routed - reviews now need a delivered order). */
+export const submitProductReviewLegacy = async (req, res) => {
   const { productId, rating, comment } = req.body;
   const userId = req.user?.userId;
 

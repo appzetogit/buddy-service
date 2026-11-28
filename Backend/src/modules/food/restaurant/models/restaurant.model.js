@@ -206,6 +206,8 @@ const restaurantSchema = new mongoose.Schema(
       set: normalizeRatingValue,
     },
     totalRatings: { type: Number, default: 0, min: 0 },
+    /** Sum of all dish ratings (rating = ratingSum / totalRatings). */
+    ratingSum: { type: Number, min: 0 },
     diningSettings: {
       isEnabled: { type: Boolean, default: false },
       maxGuests: { type: Number, default: 6 },

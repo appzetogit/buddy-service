@@ -32,6 +32,7 @@ import {
   DialogTitle,
 } from "@food/components/ui/dialog"
 import { Textarea } from "@food/components/ui/textarea"
+import OrderRatingDialog from "@food/components/user/OrderRatingDialog"
 import { useOrders } from "@food/context/OrdersContext"
 import { useCart } from "@food/context/CartContext"
 import { useProfile } from "@food/context/ProfileContext"
@@ -731,7 +732,11 @@ export default function OrderTracking() {
   const hasRestaurantRating = Number.isFinite(Number(order?.ratings?.restaurant?.rating || order?.restaurantRating))
   const hasDeliveryPartner = !!(order?.deliveryPartnerId || order?.deliveryPartnerName)
   const hasDeliveryRating = Number.isFinite(Number(order?.ratings?.deliveryPartner?.rating || order?.deliveryPartnerRating))
-  const isOrderRated = hasRestaurantRating && (!hasDeliveryPartner || hasDeliveryRating)
+  // Dishes / products are rated one by one; the restaurant / shop score is built from them (no direct restaurant rating).
+  const ratedItemIds = new Set((order?.ratings?.items || []).map((r) => String(r.itemId)))
+  const rateableItems = (order?.items || []).filter((it) => it?.itemId || it?.id)
+  const allItemsRated = rateableItems.length > 0 && rateableItems.every((it) => ratedItemIds.has(String(it.itemId || it.id)))
+  const isOrderRated = allItemsRated && (!hasDeliveryPartner || hasDeliveryRating)
   const ratingPromptedRef = useRef(false)
 
   const handleOpenRating = () => {
@@ -2315,7 +2320,7 @@ export default function OrderTracking() {
               </div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Enjoyed your food?</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 mb-6 max-w-[280px]">
-                Rate <span className="font-semibold text-gray-700 dark:text-gray-300">{order?.restaurant || "the restaurant"}</span>
+                Rate what you ordered from <span className="font-semibold text-gray-700 dark:text-gray-300">{order?.restaurant || "the restaurant"}</span>
                 {hasDeliveryPartner
                   ? ` and ${order?.deliveryPartnerName || "your delivery partner"}`
                   : ""}{" "}
@@ -2326,7 +2331,7 @@ export default function OrderTracking() {
                 onClick={handleOpenRating}
                 className="w-full max-w-[200px] bg-[#16A34A] hover:bg-[#15803D] text-white font-bold h-12 rounded-xl border-none shadow-lg shadow-[#16A34A]/20"
               >
-                Rate Restaurant & Driver
+                Rate your items{hasDeliveryPartner ? " & driver" : ""}
               </Button>
             </div>
           </motion.div>
@@ -2348,32 +2353,25 @@ export default function OrderTracking() {
                 onClick={handleOpenRating}
                 className="text-[10px] font-bold text-[#16A34A] dark:text-orange-400 uppercase tracking-widest hover:opacity-80 transition-opacity"
               >
-                Edit Rating
+                Rate more
               </button>
             </div>
             
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Food & Restaurant</span>
-                  {order?.ratings?.restaurant?.comment && (
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400 italic mt-0.5 line-clamp-1">"{order.ratings.restaurant.comment}"</span>
-                  )}
+              {(order?.ratings?.items || []).map((r) => (
+                <div key={`item-rated-${r.itemId}`} className="flex items-center justify-between">
+                  <div className="flex min-w-0 flex-col pr-3">
+                    <span className="truncate text-xs font-semibold text-gray-700 dark:text-gray-300">{r.name || "Item"}</span>
+                    {r.comment ? <span className="mt-0.5 line-clamp-1 text-[10px] italic text-gray-500 dark:text-gray-400">"{r.comment}"</span> : null}
+                  </div>
+                  <div className="flex shrink-0 gap-0.5">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star key={`it-${r.itemId}-${star}`} className={`w-3.5 h-3.5 ${star <= r.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-200 dark:text-gray-800"}`} />
+                    ))}
+                  </div>
                 </div>
-                <div className="flex gap-0.5">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star
-                      key={`res-rated-${star}`}
-                      className={`w-3.5 h-3.5 ${
-                        star <= (order?.ratings?.restaurant?.rating || order?.restaurantRating)
-                          ? "text-yellow-400 fill-yellow-400"
-                          : "text-gray-200 dark:text-gray-800"
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-              
+              ))}
+
               {hasDeliveryPartner && (
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col">
@@ -3020,101 +3018,23 @@ export default function OrderTracking() {
       </Dialog>
 
       {/* Rating & Feedback Modal */}
-      <Dialog open={showRatingModal} onOpenChange={setShowRatingModal}>
-        <DialogContent className="sm:max-w-md w-[95vw] rounded-3xl p-6 border-0 shadow-2xl bg-white dark:bg-[#1a1a1a] max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="mb-2">
-            <DialogTitle className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Star className="w-6 h-6 text-[#16A34A] fill-[#16A34A]" />
-              Rate restaurant & driver
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-6 py-2">
-            {/* Restaurant Rating */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-gray-800 dark:text-gray-200">How was the food?</p>
-                <span className="text-xs px-2 py-0.5 bg-orange-50 text-orange-600 dark:bg-orange-950/30 dark:text-orange-400 rounded-full font-medium">Restaurant</span>
-              </div>
-              <div className="flex justify-center gap-3">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <motion.button
-                    key={`res-star-${star}`}
-                    whileHover={{ scale: 1.15 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setSelectedRestaurantRating(star)}
-                    className="p-1"
-                  >
-                    <Star
-                      className={`w-10 h-10 transition-all duration-300 ${
-                        star <= selectedRestaurantRating
-                          ? "text-yellow-400 fill-yellow-400 drop-shadow-sm"
-                          : "text-gray-200 dark:text-gray-800"
-                      }`}
-                    />
-                  </motion.button>
-                ))}
-              </div>
-              <Textarea
-                placeholder="Write a quick review for the food (optional)"
-                value={restaurantFeedbackText}
-                onChange={(e) => setRestaurantFeedbackText(e.target.value)}
-                className="min-h-[80px] text-sm bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-800 resize-none rounded-xl"
-              />
-            </div>
-
-            {/* Delivery Rating */}
-            {hasDeliveryPartner && (
-              <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold text-gray-800 dark:text-gray-200">How was the delivery?</p>
-                  <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 rounded-full font-medium">Delivery</span>
-                </div>
-                <div className="flex justify-center gap-3">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <motion.button
-                      key={`del-star-${star}`}
-                      whileHover={{ scale: 1.15 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => setSelectedDeliveryRating(star)}
-                      className="p-1"
-                    >
-                      <Star
-                        className={`w-10 h-10 transition-all duration-300 ${
-                          star <= selectedDeliveryRating
-                            ? "text-yellow-400 fill-yellow-400 drop-shadow-sm"
-                            : "text-gray-200 dark:text-gray-800"
-                        }`}
-                      />
-                    </motion.button>
-                  ))}
-                </div>
-                <Textarea
-                  placeholder={`How was ${order?.deliveryPartnerName || 'the rider'}? (optional)`}
-                  value={deliveryFeedbackText}
-                  onChange={(e) => setDeliveryFeedbackText(e.target.value)}
-                  className="min-h-[80px] text-sm bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-800 resize-none rounded-xl"
-                />
-              </div>
-            )}
-
-            <Button
-              onClick={handleSubmitRating}
-              disabled={submittingRating || selectedRestaurantRating === null || (hasDeliveryPartner && selectedDeliveryRating === null)}
-              className="w-full bg-[#16A34A] hover:bg-[#15803D] text-white font-bold h-14 rounded-2xl shadow-lg mt-4"
-            >
-              {submittingRating ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Submit Feedback"}
-            </Button>
-            
-            <button
-              onClick={() => setShowRatingModal(false)}
-              className="w-full text-sm text-gray-400 dark:text-gray-500 font-medium hover:text-gray-600 dark:hover:text-gray-400 transition-colors py-2"
-            >
-              Maybe later
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <OrderRatingDialog
+        open={showRatingModal}
+        onOpenChange={setShowRatingModal}
+        order={order}
+        onRated={(updated, sent) => {
+          const nextRatings = updated?.ratings || {
+            ...(order?.ratings || {}),
+            items: [...((order?.ratings?.items) || []), ...sent.items.map((i) => ({ ...i, ratedAt: new Date().toISOString() }))],
+            ...(sent.deliveryPartner ? { deliveryPartner: { rating: sent.deliveryPartner.rating, comment: sent.deliveryPartner.comment, ratedAt: new Date().toISOString() } } : {}),
+          }
+          setOrder((prev) => ({
+            ...prev,
+            ratings: nextRatings,
+            deliveryPartnerRating: nextRatings?.deliveryPartner?.rating ?? prev?.deliveryPartnerRating,
+          }))
+        }}
+      />
 
       {partialDropPopup && (
         <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/50 p-4">

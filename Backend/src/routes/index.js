@@ -16,6 +16,7 @@ import { adminAccessGuard } from '../core/admin/adminAccess.middleware.js';
 import { gigAdminRouter, gigRiderRouter } from '../modules/common/gigs/gig.routes.js';
 import { codAdminRouter, codPublicRouter } from '../modules/common/cod/cod.routes.js';
 import accountDeletionAdminRoutes from '../core/accountDeletion/accountDeletion.admin.routes.js';
+import itemReviewsAdminRoutes from '../core/ratings/orderItemReview.admin.routes.js';
 import { loginRoles as adminLoginRolesController } from '../core/admin/adminAccess.controller.js';
 import quickCommerceAdminRoutes from '../modules/quick-commerce/routes/admin.routes.js';
 import quickCommerceRoutes from '../modules/quick-commerce/routes/quick-commerce.routes.js';
@@ -108,6 +109,8 @@ router.use('/v1/common/payment-options', codPublicRouter);
 router.use('/v1/common/admin/cod-settings', authMiddleware, requireRoles('ADMIN'), adminAccessGuard, codAdminRouter);
 // Deleted accounts (user / seller / restaurant / driver) for the admin.
 router.use('/v1/common/admin/account-deletions', authMiddleware, requireRoles('ADMIN'), adminAccessGuard, accountDeletionAdminRoutes);
+// Every dish / product rating customers gave (restaurant and seller scores are built from these).
+router.use('/v1/common/admin/item-reviews', authMiddleware, requireRoles('ADMIN'), adminAccessGuard, itemReviewsAdminRoutes);
 router.use('/v1/common/admin/home-config', authMiddleware, requireRoles('ADMIN'), adminAccessGuard, homeConfigAdminRouter);
 // Taxi (riders + admin): /api/v1/taxi/*. Own router and own error handler. Loaded defensively: a
 // problem inside the taxi module must never stop Food / Quick Commerce from starting.
