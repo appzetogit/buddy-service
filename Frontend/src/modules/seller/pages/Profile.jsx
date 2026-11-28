@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { sellerApi } from "../services/sellerApi";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import MapPicker from "@shared/components/MapPicker";
 import { clearModuleAuth } from "@food/utils/auth";
 import { useAuth } from "@core/context/AuthContext";
@@ -501,6 +502,9 @@ const SellerProfile = () => {
             Manage your store details, documents, banking, and location.
           </p>
         </div>
+        <Link to="/seller/chat" className="inline-flex items-center justify-center rounded-lg bg-green-600 px-3 py-2 text-xs font-medium text-white hover:bg-green-700">
+          Chat with Admin
+        </Link>
       </div>
 
       <div className="rounded-xl border border-slate-200/80 bg-gradient-to-r from-green-50/70 via-white to-amber-50/60 p-3 sm:p-4 shadow-xs flex items-center justify-between gap-3">

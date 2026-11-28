@@ -298,6 +298,12 @@ export default function Dashboard() {
                   onClick={() => navigate(`${RESTAURANT_BASE}/feedback`)}
                 />
                 <QuickTile
+                  icon={MessageSquare}
+                  title="Chat with Admin"
+                  subtitle="Talk to the support team live"
+                  onClick={() => navigate(`${RESTAURANT_BASE}/admin-chat`)}
+                />
+                <QuickTile
                   icon={LifeBuoy}
                   title="Support"
                   subtitle="Get help from partner team"

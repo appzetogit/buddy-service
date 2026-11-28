@@ -36,6 +36,7 @@ const Inventory = lazy(() => import("@food/pages/restaurant/Inventory"))
 const Feedback = lazy(() => import("@food/pages/restaurant/Feedback"))
 const ShareFeedback = lazy(() => import("@food/pages/restaurant/ShareFeedback"))
 const DishRatings = lazy(() => import("@food/pages/restaurant/DishRatings"))
+const SupportChatScreen = lazy(() => import("../../../../shared/supportChat/SupportChatScreen"))
 const RestaurantSupport = lazy(() => import("@food/pages/restaurant/RestaurantSupport"))
 const FssaiDetails = lazy(() => import("@food/pages/restaurant/FssaiDetails"))
 const FssaiUpdate = lazy(() => import("@food/pages/restaurant/FssaiUpdate"))
@@ -113,6 +114,7 @@ export default function RestaurantRouter() {
             <Route path="share-feedback" element={<ShareFeedback />} />
             <Route path="dish-ratings" element={<DishRatings />} />
             <Route path="help-centre/support" element={<RestaurantSupport />} />
+            <Route path="admin-chat" element={<SupportChatScreen module="restaurant" />} />
             <Route path="fssai" element={<FssaiDetails />} />
             <Route path="fssai/update" element={<FssaiUpdate />} />
             <Route path="hyperpure" element={<Hyperpure />} />

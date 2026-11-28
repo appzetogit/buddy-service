@@ -11,6 +11,7 @@ import {
   FileText, 
   Wallet,
   LifeBuoy,
+  MessageSquare,
   ChevronRight,
 } from "lucide-react"
 
@@ -42,6 +43,13 @@ const helpTopics = [
     title: "Payments",
     subtitle: "Statement of account, invoices etc.",
     path: "/food/restaurant/hub-finance"
+  },
+  {
+    id: 8,
+    icon: MessageSquare,
+    title: "Chat with Admin",
+    subtitle: "Live chat during support hours",
+    path: "/food/restaurant/admin-chat"
   },
   {
     id: 7,

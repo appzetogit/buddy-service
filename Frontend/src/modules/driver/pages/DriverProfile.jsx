@@ -435,6 +435,7 @@ export default function DriverProfile() {
       incentives: "/driver/home",
       sos: "/food/delivery/help/tickets",
       help: "/food/delivery/help/tickets",
+      adminChat: "/food/delivery/help/admin-chat",
       deleteAccount: null,
     }),
     [],
@@ -601,6 +602,13 @@ export default function DriverProfile() {
       {
         title: "Support & Legal",
         items: [
+          {
+            id: "admin-chat",
+            label: "Chat with Admin",
+            sub: "Talk to the support team",
+            icon: <HelpCircle size={20} />,
+            path: links.adminChat,
+          },
           {
             id: "help",
             label: "Help & Support",

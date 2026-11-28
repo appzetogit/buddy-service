@@ -160,6 +160,7 @@ export const initSocket = async (server) => {
             if (role === 'SELLER') socket.join(roomNames.seller(userId));
             if (role === 'USER') socket.join(roomNames.user(userId));
             if (role === 'ADMIN') socket.join(roomNames.adminBroadcast());
+            socket.join('support_chat_all'); // support-chat hours changes reach every open chat screen
             if (isFoodDeliveryRole(role)) {
                 socket.join(roomNames.delivery(userId));
                 socket.join('all_delivery'); // Global delivery broadcast room

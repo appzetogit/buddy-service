@@ -167,6 +167,19 @@ export const ProfileV2 = () => {
           <div>
             <h3 className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-4 px-2 text-left">Support & Help</h3>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+              <div
+                onClick={() => navigate('/food/delivery/help/admin-chat')}
+                className="w-full p-4 border-b border-gray-50 flex items-center justify-between active:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#F0FDF4] rounded-xl flex items-center justify-center text-[#16A34A]">
+                    <Ticket className="w-5 h-5" />
+                  </div>
+                  <span className="text-sm font-black text-[#0F172A] uppercase tracking-tight">Chat with Admin</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-200" />
+              </div>
+
               <div 
                 onClick={() => navigate('/food/delivery/help/tickets')}
                 className="w-full p-4 border-b border-gray-50 flex items-center justify-between active:bg-gray-50 transition-colors"

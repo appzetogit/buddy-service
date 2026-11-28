@@ -31,6 +31,7 @@ import fcmRoutes from '../core/notifications/fcm.routes.js';
 import notificationRoutes from '../core/notifications/notification.routes.js';
 import chatRoutes from '../modules/food/chat/routes/chat.routes.js';
 import quickCommerceChatRoutes from '../modules/quick-commerce/chat/routes/chat.routes.js';
+import supportChatRoutes from '../core/supportChat/supportChat.routes.js';
 import { authMiddleware } from '../core/auth/auth.middleware.js';
 import * as businessSettingsController from '../modules/food/admin/controllers/businessSettings.controller.js';
 import { getTipsConfig as getFoodTipsConfig, getOfferBannersPublic } from '../modules/food/admin/controllers/admin.controller.js';
@@ -117,6 +118,8 @@ router.use('/v1/food/user', authMiddleware, requireRoles('USER'), userRoutes);
 router.use('/v1/profile', authMiddleware, requireRoles('USER'), masterProfileRoutes);
 
 router.use('/v1/food/notifications', authMiddleware, requireRoles('USER', 'RESTAURANT', 'DELIVERY_PARTNER'), notificationRoutes);
+// Direct chat between admin and user / seller / restaurant / delivery partner (admin-set chat hours).
+router.use('/v1/support-chat', authMiddleware, supportChatRoutes);
 router.use('/v1/food/chat', authMiddleware, requireRoles('USER', 'RESTAURANT', 'DELIVERY_PARTNER', 'ADMIN'), chatRoutes);
 router.use('/v1/location', authMiddleware, requireRoles('USER', 'RESTAURANT', 'DELIVERY_PARTNER'), locationRoutes);
 router.use('/v1/food/orders', authMiddleware, requireRoles('USER'), orderUserRoutes);

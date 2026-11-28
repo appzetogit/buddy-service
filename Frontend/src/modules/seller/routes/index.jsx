@@ -36,6 +36,7 @@ const Earnings = React.lazy(() => import("../pages/Earnings"));
 const Analytics = React.lazy(() => import("../pages/Analytics"));
 const Transactions = React.lazy(() => import("../pages/Transactions"));
 const DeliveryTracking = React.lazy(() => import("../pages/DeliveryTracking"));
+const SupportChatScreen = React.lazy(() => import("../../../shared/supportChat/SupportChatScreen"));
 const Profile = React.lazy(() => import("../pages/Profile"));
 const Withdrawals = React.lazy(() => import("../pages/Withdrawals"));
 const Onboarding = React.lazy(() => import("../pages/Onboarding"));
@@ -105,6 +106,7 @@ const SellerWorkspace = () => (
       <Route path="profile" element={<Profile />} />
       <Route path="notifications" element={<Notifications />} />
       <Route path="support" element={<SellerSupportPage />} />
+      <Route path="chat" element={<SupportChatScreen module="seller" />} />
       <Route path="*" element={<Navigate to="/seller" replace />} />
     </Routes>
   </DashboardLayout>

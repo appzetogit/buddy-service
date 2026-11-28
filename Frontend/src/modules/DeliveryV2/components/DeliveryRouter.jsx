@@ -29,6 +29,7 @@ const FuelPayment = lazy(() => import("@food/pages/delivery/FuelPayment"))
 const LimitSettlement = lazy(() => import("@food/pages/delivery/LimitSettlement"))
 const OffersPage = lazy(() => import("@food/pages/delivery/OffersPage"))
 const UpdatesPage = lazy(() => import("@food/pages/delivery/UpdatesPage"))
+const SupportChatScreen = lazy(() => import("../../../shared/supportChat/SupportChatScreen"))
 const SupportTickets = lazy(() => import("@food/pages/delivery/SupportTickets"))
 const CreateSupportTicket = lazy(() => import("@food/pages/delivery/CreateSupportTicket"))
 const ViewSupportTicket = lazy(() => import("@food/pages/delivery/ViewSupportTicket"))
@@ -401,6 +402,14 @@ export default function DeliveryRouter() {
             </ProtectedRoute>
           }
           path="updates"
+        />
+        <Route
+          element={
+            <ProtectedRoute>
+              <SupportChatScreen module="delivery" />
+            </ProtectedRoute>
+          }
+          path="help/admin-chat"
         />
         <Route
           element={

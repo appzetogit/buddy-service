@@ -916,6 +916,14 @@ export default function Profile() {
             </h3>
           </div>
           <div className="space-y-2">
+            <Link to="/user/profile/admin-chat" className="block">
+              <Card className="bg-white dark:bg-[#1a1a1a] py-0 rounded-xl shadow-sm border-0 dark:border-gray-800 cursor-pointer">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <span className="text-base font-medium text-gray-900 dark:text-white">Chat with Admin</span>
+                  <ChevronRight className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+                </CardContent>
+              </Card>
+            </Link>
             <Link to="/user/profile/support" className="block">
               <motion.div
                 whileHover={{ x: 4, scale: 1.01 }}
