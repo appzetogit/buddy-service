@@ -90,15 +90,12 @@ export async function rateOrderItems({ orderKind, order, userId, items }) {
 
     if (itemType === 'quick') {
       // The product page's review list reads QuickReview, so the rating shows there too.
-      await QuickReview.create({
-        productId: key,
-        userId,
-        userName: user?.name || 'Customer',
-        rating,
-        comment,
-        orderId: order._id,
-        status: 'approved',
-      }).catch((e) => logger.warn(`[Ratings] product review mirror failed: ${e?.message || e}`));
+      // One review row per customer and product (unique index): a repeat purchase updates it to the latest rating.
+      await QuickReview.findOneAndUpdate(
+        { userId, productId: key },
+        { $set: { userName: user?.name || 'Customer', rating, comment, orderId: order._id, status: 'approved' } },
+        { upsert: true, setDefaultsOnInsert: true },
+      ).catch((e) => logger.warn(`[Ratings] product review mirror failed: ${e?.message || e}`));
     }
     saved.push({ itemId: key, itemType, name: line.name || '', rating, comment, ratedAt: new Date() });
   }
