@@ -232,6 +232,15 @@ const ProductRow = React.memo(({
 });
 ProductRow.displayName = "ProductRow";
 
+// Total units in stock: the sum over variants, or the product's own stock when it has none (same rule as Stock Management).
+const getProductTotalStock = (product = {}) => {
+  const variants = Array.isArray(product.variants) ? product.variants : [];
+  if (variants.length > 0) {
+    return variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+  }
+  return Number(product.stock) || 0;
+};
+
 const normalizeType = (type) =>
   (type || "quick_commerce").toLowerCase().replace(/\s+/g, "_");
 
