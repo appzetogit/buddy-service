@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import AdminLayout from "./AdminLayout";
 import Loader from "@food/components/Loader";
+import { ENABLE_DINING } from "@/shared/featureFlags"
 
 const AdminHome = lazy(() => import("@food/pages/admin/AdminHome"));
 const PointOfSale = lazy(() => import("@food/pages/admin/PointOfSale"));
@@ -309,9 +310,9 @@ export default function AdminRouter() {
             <Route path="addon-activation" element={<AddonActivation />} />
             <Route path="hero-banner-management" element={<LandingPageManagement />} />
             <Route path="home-screen-management" element={<HomeScreenManagement />} />
-            <Route path="dining-management" element={<DiningManagement />} />
-            <Route path="dining-list" element={<DiningList />} />
-            <Route path="dining-requests" element={<DiningRequests />} />
+            <Route path="dining-management" element={ENABLE_DINING ? <DiningManagement /> : <Navigate to="/admin/food" replace />} />
+            <Route path="dining-list" element={ENABLE_DINING ? <DiningList /> : <Navigate to="/admin/food" replace />} />
+            <Route path="dining-requests" element={ENABLE_DINING ? <DiningRequests /> : <Navigate to="/admin/food" replace />} />
           </Route>
 
           {/* QUICK COMMERCE ADMIN — ported module, nested like food/* above */}

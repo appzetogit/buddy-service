@@ -1,3 +1,6 @@
+
+import { ENABLE_DINING } from "@/shared/featureFlags"
+
 export const adminSidebarMenu = [
   {
     type: "link",
@@ -231,6 +234,8 @@ export const adminSidebarMenu = [
   {
     type: "section",
     label: "DINING MANAGEMENT",
+    // Dining is hidden everywhere for now (shared/featureFlags ENABLE_DINING); set it to true to bring this back.
+    hidden: !ENABLE_DINING,
     items: [
       { type: "link", label: "Dining Banners", path: "/admin/food/dining-management", icon: "UtensilsCrossed" },
       { type: "link", label: "Dining List", path: "/admin/food/dining-list", icon: "FileText" },
