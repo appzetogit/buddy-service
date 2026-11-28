@@ -60,6 +60,7 @@ router.patch('/orders/:orderId/reject', authMiddleware, requireRoles('DELIVERY_P
 router.patch('/orders/:orderId/reached-pickup', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.confirmReachedPickupDeliveryController);
 router.patch('/orders/:orderId/confirm-pickup', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.confirmPickupDeliveryController);
 router.patch('/orders/:orderId/reached-drop', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.confirmReachedDropDeliveryController);
+router.post('/orders/:orderId/drop-proof', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.submitDropProofDeliveryController);
 router.post('/orders/:orderId/verify-drop-otp', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.verifyDropOtpDeliveryController);
 router.patch('/orders/:orderId/complete', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.completeDeliveryController);
 router.patch('/orders/:orderId/status', authMiddleware, requireRoles('DELIVERY_PARTNER', 'DRIVER'), orderController.updateOrderStatusDeliveryController);

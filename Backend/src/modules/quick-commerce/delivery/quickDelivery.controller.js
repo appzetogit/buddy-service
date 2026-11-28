@@ -19,6 +19,7 @@ import {
   reachedDrop,
   reachedPickup,
   verifyDropOtp,
+  submitDropProof,
 } from '../services/quickRiderFlow.service.js';
 import {
   acceptSharedQuickOrder,
@@ -223,6 +224,11 @@ export const confirmPickupController = riderStep('confirm pickup', 'Pickup confi
 
 export const reachedDropController = riderStep('mark reached drop', 'Marked as reached drop', (req, partnerId) =>
   reachedDrop(req.params.orderId, partnerId),
+);
+
+/** Photo of the delivered parcel (uploaded via the upload API first), required before the handover code. */
+export const submitDropProofController = riderStep('save delivery photo', 'Delivery photo saved', (req, partnerId) =>
+  submitDropProof(req.params.orderId, partnerId, req.body?.imageUrl),
 );
 
 /** Handover code check at the customer's door. */

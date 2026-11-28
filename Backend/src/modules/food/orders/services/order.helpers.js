@@ -10,6 +10,7 @@ import { config } from '../../../../config/env.js';
 import { addOrderJob } from '../../../../queues/producers/order.producer.js';
 import { FoodOrderEvent } from '../models/foodOrderEvent.model.js';
 import { FoodPeakHourRule } from '../../admin/models/peakHourRule.model.js';
+import { buildDropProofs } from './dropProof.util.js';
 
 /**
  * Record an order lifecycle milestone.
@@ -957,6 +958,7 @@ export function sanitizeOrderForExternal(orderDoc) {
       },
     };
   }
+  o.dropProofs = buildDropProofs(o);
   o.orderMongoId = (o._id || orderDoc?._id || "").toString();
   // Ensure orderId field for UI always contains the pretty ID
   o.orderId = o.order_id || o.orderMongoId;

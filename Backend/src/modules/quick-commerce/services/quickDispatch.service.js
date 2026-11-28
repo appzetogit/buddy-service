@@ -23,6 +23,7 @@ import { getIO, rooms } from '../../../config/socket.js';
 import { getQuickDeliverySettings } from './quickDeliverySettings.service.js';
 import { getNextPickup } from '../../food/orders/services/order-lifecycle.policy.js';
 import { logger } from '../../../utils/logger.js';
+import { buildDropProofs } from '../../food/orders/services/dropProof.util.js';
 import { getRiderCashSummary, riderCanTakeWork, CASH_BLOCKED_MESSAGE, CASH_NO_HEADROOM_MESSAGE } from '../../food/delivery/services/riderCash.service.js';
 import { eligiblePartnerIds, gigPartnerIdsForTime, GIG_BLOCKED_MESSAGE, GIG_SCHEDULED_MESSAGE } from '../../common/gigs/gig.service.js';
 
@@ -153,6 +154,7 @@ export const buildQuickOfferPayload = (orderDoc) => {
       const { otp, ...rest } = leg || {};
       return { ...rest, hasOtp: Boolean(otp) };
     }),
+    dropProofs: buildDropProofs(order),
     deliveryState: order?.deliveryState,
     delayContext: order?.delayContext,
     scheduledAt: order?.scheduledAt,

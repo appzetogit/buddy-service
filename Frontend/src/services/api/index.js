@@ -2501,6 +2501,13 @@ export const deliveryAPI = {
         contextModule: "delivery",
       },
     ),
+  /** POST /food/delivery/orders/:orderId/drop-proof - photo of the delivered parcel (required before the drop OTP) */
+  submitDropProof: (orderId, imageUrl) =>
+    apiClient.post(
+      `/food/delivery/orders/${String(orderId)}/drop-proof`,
+      { imageUrl },
+      { contextModule: "delivery" },
+    ),
   verifyDropOtp: (orderId, otp) =>
     apiClient.post(
       `/food/delivery/orders/${String(orderId)}/verify-drop-otp`,

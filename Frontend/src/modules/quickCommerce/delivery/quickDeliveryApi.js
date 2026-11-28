@@ -36,6 +36,9 @@ export const quickDeliveryAPI = {
   confirmReachedDrop: (orderId) =>
     apiClient.patch(`${base(orderId)}/reached-drop`, {}, opts),
 
+  submitDropProof: (orderId, imageUrl) =>
+    apiClient.post(`${base(orderId)}/drop-proof`, { imageUrl }, opts),
+
   verifyDropOtp: (orderId, otp) =>
     apiClient.post(`${base(orderId)}/verify-drop-otp`, { otp: String(otp) }, opts),
 

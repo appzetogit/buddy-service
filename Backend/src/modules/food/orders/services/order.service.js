@@ -3354,6 +3354,10 @@ export async function confirmReachedDropDelivery(orderId, deliveryPartnerId) {
   return deliveryService.confirmReachedDropDelivery(orderId, deliveryPartnerId);
 }
 
+export async function submitDropProofDelivery(orderId, deliveryPartnerId, imageUrl) {
+  return deliveryService.submitDropProofDelivery(orderId, deliveryPartnerId, imageUrl);
+}
+
 export async function verifyDropOtpDelivery(orderId, deliveryPartnerId, otp) {
   return deliveryService.verifyDropOtpDelivery(orderId, deliveryPartnerId, otp);
 }

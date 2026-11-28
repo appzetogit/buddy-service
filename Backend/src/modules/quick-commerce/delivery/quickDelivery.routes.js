@@ -11,6 +11,7 @@ import {
   confirmPickupController,
   reachedDropController,
   verifyDropOtpController,
+  submitDropProofController,
   completeQuickOrderController,
   shareQuickOrderController,
   acceptSharedQuickOrderController,
@@ -31,6 +32,7 @@ router.patch('/orders/:orderId/reject', ...riderOnly, rejectQuickOrderController
 router.patch('/orders/:orderId/reached-pickup', ...riderOnly, reachedPickupController);
 router.patch('/orders/:orderId/confirm-pickup', ...riderOnly, confirmPickupController);
 router.patch('/orders/:orderId/reached-drop', ...riderOnly, reachedDropController);
+router.post('/orders/:orderId/drop-proof', ...riderOnly, submitDropProofController);
 router.post('/orders/:orderId/verify-drop-otp', ...riderOnly, verifyDropOtpController);
 router.patch('/orders/:orderId/complete', ...riderOnly, completeQuickOrderController);
 // Second rider / split / delay (mirrors Food's /share, /accept-share, /confirm-split, /delay)

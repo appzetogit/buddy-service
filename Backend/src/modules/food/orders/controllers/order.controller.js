@@ -345,6 +345,15 @@ export async function confirmReachedDropDeliveryController(req, res, next) {
     }
 }
 
+export async function submitDropProofDeliveryController(req, res, next) {
+    try {
+        const order = await orderService.submitDropProofDelivery(req.params.orderId, req.user?.userId, req.body?.imageUrl);
+        return sendResponse(res, 200, 'Delivery photo saved', { order });
+    } catch (err) {
+        next(err);
+    }
+}
+
 export async function verifyDropOtpDeliveryController(req, res, next) {
     try {
         const deliveryPartnerId = req.user?.userId;

@@ -530,6 +530,8 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
     })(),
     isMultiRestaurant: apiOrder?.isMultiRestaurant || (apiOrder?.pickups?.length > 1) || previousOrder?.isMultiRestaurant || false,
     pickups: apiOrder?.pickups || previousOrder?.pickups || [],
+    // Rider's photo(s) of the delivered parcel (one per rider drop), shown before the OTP is shared.
+    dropProofs: apiOrder?.dropProofs || previousOrder?.dropProofs || [],
     partialRefunds: apiOrder?.partialRefunds || previousOrder?.partialRefunds || [],
     cancellationReason: apiOrder?.cancellationReason || previousOrder?.cancellationReason || null,
     ratings: apiOrder?.ratings || previousOrder?.ratings || {},
@@ -2163,6 +2165,21 @@ export default function OrderTracking() {
               </div>
             </div>
           </motion.div>
+        )}
+
+        {Array.isArray(order?.dropProofs) && order.dropProofs.length > 0 && (
+          <div className="bg-white dark:bg-[#1a1a1a] rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 space-y-2">
+            <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+              Delivery photo
+            </p>
+            <div className={order.dropProofs.length > 1 ? 'grid grid-cols-2 gap-3' : ''}>
+              {order.dropProofs.map((p, i) => (
+                <a key={`${p.imageUrl}-${i}`} href={p.imageUrl} target="_blank" rel="noreferrer">
+                  <img src={p.imageUrl} alt="Delivered order" loading="lazy" className="w-full max-h-64 rounded-lg object-cover" />
+                </a>
+              ))}
+            </div>
+          </div>
         )}
 
         {customerLegOtps.length > 0 && orderStatus !== 'delivered' && orderStatus !== 'cancelled' && (

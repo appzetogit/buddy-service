@@ -23,6 +23,7 @@ import {
 } from '../helpers/razorpay.helper.js';
 import { fetchPolyline } from '../utils/googleMaps.js';
 import * as foodTransactionService from './foodTransaction.service.js';
+import { validateProofUrl, assertAtDrop, assertDropProof, applyDropProof } from './dropProof.util.js';
 import * as dispatchService from './order-dispatch.service.js';
 import {
   isActivePickup,
@@ -1771,6 +1772,32 @@ export async function confirmSplitDelivery(orderId, deliveryPartnerId) {
   return sanitizeOrderForExternal(order);
 }
 
+/** Rider uploads the photo of the delivered parcel; must happen at the drop, before the OTP is verified. */
+export async function submitDropProofDelivery(orderId, deliveryPartnerId, imageUrl) {
+  const url = validateProofUrl(imageUrl);
+  const identity = buildOrderIdentityFilter(orderId);
+  const order = await FoodOrder.findOne(identity).select('+deliveryOtp');
+  if (!order) throw new NotFoundError('Order not found');
+
+  const isPrimary = toPartnerId(order.dispatch?.deliveryPartnerId) === toPartnerId(deliveryPartnerId);
+  const isShared = toPartnerId(order.dispatch?.sharedPartnerId) === toPartnerId(deliveryPartnerId);
+  if (!isPrimary && !isShared) throw new ForbiddenError('Not your order');
+
+  ensureDualLegs(order, generateFourDigitDeliveryOtp);
+  const leg = isDualLegActive(order) ? getLegForPartner(order, deliveryPartnerId) : null;
+  if (isDualLegActive(order) && !leg) throw new ForbiddenError('No delivery leg assigned to you on this shared order');
+
+  if (leg ? leg.otpVerified : order.deliveryVerification?.dropOtp?.verified) {
+    throw new ValidationError('OTP is already verified for this delivery; the photo can no longer be changed.');
+  }
+  assertAtDrop(order, leg);
+  applyDropProof(order, leg, deliveryPartnerId, url);
+  await order.save();
+
+  emitOrderUpdate(order, deliveryPartnerId, { sendMilestonePush: false }); // customer sees the photo live
+  return sanitizeOrderForExternal(order);
+}
+
 export async function verifyDropOtpDelivery(orderId, deliveryPartnerId, otp) {
   const identity = buildOrderIdentityFilter(orderId);
   const order = await FoodOrder.findOne(identity).select('+deliveryOtp');
@@ -1797,6 +1824,7 @@ export async function verifyDropOtpDelivery(orderId, deliveryPartnerId, otp) {
     if (verifyLeg.otpVerified) {
       return { order: sanitizeOrderForExternal(order) };
     }
+    assertDropProof(order, verifyLeg);
     if (!isOtpMatch(verifyLeg.otp, otpStr)) {
       throw new ValidationError(
         'Invalid OTP. Ask the customer for the code shown in their app for this delivery.',
@@ -1839,6 +1867,7 @@ export async function verifyDropOtpDelivery(orderId, deliveryPartnerId, otp) {
     return { order: sanitizeOrderForExternal(order) };
   }
 
+  assertDropProof(order, null);
   if (!isOtpMatch(order.deliveryOtp, otpStr)) {
     throw new ValidationError(
       'Invalid OTP. Ask the customer for the code shown in their app.',
@@ -1892,6 +1921,7 @@ export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
     }
 
     if (!completeLeg.otpVerified) {
+      assertDropProof(order, completeLeg);
       const providedOtp = normalizeOtpValue(otp);
       if (!providedOtp) {
         throw new ValidationError(
@@ -1964,6 +1994,7 @@ export async function completeDelivery(orderId, deliveryPartnerId, body = {}) {
     order.deliveryVerification?.dropOtp?.required &&
     !order.deliveryVerification?.dropOtp?.verified
   ) {
+    assertDropProof(order, null);
     const orderWithSecret = await FoodOrder.findById(order._id).select('+deliveryOtp');
     if (isOtpMatch(orderWithSecret?.deliveryOtp, otp)) {
       order.deliveryVerification.dropOtp.verified = true;

@@ -37,6 +37,7 @@ import { getIO, rooms } from '../../../config/socket.js';
 import { logger } from '../../../utils/logger.js';
 import { getQuickDeliverySettings } from './quickDeliverySettings.service.js';
 import { emitQuickOrderUpdate } from './quickDispatch.service.js';
+import { validateProofUrl, assertAtDrop, assertDropProof, applyDropProof } from '../../food/orders/services/dropProof.util.js';
 import { emitQuickLegOtpsToCustomer } from './quickOrderFlows.service.js';
 import { syncSellerOrderFromDelivery } from './quickOrder.service.js';
 
@@ -286,6 +287,22 @@ const otpMatches = (expected, supplied) => {
   return Boolean(a) && Boolean(b) && a === b;
 };
 
+/** Photo of the delivered parcel, taken at the door before the customer's code is checked. */
+export async function submitDropProof(orderId, partnerId, imageUrl) {
+  const url = validateProofUrl(imageUrl);
+  const order = await loadOrderForRider(orderId, partnerId, { withOtp: true });
+  const leg = myLegOf(order, partnerId);
+  if (isDualLegActive(order) && !leg) throw new ForbiddenError('No delivery leg assigned to you on this shared order');
+  if (leg ? leg.otpVerified : order.deliveryVerification?.dropOtp?.verified) {
+    throw new ValidationError('Handover code already verified; the photo can no longer be changed.');
+  }
+  assertAtDrop(order, leg);
+  applyDropProof(order, leg, partnerId, url);
+  await order.save();
+  await emitQuickOrderUpdate(order, 'order_update'); // customer sees the photo live
+  return { order };
+}
+
 /** Handover code check at the door (this rider's own leg when two riders share the order). */
 export async function verifyDropOtp(orderId, partnerId, otp) {
   const order = await loadOrderForRider(orderId, partnerId, { withOtp: true });
@@ -293,6 +310,7 @@ export async function verifyDropOtp(orderId, partnerId, otp) {
 
   if (leg) {
     if (leg.otpVerified) return { verified: true, order };
+    assertDropProof(order, leg);
     if (!otpMatches(leg.otp, otp)) throw new ValidationError('Incorrect handover code');
     leg.otpVerified = true;
     order.markModified('legs');
@@ -303,6 +321,7 @@ export async function verifyDropOtp(orderId, partnerId, otp) {
 
   const expected = String(order.deliveryOtp || '').trim();
   if (!expected) throw new ValidationError('No handover code set for this order');
+  assertDropProof(order, null);
   if (!otpMatches(expected, otp)) throw new ValidationError('Incorrect handover code');
   order.set('deliveryVerification.dropOtp.verified', true);
   await order.save();
@@ -330,6 +349,7 @@ export async function completeDelivery(orderId, partnerId, { otp = '' } = {}) {
       throw new ValidationError('Collect your part of the order before completing your delivery.');
     }
     if (!leg.otpVerified) {
+      assertDropProof(order, leg);
       if (!String(otp || '').trim()) {
         throw new ValidationError('Customer handover OTP is required. Verify the OTP for your delivery before completing.');
       }
@@ -369,6 +389,7 @@ export async function completeDelivery(orderId, partnerId, { otp = '' } = {}) {
     const required = Boolean(order.deliveryVerification?.dropOtp?.required);
     const alreadyVerified = Boolean(order.deliveryVerification?.dropOtp?.verified);
     if (required && !alreadyVerified) {
+      assertDropProof(order, null);
       if (!String(otp || '').trim()) {
         throw new ValidationError('Customer handover OTP is required. Verify the OTP from the customer before completing delivery.');
       }

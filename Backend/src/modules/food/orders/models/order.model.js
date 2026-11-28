@@ -292,6 +292,12 @@ const deliveryVerificationSchema = new mongoose.Schema(
         dropOtp: {
             required: { type: Boolean, default: false },
             verified: { type: Boolean, default: false }
+        },
+        /** Rider's photo of the delivered parcel, taken before the customer OTP is checked. */
+        dropProof: {
+            imageUrl: { type: String, default: '' },
+            uploadedAt: { type: Date, default: null },
+            partnerId: { type: mongoose.Schema.Types.ObjectId, default: null }
         }
     },
     { _id: false }
@@ -374,6 +380,9 @@ const deliveryLegSchema = new mongoose.Schema(
         /** Per-leg handover OTP — every leg is verified independently at the drop. */
         otp: { type: String, default: '' },
         otpVerified: { type: Boolean, default: false },
+        /** Delivery photo for this rider's drop (taken before this leg's OTP is checked). */
+        dropProofUrl: { type: String, default: '' },
+        dropProofAt: { type: Date, default: null },
         earning: { type: Number, default: 0, min: 0 },
         assignedAt: { type: Date, default: Date.now },
         reachedPickupAt: { type: Date, default: null },

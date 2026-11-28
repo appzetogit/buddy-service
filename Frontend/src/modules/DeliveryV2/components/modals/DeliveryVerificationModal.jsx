@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShieldCheck, DollarSign, CheckCircle2, 
   QrCode, Loader2, Info, X, RefreshCw, Package,
-  Users, PhoneCall, Scale
+  Users, PhoneCall, Scale, Camera
 } from 'lucide-react';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
-import { deliveryAPI as foodDeliveryAPI } from '@food/api';
+import { deliveryAPI as foodDeliveryAPI, uploadAPI } from '@food/api';
 import { quickDeliveryAPI, isQuickDeliveryOrder } from '@quickCommerce/delivery/quickDeliveryApi';
 import { toast } from 'sonner';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
@@ -88,6 +88,33 @@ const OtpModal = ({ order, onVerified, onClose }) => {
     ? (order._id || order.orderMongoId || order.orderId)
     : (order.orderId || order._id || 'ORD');
 
+  // Step 0: photo of the delivered parcel. The customer sees it in their order, then gives the OTP.
+  const savedProofUrl = isDualLeg ? myLeg?.dropProofUrl : order?.deliveryVerification?.dropProof?.imageUrl;
+  const [proofUrl, setProofUrl] = useState('');
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
+  const activeProofUrl = proofUrl || savedProofUrl || '';
+  const hasProof = Boolean(activeProofUrl);
+
+  const handleProofFile = async (file) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size should be less than 5MB');
+      return;
+    }
+    setIsUploadingProof(true);
+    try {
+      const up = await uploadAPI.uploadMedia(file, { folder: 'appzeto/delivery/drop-proof' });
+      const url = up?.data?.data?.url || up?.data?.data?.secure_url;
+      if (!url) throw new Error('Upload failed');
+      await deliveryAPI.submitDropProof(orderId, url);
+      setProofUrl(url);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || err?.message || 'Could not save delivery photo');
+    } finally {
+      setIsUploadingProof(false);
+    }
+  };
+
   const handleOtpChange = (index, value) => {
     if (value && !/^\d+$/.test(value)) return;
     const newOtp = [...otp];
@@ -138,7 +165,7 @@ const OtpModal = ({ order, onVerified, onClose }) => {
              <div>
                <h2 className="text-xl font-bold text-gray-900">Handover Code</h2>
                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                 {isDualLeg ? 'Your delivery OTP · Step 1' : 'Step 1 of Verification'}
+                 {isDualLeg ? 'Your delivery OTP · Step 2' : 'Step 2 of Verification'}
                </p>
              </div>
            </div>
@@ -152,6 +179,27 @@ const OtpModal = ({ order, onVerified, onClose }) => {
             <p className="text-[11px] font-bold text-indigo-800 leading-snug">
               Ask the customer for <span className="underline">your</span> OTP only — each driver has a separate code.
             </p>
+          </div>
+        )}
+
+        {!isAlreadyVerified && (
+          <div className="mb-5 rounded-2xl border border-gray-200 p-3">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-gray-500">
+              Step 1 · Photo of delivered order
+            </p>
+            {hasProof && <img src={activeProofUrl} alt="Delivery proof" className="mb-2 h-36 w-full rounded-xl object-cover" />}
+            <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold uppercase tracking-widest ${hasProof ? 'bg-gray-100 text-gray-600' : 'bg-gray-900 text-white'}`}>
+              {isUploadingProof ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+              <span>{isUploadingProof ? 'Uploading...' : hasProof ? 'Retake photo' : 'Take photo'}</span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                disabled={isUploadingProof || isOtpVerified}
+                onChange={(e) => { handleProofFile(e.target.files?.[0]); e.target.value = ''; }}
+              />
+            </label>
           </div>
         )}
 
@@ -176,7 +224,7 @@ const OtpModal = ({ order, onVerified, onClose }) => {
           key="action-otp"
           label={isVerifyingOtp ? "Verifying..." : isAlreadyVerified ? "Code already verified ✓" : "Slide to Verify OTP"} 
           successLabel="Verified!"
-          disabled={otp.some(d => !d) || isVerifyingOtp || isOtpVerified || isAlreadyVerified}
+          disabled={otp.some(d => !d) || isVerifyingOtp || isOtpVerified || isAlreadyVerified || (!hasProof && !isAlreadyVerified)}
           onConfirm={isAlreadyVerified ? async () => onVerified('VERIFIED') : verifyOtp}
           color="bg-gray-900"
         />

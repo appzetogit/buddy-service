@@ -5,6 +5,7 @@
  */
 
 import { resolveQuickOrderCancellationReason } from './cancellation.helpers.js';
+import { buildDropProofs } from '../../food/orders/services/dropProof.util.js';
 
 const num = (value, fallback = 0) => {
   const n = Number(value);
@@ -455,6 +456,8 @@ export const toQuickCustomerOrderDetail = ({
         verified: Boolean(dropOtp.verified),
       },
     },
+    // Rider's photo(s) of the delivered parcel: one per rider drop.
+    dropProofs: buildDropProofs(order),
     ...(dropOtp.required && !dropOtp.verified && handoverOtp
       ? { handoverOtp: String(handoverOtp) }
       : {}),
