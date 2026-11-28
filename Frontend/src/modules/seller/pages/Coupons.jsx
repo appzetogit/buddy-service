@@ -53,7 +53,7 @@ const triggerCrackerExplosion = () => {
     particleCount: 90,
     spread: 90,
     origin: { y: 0.55 },
-    colors: ['#ef4444', '#10b981', '#f59e0b', '#3b82f6', '#ec4899', '#8b5cf6'],
+    colors: ['#16A34A', '#10b981', '#f59e0b', '#3b82f6', '#ec4899', '#8b5cf6'],
     zIndex: 99999,
   });
 
@@ -63,7 +63,7 @@ const triggerCrackerExplosion = () => {
     angle: 60,
     spread: 65,
     origin: { x: 0.05, y: 0.65 },
-    colors: ['#ef4444', '#f59e0b', '#10b981', '#3b82f6'],
+    colors: ['#16A34A', '#f59e0b', '#10b981', '#3b82f6'],
     zIndex: 99999,
   });
 
@@ -73,7 +73,7 @@ const triggerCrackerExplosion = () => {
     angle: 120,
     spread: 65,
     origin: { x: 0.95, y: 0.65 },
-    colors: ['#ef4444', '#f59e0b', '#10b981', '#3b82f6'],
+    colors: ['#16A34A', '#f59e0b', '#10b981', '#3b82f6'],
     zIndex: 99999,
   });
 
@@ -83,7 +83,7 @@ const triggerCrackerExplosion = () => {
       particleCount: 50,
       spread: 100,
       origin: { y: 0.45 },
-      colors: ['#f59e0b', '#ef4444', '#10b981', '#8b5cf6'],
+      colors: ['#f59e0b', '#16A34A', '#10b981', '#8b5cf6'],
       zIndex: 99999,
     });
   }, 250);
@@ -219,7 +219,7 @@ export default function Coupons() {
         </div>
         <button
           onClick={openCreateModal}
-          className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer">
+          className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer">
           <Plus className="h-3.5 w-3.5" />
           <span>Create Coupon</span>
         </button>
@@ -304,7 +304,7 @@ export default function Coupons() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => openEditModal(coupon)}
-                        className="rounded-lg bg-red-50 p-2 text-red-700 hover:bg-red-100 transition-colors border border-red-200"
+                        className="rounded-lg bg-green-50 p-2 text-green-700 hover:bg-green-100 transition-colors border border-green-200"
                         title="Edit Coupon"
                       >
                         <Edit2 className="h-4 w-4" />
@@ -365,7 +365,7 @@ export default function Coupons() {
                       value={formData.code}
                       onChange={(e) => setFormData((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
                       placeholder="E.g. SUMMER50, WELCOME20"
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-semibold text-slate-900 uppercase tracking-wider outline-none focus:bg-white focus:border-red-500 focus:ring-1 focus:ring-red-500/20 transition-all"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-semibold text-slate-900 uppercase tracking-wider outline-none focus:bg-white focus:border-green-600 focus:ring-1 focus:ring-green-600/20 transition-all"
                     />
                   </div>
 
@@ -374,7 +374,7 @@ export default function Coupons() {
                     <select
                       value={formData.discountType}
                       onChange={(e) => setFormData((prev) => ({ ...prev, discountType: e.target.value }))}
-                      className="w-full truncate rounded-lg border border-slate-200 bg-slate-50/70 px-2 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all"
+                      className="w-full truncate rounded-lg border border-slate-200 bg-slate-50/70 px-2 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all"
                     >
                       <option value="percentage">Percentage (%)</option>
                       <option value="fixed">Fixed Flat (₹)</option>
@@ -387,7 +387,7 @@ export default function Coupons() {
                     <select
                       value={formData.couponType}
                       onChange={(e) => setFormData((prev) => ({ ...prev, couponType: e.target.value }))}
-                      className="w-full truncate rounded-lg border border-slate-200 bg-slate-50/70 px-2 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all"
+                      className="w-full truncate rounded-lg border border-slate-200 bg-slate-50/70 px-2 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all"
                     >
                       <option value="generic">Generic</option>
                       <option value="min_order_value">Min Order</option>
@@ -405,7 +405,7 @@ export default function Coupons() {
                         value={formData.discountValue}
                         onChange={(e) => setFormData((prev) => ({ ...prev, discountValue: e.target.value }))}
                         placeholder={formData.discountType === "percentage" ? "15 for 15%" : "100"}
-                        className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all"
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all"
                       />
                     </div>
                   )}
@@ -418,7 +418,7 @@ export default function Coupons() {
                       value={formData.minOrderValue}
                       onChange={(e) => setFormData((prev) => ({ ...prev, minOrderValue: e.target.value }))}
                       placeholder="E.g. 299"
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all"
                     />
                   </div>
 
@@ -431,7 +431,7 @@ export default function Coupons() {
                       onChange={(e) => setFormData((prev) => ({ ...prev, maxDiscount: e.target.value }))}
                       placeholder="E.g. 150"
                       disabled={formData.discountType === "fixed" || formData.discountType === "free_delivery"}
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all disabled:bg-slate-100"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all disabled:bg-slate-100"
                     />
                   </div>
                 </div>
@@ -446,7 +446,7 @@ export default function Coupons() {
                       value={formData.usageLimit}
                       onChange={(e) => setFormData((prev) => ({ ...prev, usageLimit: e.target.value }))}
                       placeholder="E.g. 50 (optional)"
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all"
                     />
                   </div>
 
@@ -459,7 +459,7 @@ export default function Coupons() {
                       value={formData.perUserLimit}
                       onChange={(e) => setFormData((prev) => ({ ...prev, perUserLimit: e.target.value }))}
                       placeholder="E.g. 1"
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all"
                     />
                   </div>
 
@@ -469,7 +469,7 @@ export default function Coupons() {
                       type="date"
                       value={formData.validFrom}
                       onChange={(e) => setFormData((prev) => ({ ...prev, validFrom: e.target.value }))}
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all"
                     />
                   </div>
 
@@ -480,7 +480,7 @@ export default function Coupons() {
                       value={formData.validTill}
                       min={formData.validFrom || undefined}
                       onChange={(e) => setFormData((prev) => ({ ...prev, validTill: e.target.value }))}
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all"
                     />
                   </div>
 
@@ -491,7 +491,7 @@ export default function Coupons() {
                       onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                       placeholder="E.g. Get 15% off on your favorite products up to ₹150"
                       rows={2}
-                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all"
                     />
                   </div>
                 </div>
@@ -502,7 +502,7 @@ export default function Coupons() {
                     type="checkbox"
                     checked={Boolean(formData.firstOrderOnly)}
                     onChange={(e) => setFormData((prev) => ({ ...prev, firstOrderOnly: e.target.checked }))}
-                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-600"
+                    className="h-4 w-4 rounded border-slate-300 text-green-600 focus:ring-green-600"
                   />
                   <span className="text-sm font-medium text-slate-700">First order only</span>
                 </label>
@@ -513,7 +513,7 @@ export default function Coupons() {
                   </button>
                   <button
                     onClick={handleSaveCoupon}
-                    className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-xs font-semibold text-white shadow-xs transition-colors"
+                    className="px-4 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-xs font-semibold text-white shadow-xs transition-colors"
                   >
                     {editingCoupon ? "Save Changes" : "Submit Coupon"}
                   </button>
@@ -552,7 +552,7 @@ export default function Coupons() {
                   initial={{ scale: 0, rotate: -45 }}
                   animate={{ scale: 1, rotate: 0 }}
                   transition={{ delay: 0.1, type: "spring", stiffness: 400 }}
-                  className="mx-auto h-20 w-20 rounded-full bg-gradient-to-br from-amber-100 via-rose-100 to-emerald-100 flex items-center justify-center border-4 border-white shadow-[0_12px_30px_rgba(245,158,11,0.35)] relative"
+                  className="mx-auto h-20 w-20 rounded-full bg-gradient-to-br from-amber-100 via-green-100 to-emerald-100 flex items-center justify-center border-4 border-white shadow-[0_12px_30px_rgba(245,158,11,0.35)] relative"
                 >
                   <span className="text-4xl select-none animate-bounce drop-shadow-md">🎉</span>
                   <div className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-white shadow-xs">
@@ -572,7 +572,7 @@ export default function Coupons() {
                 {/* Coupon Code Pill */}
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 inline-block w-full">
                   <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-0.5">Coupon Code</span>
-                  <span className="text-lg font-extrabold text-slate-900 font-mono tracking-widest text-red-600">
+                  <span className="text-lg font-extrabold text-slate-900 font-mono tracking-widest text-green-600">
                     {successCouponCode}
                   </span>
                 </div>

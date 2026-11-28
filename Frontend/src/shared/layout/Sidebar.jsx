@@ -55,7 +55,7 @@ const SidebarItem = ({
               className={cn(
                 "p-1.5 rounded-lg transition-all duration-200 shadow-xs",
                 isChildActive || isOpen
-                  ? (isSellerPanel ? "bg-red-600 text-white" : "bg-primary text-white")
+                  ? (isSellerPanel ? "bg-green-600 text-white" : "bg-primary text-white")
                   : (isLightSidebar
                         ? "bg-slate-100 text-slate-500 group-hover:bg-slate-200/70 group-hover:text-slate-900"
                         : "bg-white/5 text-gray-400 group-hover:bg-white/10 group-hover:text-white"),
@@ -73,7 +73,7 @@ const SidebarItem = ({
               className={cn(
                 "transition-transform duration-200 z-10",
                 isOpen
-                  ? "rotate-180 text-red-500"
+                  ? "rotate-180 text-green-600"
                   : (isLightSidebar ? "rotate-0 text-slate-400 group-hover:text-slate-600" : "rotate-0 text-gray-500 group-hover:text-gray-300"),
               )}>
               <HiChevronDown className="h-4 w-4" />
@@ -92,7 +92,7 @@ const SidebarItem = ({
                     "block text-xs py-1.5 px-2.5 rounded-lg transition-all duration-200 relative",
                     isActive
                       ? (isSellerPanel
-                          ? "text-red-600 font-semibold bg-red-50"
+                          ? "text-green-600 font-semibold bg-green-50"
                           : isLightSidebar
                             ? "text-primary font-semibold bg-slate-100"
                             : "text-white font-semibold bg-white/10")
@@ -102,7 +102,7 @@ const SidebarItem = ({
                 {({ isActive }) => (
                   <>
                     {isActive && (
-                      <div className={cn("absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 rounded-full", isSellerPanel ? "bg-red-600" : "bg-primary")} />
+                      <div className={cn("absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 rounded-full", isSellerPanel ? "bg-green-600" : "bg-primary")} />
                     )}
                     {child.label}
                   </>
@@ -128,7 +128,7 @@ const SidebarItem = ({
           collapsed ? "justify-center px-1.5" : "space-x-2.5 px-3",
           isActive
             ? (isSellerPanel
-                ? cn("bg-red-50/90 text-red-600 font-semibold", !collapsed && "border-r-2 border-red-600")
+                ? cn("bg-green-50/90 text-green-600 font-semibold", !collapsed && "border-r-2 border-green-600")
                 : "bg-primary text-white shadow-xs")
             : (isLightSidebar ? "text-slate-700 hover:text-[#1c1c1e] hover:bg-slate-50/80" : "text-gray-400 hover:text-white"),
         )
@@ -139,7 +139,7 @@ const SidebarItem = ({
             className={cn(
               "p-1.5 rounded-lg transition-all duration-200 shrink-0 z-10",
               isActive
-                ? (isSellerPanel ? "bg-red-600 text-white shadow-xs" : "bg-white/20 text-white")
+                ? (isSellerPanel ? "bg-green-600 text-white shadow-xs" : "bg-white/20 text-white")
                 : (isLightSidebar
                       ? "bg-slate-100 text-slate-500 group-hover:bg-slate-200/70 group-hover:text-slate-900"
                       : "bg-white/5 text-gray-400 group-hover:bg-white/10 group-hover:text-white"),
@@ -194,7 +194,7 @@ const SidebarContent = ({
       <div className={cn(
         "flex-shrink-0 flex h-16 items-center border-b z-10",
         collapsed ? "justify-center px-1.5" : "justify-between px-4",
-        isLightSidebar ? "border-slate-200/80 bg-white" : "border-white/5 bg-slate-900"
+        isLightSidebar ? (isSellerPanel ? "border-slate-200/80 bg-gradient-to-b from-[#E8F7EC] to-white" : "border-slate-200/80 bg-white") : "border-white/5 bg-slate-900"
       )}>
         {!collapsed && (
           <div className="flex flex-col justify-center min-w-0">
@@ -202,7 +202,7 @@ const SidebarContent = ({
               {logoUrl ? (
                 <img src={logoUrl} alt={companyName} className="h-8 w-auto object-contain" />
               ) : (
-                <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center text-white font-bold shadow-xs", isSellerPanel ? "bg-red-600" : "bg-primary")}>
+                <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center text-white font-bold shadow-xs", isSellerPanel ? "bg-green-600" : "bg-primary")}>
                   <span className="text-sm italic">{companyName?.charAt(0) || 'B'}</span>
                 </div>
               )}
@@ -214,7 +214,7 @@ const SidebarContent = ({
             </div>
             <span className={cn(
               "text-[10px] font-semibold uppercase tracking-wider mt-1 inline-block w-fit px-2 py-0.5 rounded-md",
-              isLightSidebar ? "bg-[#1c1c1e] text-white" : "bg-primary text-white"
+              isSellerPanel ? "bg-[#E8F7EC] text-[#1f8f3a] border border-green-200" : isLightSidebar ? "bg-[#1c1c1e] text-white" : "bg-primary text-white"
             )}>
               {title}
             </span>

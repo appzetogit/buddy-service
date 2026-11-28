@@ -184,8 +184,8 @@ const Withdrawals = () => {
                     <div>
                         <h1 className="text-lg sm:text-xl font-semibold text-[#1c1c1e] tracking-tight flex items-center gap-2">
                             Money Requests
-                            <span className="p-1 bg-red-100 rounded-md">
-                                <Wallet className="h-4 w-4 text-red-600" />
+                            <span className="p-1 bg-green-100 rounded-md">
+                                <Wallet className="h-4 w-4 text-green-600" />
                             </span>
                         </h1>
                         <p className="text-xs font-normal text-slate-500 mt-0.5">
@@ -194,7 +194,7 @@ const Withdrawals = () => {
                     </div>
                     <button
                         onClick={() => setIsModalOpen(true)}
-                        className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer group"
+                        className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer group"
                     >
                         <ArrowUpRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                         <span>New Request</span>
@@ -260,7 +260,7 @@ const Withdrawals = () => {
                                     </div>
                                 )}
                                 {(!bankInfo.upiId && !bankInfo.bankName) && <p className="text-sm font-black text-slate-900 mt-1">Add UPI / bank in Profile</p>}
-                                <Link to="/seller/profile" className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-500 mt-2">
+                                <Link to="/seller/profile" className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-green-600 mt-2">
                                     Update in Profile <ArrowRight className="h-3 w-3" />
                                 </Link>
                             </div>
@@ -274,7 +274,7 @@ const Withdrawals = () => {
                 <div className="border border-slate-200/80 shadow-xs overflow-hidden rounded-xl bg-white space-y-3 p-3.5 sm:p-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                         <h2 className="text-xs sm:text-sm font-semibold text-[#1c1c1e] flex items-center gap-1.5">
-                            <History className="h-4 w-4 text-red-600" />
+                            <History className="h-4 w-4 text-green-600" />
                             <span>Withdrawal History</span>
                         </h2>
                         <div className="relative w-full sm:w-64">
@@ -284,7 +284,7 @@ const Withdrawals = () => {
                                 placeholder="Search ID or status..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full bg-slate-50/70 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all placeholder:text-slate-400"
+                                className="w-full bg-slate-50/70 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all placeholder:text-slate-400"
                             />
                         </div>
                     </div>
@@ -322,20 +322,20 @@ const Withdrawals = () => {
                                                         ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
                                                         : (item.status === 'Pending' || item.status === 'Processing')
                                                             ? 'bg-amber-100 text-amber-700 border-amber-200'
-                                                            : 'bg-rose-100 text-rose-700 border-rose-200'
+                                                            : 'bg-green-100 text-green-700 border-green-200'
                                                 }`}
                                             >
                                                 {item.status === 'Settled' ? <CheckCircle2 className="h-3 w-3 mr-1" /> : (item.status === 'Pending' || item.status === 'Processing') ? <Clock className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
                                                 {item.status}
                                             </span>
-                                            {item.reason && <p className="text-[10px] text-rose-600 font-normal mt-0.5 italic">{item.reason}</p>}
+                                            {item.reason && <p className="text-[10px] text-green-600 font-normal mt-0.5 italic">{item.reason}</p>}
                                         </td>
                                         <td className="px-3.5 py-2.5 text-right">
                                             <p className="text-xs font-medium text-slate-700 truncate">{item.customer || "Bank Transfer"}</p>
                                             <button
                                                 type="button"
                                                 onClick={() => handleDownloadReceipt(item)}
-                                                className="text-[10px] font-semibold text-red-600 hover:text-red-700 mt-0.5 inline-flex items-center gap-1 justify-end ml-auto cursor-pointer"
+                                                className="text-[10px] font-semibold text-green-600 hover:text-green-700 mt-0.5 inline-flex items-center gap-1 justify-end ml-auto cursor-pointer"
                                             >
                                                 Receipt <Download className="h-3 w-3" />
                                             </button>
@@ -399,19 +399,19 @@ const Withdrawals = () => {
                                     placeholder="0.00"
                                     min={minWd || 0}
                                     max={maxWd > 0 ? Math.min(maxWd, balances.available) : balances.available}
-                                    className="w-full pl-7 pr-3 py-1.5 bg-slate-50/70 border border-slate-200 focus:bg-white focus:border-red-500 rounded-lg text-sm font-semibold text-slate-900 outline-none transition-all placeholder:text-slate-400"
+                                    className="w-full pl-7 pr-3 py-1.5 bg-slate-50/70 border border-slate-200 focus:bg-white focus:border-green-600 rounded-lg text-sm font-semibold text-slate-900 outline-none transition-all placeholder:text-slate-400"
                                 />
                             </div>
                         </div>
 
-                        <div className="p-2.5 bg-rose-50/50 rounded-lg border border-rose-100 space-y-1">
-                            <p className="text-[10px] font-medium text-rose-600 uppercase tracking-wider">Transfer Destination</p>
+                        <div className="p-2.5 bg-green-50/50 rounded-lg border border-green-100 space-y-1">
+                            <p className="text-[10px] font-medium text-green-600 uppercase tracking-wider">Transfer Destination</p>
                             <div className="flex items-center gap-2.5">
                                 {bankInfo.upiQrImage ? (
-                                    <img src={bankInfo.upiQrImage} alt="UPI QR" className="h-7 w-7 rounded-md object-contain bg-white border border-rose-200/60" />
+                                    <img src={bankInfo.upiQrImage} alt="UPI QR" className="h-7 w-7 rounded-md object-contain bg-white border border-green-200/60" />
                                 ) : (
-                                    <div className="h-7 w-7 bg-white rounded-md border border-rose-200/60 flex items-center justify-center shrink-0">
-                                        <Building2 className="h-3.5 w-3.5 text-rose-600" />
+                                    <div className="h-7 w-7 bg-white rounded-md border border-green-200/60 flex items-center justify-center shrink-0">
+                                        <Building2 className="h-3.5 w-3.5 text-green-600" />
                                     </div>
                                 )}
                                 <div className="flex-1 min-w-0">
@@ -432,7 +432,7 @@ const Withdrawals = () => {
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold text-xs transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                            className="w-full py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold text-xs transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
                         >
                             {isSubmitting ? <div className="h-3.5 w-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Submit Request'}
                         </button>

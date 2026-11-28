@@ -44,13 +44,13 @@ const NotificationPopup = ({ notifications, onMarkAsRead, onMarkAllAsRead, onOpe
             {/* Card Header */}
             <div className="p-2.5 px-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60 flex-shrink-0">
                 <div className="flex items-center gap-2">
-                    <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center shadow-xs shrink-0", isSeller ? "bg-red-500 text-white shadow-red-500/20" : "bg-primary text-white")}>
+                    <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center shadow-xs shrink-0", isSeller ? "bg-green-600 text-white shadow-green-600/20" : "bg-primary text-white")}>
                         <HiOutlineBell className="h-3.5 w-3.5" />
                     </div>
                     <h3 className="text-xs sm:text-sm font-semibold text-[#1c1c1e] tracking-tight flex items-center gap-1.5">
                         Notifications
                         {unreadCount > 0 && (
-                            <span className="text-[10px] font-semibold bg-red-100 text-red-700 px-1.5 py-0.2 rounded-full">
+                            <span className="text-[10px] font-semibold bg-green-100 text-green-700 px-1.5 py-0.2 rounded-full">
                                 {unreadCount}
                             </span>
                         )}
@@ -61,7 +61,7 @@ const NotificationPopup = ({ notifications, onMarkAsRead, onMarkAllAsRead, onOpe
                         onClick={onMarkAllAsRead}
                         className={cn(
                             "text-xs font-semibold px-2 py-0.5 rounded-md transition-all cursor-pointer",
-                            isSeller ? "text-red-600 hover:bg-red-50 hover:text-red-700" : "text-primary hover:bg-primary/5"
+                            isSeller ? "text-green-600 hover:bg-green-50 hover:text-green-700" : "text-primary hover:bg-primary/5"
                         )}
                     >
                         Mark all read
@@ -81,7 +81,7 @@ const NotificationPopup = ({ notifications, onMarkAsRead, onMarkAllAsRead, onOpe
                                     isSeller
                                         ? cn(
                                             "p-3 rounded-xl border",
-                                            notif.isRead ? "border-slate-100 bg-white" : "border-red-100 bg-red-50/40"
+                                            notif.isRead ? "border-slate-100 bg-white" : "border-green-100 bg-green-50/40"
                                           )
                                         : cn(
                                             "p-2.5 px-3.5",
@@ -104,7 +104,7 @@ const NotificationPopup = ({ notifications, onMarkAsRead, onMarkAllAsRead, onOpe
                                     isSeller ? "h-9 w-9 rounded-full" : "h-8 w-8 rounded-lg",
                                     notif.type === 'order' ? "bg-emerald-50 text-emerald-600 border-emerald-200/60" :
                                         notif.type === 'payment' ? "bg-amber-50 text-amber-600 border-amber-200/60" :
-                                            (isSeller ? "bg-red-50 text-red-600 border-red-200/60" : "bg-blue-50 text-blue-600 border-blue-200/60")
+                                            (isSeller ? "bg-green-50 text-green-600 border-green-200/60" : "bg-blue-50 text-blue-600 border-blue-200/60")
                                 )}>
                                     {notif.type === 'order' ? <HiOutlineCheckCircle className="h-4 w-4" /> :
                                         notif.type === 'payment' ? <HiOutlineClock className="h-4 w-4" /> :
@@ -118,7 +118,7 @@ const NotificationPopup = ({ notifications, onMarkAsRead, onMarkAllAsRead, onOpe
                                         )}>
                                             {notif.title}
                                             {isSeller && !notif.isRead ? (
-                                                <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" />
+                                                <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-green-600 align-middle" />
                                             ) : null}
                                         </p>
                                         <span className="text-[10px] font-normal text-slate-400 shrink-0 pt-0.5">
@@ -156,7 +156,7 @@ const NotificationPopup = ({ notifications, onMarkAsRead, onMarkAllAsRead, onOpe
                     }}
                     className={cn(
                         "text-xs font-semibold transition-colors py-1.5 px-3 rounded-lg cursor-pointer",
-                        isSeller ? "text-red-600 hover:bg-red-100/50" : "text-primary hover:bg-primary/10"
+                        isSeller ? "text-green-600 hover:bg-green-100/50" : "text-primary hover:bg-primary/10"
                     )}
                 >
                     View all

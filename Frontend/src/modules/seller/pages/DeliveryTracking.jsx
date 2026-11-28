@@ -135,8 +135,8 @@ const DeliveryTracking = () => {
         label: "On the Way",
         value: deliveries.filter((d) => d.status === "On the Way").length,
         icon: HiOutlineTruck,
-        iconColor: "text-red-600",
-        iconBg: "bg-red-50 border-red-200/80",
+        iconColor: "text-green-600",
+        iconBg: "bg-green-50 border-green-200/80",
       },
       {
         label: "At Store",
@@ -184,7 +184,7 @@ const DeliveryTracking = () => {
           <div>
             <h1 className="text-lg sm:text-xl font-semibold text-[#1c1c1e] tracking-tight flex items-center gap-2">
               Delivery Tracking
-              <span className="text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider rounded-md bg-red-100 text-red-700 border border-red-200">
+              <span className="text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider rounded-md bg-green-100 text-green-700 border border-green-200">
                 Live Fleet
               </span>
             </h1>
@@ -198,7 +198,7 @@ const DeliveryTracking = () => {
       {/* 2-by-2 Pure White Stats Grid with Colorful Icon Badges */}
       {loading ? (
         <div className="min-h-[250px] flex flex-col items-center justify-center bg-white rounded-xl border border-slate-200/80 shadow-2xs">
-          <Loader2 className="h-6 w-6 text-red-600 animate-spin" />
+          <Loader2 className="h-6 w-6 text-green-600 animate-spin" />
           <p className="text-slate-500 font-medium mt-2 text-xs">Tracking Fleet...</p>
         </div>
       ) : (
@@ -250,7 +250,7 @@ const DeliveryTracking = () => {
                   <input
                     type="text"
                     placeholder="Search Order ID or partner..."
-                    className="w-full bg-slate-50/70 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all placeholder:text-slate-400"
+                    className="w-full bg-slate-50/70 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all placeholder:text-slate-400"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -328,9 +328,9 @@ const DeliveryTracking = () => {
                                     "_blank",
                                   );
                                 }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 hover:bg-red-100 rounded-md text-[11px] font-medium text-red-600 border border-red-200 transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 hover:bg-green-100 rounded-md text-[11px] font-medium text-green-600 border border-green-200 transition-colors cursor-pointer"
                               >
-                                <HiOutlineMapPin className="h-3 w-3 text-red-500" />
+                                <HiOutlineMapPin className="h-3 w-3 text-green-600" />
                                 <span>Map</span>
                               </button>
                             )}

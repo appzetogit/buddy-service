@@ -67,13 +67,13 @@ const SellerSupportPage = () => {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                         {/* Search Input */}
                         <div className="relative group w-full sm:w-72">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 group-focus-within:text-red-500 transition-colors" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 group-focus-within:text-green-600 transition-colors" />
                             <input
                                 type="text"
                                 placeholder="Search FAQs..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full bg-slate-50/70 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 focus:ring-1 focus:ring-red-500/20 transition-all placeholder:text-slate-400"
+                                className="w-full bg-slate-50/70 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 focus:ring-1 focus:ring-green-600/20 transition-all placeholder:text-slate-400"
                             />
                         </div>
 
@@ -87,7 +87,7 @@ const SellerSupportPage = () => {
                                         className={cn(
                                             "px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer",
                                             activeCategory === cat 
-                                                ? "bg-red-600 text-white shadow-2xs font-semibold" 
+                                                ? "bg-green-600 text-white shadow-2xs font-semibold" 
                                                 : "bg-slate-100/80 text-slate-600 hover:bg-slate-200/60 hover:text-slate-900 border border-slate-200/60"
                                         )}
                                     >
@@ -126,13 +126,13 @@ const FAQItem = ({ question, answer }) => {
     const [isOpen, setIsOpen] = useState(false);
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden transition-all hover:border-red-200 shadow-2xs">
+        <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden transition-all hover:border-green-200 shadow-2xs">
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="w-full px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-slate-50/60 transition-colors cursor-pointer"
             >
-                <span className="font-semibold text-slate-900 text-xs sm:text-sm group-hover:text-red-600 transition-colors">{question}</span>
-                {isOpen ? <ChevronUp className="h-4 w-4 text-red-600 shrink-0 ml-2" /> : <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 ml-2" />}
+                <span className="font-semibold text-slate-900 text-xs sm:text-sm group-hover:text-green-600 transition-colors">{question}</span>
+                {isOpen ? <ChevronUp className="h-4 w-4 text-green-600 shrink-0 ml-2" /> : <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 ml-2" />}
             </button>
             <AnimatePresence>
                 {isOpen && (

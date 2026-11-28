@@ -53,7 +53,7 @@ import {
 import OnboardingLocationSection from "@food/components/restaurant/OnboardingLocationSection";
 
 const ONBOARDING_INPUT =
-  "h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium transition-all outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 hover:border-slate-300";
+  "h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium transition-all outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600 hover:border-slate-300";
 
 const businessTypes = [
   "Quick Commerce",
@@ -201,7 +201,7 @@ const ImageUploadField = ({
       <span className="truncate max-w-[220px]">
         {uploading ? "Uploading…" : imageUrl ? "Image saved — tap to replace" : emptyText}
       </span>
-      <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-red-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-red-600">
+      <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-green-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-green-600">
         {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
         {uploading ? "Wait" : "Choose"}
       </span>
@@ -1125,7 +1125,7 @@ export default function SellerOnboarding() {
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-br from-[#E21A22]/95 via-[#E21A22]/90 to-[#B91C1C]/95" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#16A34A]/95 via-[#16A34A]/90 to-[#15803D]/95" />
           <div className="relative z-10 flex h-full flex-col overflow-hidden p-8 xl:p-10">
             <div className="shrink-0">
               <div className="flex items-center gap-3">
@@ -1165,7 +1165,7 @@ export default function SellerOnboarding() {
                 ].map((s) => (
                   <div key={s.step} className="flex items-start gap-4">
                     <div className="relative flex flex-col items-center">
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold shadow-sm transition-all duration-300 ${currentStep === s.step ? "bg-white text-red-600 scale-110" : currentStep > s.step ? "bg-white/20 text-white backdrop-blur-sm border border-white/30" : "bg-black/10 text-white/40 border border-white/10"}`}>
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold shadow-sm transition-all duration-300 ${currentStep === s.step ? "bg-white text-green-600 scale-110" : currentStep > s.step ? "bg-white/20 text-white backdrop-blur-sm border border-white/30" : "bg-black/10 text-white/40 border border-white/10"}`}>
                         {currentStep > s.step ? <Check className="h-4 w-4" /> : s.step}
                       </div>
                       {s.step !== 4 && <div className={`absolute top-8 bottom-[-24px] w-px ${currentStep > s.step ? "bg-white/40" : "bg-white/10"}`} />}
@@ -1204,7 +1204,7 @@ export default function SellerOnboarding() {
               <button
                 type="button"
                 onClick={openQuitModal}
-                className="flex h-9 w-9 items-center justify-center rounded-full text-red-500 transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/30"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-green-600 transition-colors hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600/30"
                 aria-label="Exit registration"
               >
                 <LogOut className="h-4 w-4" />
@@ -1216,7 +1216,7 @@ export default function SellerOnboarding() {
               <div className="absolute top-1/2 left-8 right-8 h-[2px] -translate-y-1/2 bg-slate-100 -z-10" />
               {[1, 2, 3, 4].map((stepNumber) => (
                 <div key={stepNumber} className="relative flex items-center justify-center bg-white px-1">
-                  <div className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full text-xs font-bold shadow-sm transition-colors ${currentStep === stepNumber ? 'bg-red-600 text-white ring-4 ring-red-100' : currentStep > stepNumber ? 'bg-slate-50 text-slate-400 border-2 border-slate-200' : 'bg-white text-slate-300 border-2 border-slate-100'}`}>
+                  <div className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full text-xs font-bold shadow-sm transition-colors ${currentStep === stepNumber ? 'bg-green-600 text-white ring-4 ring-green-100' : currentStep > stepNumber ? 'bg-slate-50 text-slate-400 border-2 border-slate-200' : 'bg-white text-slate-300 border-2 border-slate-100'}`}>
                     {currentStep > stepNumber ? <Check className="h-3 w-3 sm:h-4 sm:w-4 text-slate-400" /> : stepNumber}
                   </div>
                 </div>
@@ -1224,14 +1224,14 @@ export default function SellerOnboarding() {
             </div>
             <div className="flex items-center justify-between mt-1">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-red-600">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-green-600">
                   STEP {currentStep} OF 4
                 </p>
                 <h2 className="text-[13px] font-bold text-slate-900 mt-0.5 font-jakarta">
                   {currentStep === 1 ? "Business Profile" : currentStep === 2 ? "Store Details" : currentStep === 3 ? "Documents" : "Bank Details"}
                 </h2>
               </div>
-              <div className="rounded-full bg-red-100 px-2.5 py-1 text-[10px] font-bold text-red-600">
+              <div className="rounded-full bg-green-100 px-2.5 py-1 text-[10px] font-bold text-green-600">
                 {currentStep * 25}%
               </div>
             </div>
@@ -1254,7 +1254,7 @@ export default function SellerOnboarding() {
              <button
                type="button"
                onClick={openQuitModal}
-               className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/30"
+               className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-green-50 hover:text-green-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600/30"
                title="Exit registration"
              >
                <LogOut className="h-5 w-5" />
@@ -1266,7 +1266,7 @@ export default function SellerOnboarding() {
           <div className="mx-auto w-full max-w-3xl">
           {rejectionReason && (
             <div className="mb-6 rounded-[16px] border border-red-200 bg-red-50 px-5 py-4 flex items-start gap-3 shadow-sm">
-              <div className="mt-0.5 shrink-0 rounded-full bg-red-100 p-2 text-red-600">
+              <div className="mt-0.5 shrink-0 rounded-full bg-green-100 p-2 text-green-600">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86C20.47 19 21.5 17.56 20.79 16.13L13.93 3.93a2 2 0 00-3.86 0L2.21 16.13C1.5 17.56 2.53 19 4.07 19z" /></svg>
               </div>
               <div>
@@ -1338,7 +1338,7 @@ export default function SellerOnboarding() {
                   <input required className={ONBOARDING_INPUT} placeholder="Shop name" value={form.shopName} onChange={(e) => updateField("shopName", e.target.value.replace(/[^a-zA-Z\s]/g, ""))} />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Email <span className="text-red-500">*</span></label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Email <span className="text-green-600">*</span></label>
                   <input
                     required
                     className={`rounded-xl border bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:border-slate-900 focus:bg-white transition-colors ${form.email && !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(form.email) ? "border-red-400 bg-red-50" : "border-slate-200"}`}
@@ -1348,15 +1348,15 @@ export default function SellerOnboarding() {
                     onChange={(e) => updateField("email", e.target.value)}
                   />
                   {form.email && !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(form.email) && (
-                    <p className="text-xs font-semibold text-red-500 px-1">Enter a valid email address (e.g. name@domain.com)</p>
+                    <p className="text-xs font-semibold text-green-600 px-1">Enter a valid email address (e.g. name@domain.com)</p>
                   )}
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Primary phone <span className="text-red-500">*</span></label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Primary phone <span className="text-green-600">*</span></label>
                   <input className={`${ONBOARDING_INPUT} bg-slate-100 text-slate-500`} placeholder="Primary phone" value={form.phone} readOnly title="Linked from the seller OTP login" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Alternate phone <span className="text-red-500">*</span></label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Alternate phone <span className="text-green-600">*</span></label>
                   <input
                     required
                     type="tel"
@@ -1367,7 +1367,7 @@ export default function SellerOnboarding() {
                       (sanitizePhoneField(form.alternatePhone) === sanitizePhoneField(form.phone) ||
                         sanitizePhoneField(form.alternatePhone).length !== 10 ||
                         !["6", "7", "8", "9"].includes(sanitizePhoneField(form.alternatePhone)[0] || ""))
-                        ? "border-red-400 bg-red-50"
+                        ? "border-green-500 bg-green-50"
                         : "border-slate-200"
                     }`}
                     placeholder="10-digit mobile number"
@@ -1377,13 +1377,13 @@ export default function SellerOnboarding() {
                     onBlur={(e) => updateField("alternatePhone", sanitizePhoneInput(e.target.value))}
                   />
                   {form.alternatePhone && sanitizePhoneField(form.alternatePhone) === sanitizePhoneField(form.phone) && (
-                    <p className="text-xs font-semibold text-red-500 px-1">Alternate number cannot be same as primary number</p>
+                    <p className="text-xs font-semibold text-green-600 px-1">Alternate number cannot be same as primary number</p>
                   )}
                   {form.alternatePhone &&
                     sanitizePhoneField(form.alternatePhone) !== sanitizePhoneField(form.phone) &&
                     (sanitizePhoneField(form.alternatePhone).length !== 10 ||
                       !["6", "7", "8", "9"].includes(sanitizePhoneField(form.alternatePhone)[0] || "")) && (
-                    <p className="text-xs font-semibold text-red-500 px-1">Enter a valid 10-digit Indian mobile number (without country code)</p>
+                    <p className="text-xs font-semibold text-green-600 px-1">Enter a valid 10-digit Indian mobile number (without country code)</p>
                   )}
                   {stepServerError ? (
                     <p className="text-xs font-semibold text-red-500 px-1">{stepServerError}</p>
@@ -1405,7 +1405,7 @@ export default function SellerOnboarding() {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5 md:col-span-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Support email <span className="text-red-500">*</span></label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Support email <span className="text-green-600">*</span></label>
                   <input
                     required
                     className={`${ONBOARDING_INPUT} ${form.supportEmail && !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(form.supportEmail) ? "border-red-400 bg-red-50 ring-red-200" : ""}`}
@@ -1415,7 +1415,7 @@ export default function SellerOnboarding() {
                     onChange={(e) => updateField("supportEmail", e.target.value)}
                   />
                   {form.supportEmail && !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(form.supportEmail) && (
-                    <p className="text-xs font-semibold text-red-500 px-1">Enter a valid email address (e.g. support@example.com)</p>
+                    <p className="text-xs font-semibold text-green-600 px-1">Enter a valid email address (e.g. support@example.com)</p>
                   )}
                 </div>
 
@@ -1496,7 +1496,7 @@ export default function SellerOnboarding() {
                       type="button"
                       onClick={handleSaveOpeningHours}
                       disabled={isSavingHours}
-                      className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+                      className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-70"
                     >
                       {isSavingHours ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                       {isSavingHours ? "Saving..." : "Save Hours"}
@@ -1523,7 +1523,7 @@ export default function SellerOnboarding() {
                   <input required className={ONBOARDING_INPUT} placeholder="Account holder name" value={form.accountHolderName} onChange={(e) => updateField("accountHolderName", e.target.value.replace(/[^a-zA-Z\s]/g, ""))} />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Account number <span className="text-red-500">*</span></label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Account number <span className="text-green-600">*</span></label>
                   <input
                     required
                     className={`${ONBOARDING_INPUT} ${form.accountNumber && !ACCOUNT_NUMBER_REGEX.test(form.accountNumber) ? "border-red-400 bg-red-50 ring-red-200" : ""}`}
@@ -1533,11 +1533,11 @@ export default function SellerOnboarding() {
                     onChange={(e) => updateField("accountNumber", e.target.value.replace(/\D/g, "").slice(0, 18))}
                   />
                   {form.accountNumber && !ACCOUNT_NUMBER_REGEX.test(form.accountNumber) && (
-                    <p className="text-xs font-semibold text-red-500 px-1">Account number must be 9–18 digits (numbers only)</p>
+                    <p className="text-xs font-semibold text-green-600 px-1">Account number must be 9–18 digits (numbers only)</p>
                   )}
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">IFSC code <span className="text-red-500">*</span></label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">IFSC code <span className="text-green-600">*</span></label>
                   <input
                     required
                     className={`${ONBOARDING_INPUT} uppercase ${form.ifscCode && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(form.ifscCode) ? "border-red-400 bg-red-50 ring-red-200" : ""}`}
@@ -1551,7 +1551,7 @@ export default function SellerOnboarding() {
                   )}
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Account type <span className="text-red-500">*</span></label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Account type <span className="text-green-600">*</span></label>
                 <Select
                   value={form.accountType}
                   onValueChange={(val) => updateField("accountType", val)}
@@ -1573,7 +1573,7 @@ export default function SellerOnboarding() {
                 </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">UPI ID <span className="text-red-500">*</span></label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">UPI ID <span className="text-green-600">*</span></label>
                   <input
                     required
                     className={`${ONBOARDING_INPUT} ${form.upiId && !/^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/.test(form.upiId) ? "border-red-400 bg-red-50" : "border-slate-200"}`}
@@ -1606,7 +1606,7 @@ export default function SellerOnboarding() {
               </h2>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">PAN number <span className="text-red-500">*</span></label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">PAN number <span className="text-green-600">*</span></label>
                   <input
                     required
                     className={`${ONBOARDING_INPUT} uppercase ${form.panNumber && !PAN_NUMBER_REGEX.test(form.panNumber) ? "border-red-400 bg-red-50" : ""}`}
@@ -1633,14 +1633,14 @@ export default function SellerOnboarding() {
                         }, 80);
                       }
                     }}
-                    className="h-4 w-4 accent-red-600"
+                    className="h-4 w-4 accent-green-600"
                   />
                   GST registered
                 </label>
                 {form.gstRegistered ? (
                   <div ref={gstSectionRef} className="md:col-span-2 grid gap-4 md:grid-cols-2">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">GST number <span className="text-red-500">*</span></label>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">GST number <span className="text-green-600">*</span></label>
                       <input
                         required
                         className={`${ONBOARDING_INPUT} uppercase ${form.gstNumber && !GST_NUMBER_REGEX.test(form.gstNumber) ? "border-red-400 bg-red-50" : ""}`}
@@ -1655,7 +1655,7 @@ export default function SellerOnboarding() {
                       )}
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">GST legal name <span className="text-red-500">*</span></label>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">GST legal name <span className="text-green-600">*</span></label>
                       <input
                         required
                         className={`${ONBOARDING_INPUT} ${form.gstLegalName && !GST_LEGAL_NAME_REGEX.test(form.gstLegalName.trim()) ? "border-red-400 bg-red-50" : ""}`}
@@ -1665,14 +1665,14 @@ export default function SellerOnboarding() {
                         onChange={(e) => updateField("gstLegalName", e.target.value.replace(/[^a-zA-Z\s]/g, ""))}
                       />
                       {form.gstLegalName && !GST_LEGAL_NAME_REGEX.test(form.gstLegalName.trim()) && (
-                        <p className="text-xs font-semibold text-red-500 px-1">GST legal name must contain only letters (min. 2 characters)</p>
+                        <p className="text-xs font-semibold text-green-600 px-1">GST legal name must contain only letters (min. 2 characters)</p>
                       )}
                     </div>
                   </div>
                 ) : null}
                 {(<>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">FSSAI number <span className="text-red-500">*</span></label>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">FSSAI number <span className="text-green-600">*</span></label>
                       <input
                         required
                         className={`${ONBOARDING_INPUT} ${form.fssaiNumber && !FSSAI_NUMBER_REGEX.test(form.fssaiNumber) ? "border-red-400 bg-red-50" : ""}`}
@@ -1682,18 +1682,18 @@ export default function SellerOnboarding() {
                         onChange={(e) => updateField("fssaiNumber", e.target.value.replace(/\D/g, "").slice(0, 14))}
                       />
                       {form.fssaiNumber && !FSSAI_NUMBER_REGEX.test(form.fssaiNumber) && (
-                        <p className="text-xs font-semibold text-red-500 px-1">FSSAI number must be exactly 14 digits (numbers only)</p>
+                        <p className="text-xs font-semibold text-green-600 px-1">FSSAI number must be exactly 14 digits (numbers only)</p>
                       )}
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">FSSAI expiry date <span className="text-red-500">*</span></label>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">FSSAI expiry date <span className="text-green-600">*</span></label>
                       <OnboardingDatePicker
                         value={form.fssaiExpiry}
                         onChange={(next) => updateField("fssaiExpiry", next)}
                         error={Boolean(form.fssaiExpiry && form.fssaiExpiry < new Date().toISOString().split("T")[0])}
                       />
                       {form.fssaiExpiry && form.fssaiExpiry < new Date().toISOString().split("T")[0] && (
-                        <p className="text-xs font-semibold text-red-500 px-1">FSSAI expiry date cannot be a past date</p>
+                        <p className="text-xs font-semibold text-green-600 px-1">FSSAI expiry date cannot be a past date</p>
                       )}
                     </div>
                     <ImageUploadField
@@ -1708,7 +1708,7 @@ export default function SellerOnboarding() {
                     />
                   </>)}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Shop license number <span className="text-red-500">*</span></label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Shop license number <span className="text-green-600">*</span></label>
                   <input
                     required
                     className={`${ONBOARDING_INPUT} ${form.shopLicenseNumber && !SHOP_LICENSE_REGEX.test(form.shopLicenseNumber) ? "border-red-400 bg-red-50" : ""}`}
@@ -1718,18 +1718,18 @@ export default function SellerOnboarding() {
                     onChange={(e) => updateField("shopLicenseNumber", e.target.value.replace(/[^A-Za-z0-9\/\-]/g, "").slice(0, 20))}
                   />
                   {form.shopLicenseNumber && !SHOP_LICENSE_REGEX.test(form.shopLicenseNumber) && (
-                    <p className="text-xs font-semibold text-red-500 px-1">License number must be 5–20 characters (letters, numbers, / and - only)</p>
+                    <p className="text-xs font-semibold text-green-600 px-1">License number must be 5–20 characters (letters, numbers, / and - only)</p>
                   )}
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Shop license expiry date <span className="text-red-500">*</span></label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Shop license expiry date <span className="text-green-600">*</span></label>
                   <OnboardingDatePicker
                     value={form.shopLicenseExpiry}
                     onChange={(next) => updateField("shopLicenseExpiry", next)}
                     error={Boolean(form.shopLicenseExpiry && form.shopLicenseExpiry < new Date().toISOString().split("T")[0])}
                   />
                   {form.shopLicenseExpiry && form.shopLicenseExpiry < new Date().toISOString().split("T")[0] && (
-                    <p className="text-xs font-semibold text-red-500 px-1">Shop license expiry date cannot be a past date</p>
+                    <p className="text-xs font-semibold text-green-600 px-1">Shop license expiry date cannot be a past date</p>
                   )}
                 </div>
                 <ImageUploadField
@@ -1747,11 +1747,11 @@ export default function SellerOnboarding() {
             )}
 
             {currentStep === 4 && feeConfig && !isReonboardBypass && feeConfig.isActive && feeConfig.price > 0 && (
-              <div className="rounded-2xl border border-red-200 bg-red-50/70 p-5 mt-4 mb-4">
+              <div className="rounded-2xl border border-green-200 bg-green-50/70 p-5 mt-4 mb-4">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-red-600">
                   Required Onboarding Fee
                 </p>
-                <p className="mt-1.5 text-2xl font-black text-red-900">Γé╣{feeConfig.price}</p>
+                <p className="mt-1.5 text-2xl font-black text-green-900">Γé╣{feeConfig.price}</p>
                 <p className="mt-1.5 text-xs font-semibold text-red-700">
                   An onboarding fee is required to submit your seller registration.
                   You will be prompted to make a secure payment via Razorpay.
@@ -1773,7 +1773,7 @@ export default function SellerOnboarding() {
               <button
                 type="submit"
                 disabled={isSubmitting || isAdvancing || Boolean(uploadingImageKey)}
-                className="w-full flex-1 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#E21A22] px-4 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70 shadow-sm"
+                className="w-full flex-1 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#16A34A] px-4 text-sm font-bold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-70 shadow-sm"
               >
                 {isSubmitting || isAdvancing ? (currentStep === 4 ? "Submitting..." : "Saving...") : currentStep === 4 ? "Submit for approval" : "Next step"}
                 {!isSubmitting && <ArrowRight className="h-4 w-4 ml-1" />}
@@ -1807,7 +1807,7 @@ export default function SellerOnboarding() {
               <button
                 type="button"
                 onClick={stayOnRegistration}
-                className="h-12 rounded-2xl bg-[#E21A22] text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-red-500/15 transition-all active:scale-[0.98]"
+                className="h-12 rounded-2xl bg-[#16A34A] text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-green-600/15 transition-all active:scale-[0.98]"
               >
                 Continue
               </button>

@@ -392,7 +392,7 @@ const Returns = () => {
 
             {loading ? (
                 <div className="min-h-[250px] flex flex-col items-center justify-center bg-white rounded-xl border border-slate-200/80 shadow-2xs">
-                    <Loader2 className="h-6 w-6 text-red-600 animate-spin" />
+                    <Loader2 className="h-6 w-6 text-green-600 animate-spin" />
                     <p className="text-slate-500 font-medium mt-2 text-xs">
                         Loading Return Requests...
                     </p>
@@ -663,7 +663,7 @@ const Returns = () => {
                                             <p className="text-xs font-bold text-rose-800">
                                                 Dispatch Failed
                                             </p>
-                                            <p className="text-xs text-rose-700">
+                                            <p className="text-xs text-green-700">
                                                 No nearby delivery partner found. Ensure riders
                                                 are online and tap Retry below.
                                             </p>

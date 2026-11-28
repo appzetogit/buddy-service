@@ -250,7 +250,7 @@ export default function SellerPendingApproval() {
                 <div className="space-y-5">
                   {submittedSections.map((section) => (
                     <div key={section.title}>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-red-600">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-green-600">
                         {section.title}
                       </p>
                       {section.rows.length > 0 && (
@@ -273,7 +273,7 @@ export default function SellerPendingApproval() {
                               href={url}
                               target="_blank"
                               rel="noreferrer"
-                              className="group overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:border-red-200"
+                              className="group overflow-hidden rounded-xl border border-slate-200 bg-white transition hover:border-green-200"
                             >
                               <div className="aspect-[4/3] bg-slate-50">
                                 <img
@@ -282,7 +282,7 @@ export default function SellerPendingApproval() {
                                   className="h-full w-full object-contain p-2"
                                 />
                               </div>
-                              <p className="border-t border-slate-100 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 group-hover:text-red-600">
+                              <p className="border-t border-slate-100 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 group-hover:text-green-600">
                                 {label}
                               </p>
                             </a>
@@ -309,7 +309,7 @@ export default function SellerPendingApproval() {
                       sessionStorage.setItem("sellerReonboard", "true");
                       navigate("/seller/onboarding");
                     }}
-                    className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 sm:flex-none"
+                    className="flex-1 rounded-xl bg-green-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-green-700 sm:flex-none"
                   >
                     Edit & Re-apply
                   </button>
@@ -321,7 +321,7 @@ export default function SellerPendingApproval() {
                   className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition disabled:opacity-70 sm:flex-none ${
                     isRejected
                       ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                      : "bg-red-600 text-white hover:bg-red-700"
+                      : "bg-green-600 text-white hover:bg-green-700"
                   }`}
                 >
                   <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />

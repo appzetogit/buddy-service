@@ -181,7 +181,7 @@ const OrderMobileCard = React.memo(({
           {canResendDispatch(order) && (
             <button
               onClick={() => handleResendDispatch(order.id)}
-              className="px-2 py-1 rounded-md bg-red-50 text-red-600 text-[10px] font-semibold uppercase tracking-wider">
+              className="px-2 py-1 rounded-md bg-green-50 text-green-600 text-[10px] font-semibold uppercase tracking-wider">
               Resend Rider
             </button>
           )}
@@ -208,7 +208,7 @@ const OrderMobileCard = React.memo(({
               setCancelReason("");
               setIsCancelModalOpen(true);
             }}
-            className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600 text-xs font-semibold uppercase tracking-wider active:scale-95 transition-all">
+            className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-50 text-green-600 text-xs font-semibold uppercase tracking-wider active:scale-95 transition-all">
             <HiOutlineXMark className="h-3.5 w-3.5" />
             Reject
           </button>
@@ -242,7 +242,7 @@ const OrderRow = React.memo(({
       <td className="px-4 lg:px-6 py-3 lg:py-4">
         <div>
           <span
-            className="text-xs font-bold text-slate-900 group-hover:text-red-500 transition-colors cursor-pointer"
+            className="text-xs font-bold text-slate-900 group-hover:text-green-600 transition-colors cursor-pointer"
             onClick={() => handleViewDetails(order)}>
             #{order.id}
           </span>
@@ -337,14 +337,14 @@ const OrderRow = React.memo(({
               onClick={() =>
                 handleResendDispatch(order.id)
               }
-              className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-all text-[10px] font-black uppercase tracking-wider">
+              className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-all text-[10px] font-black uppercase tracking-wider">
               Resend Rider
             </button>
           )}
           <OrderDelayButton order={order} className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all text-[10px] font-black uppercase tracking-wider" />
           <button
             onClick={() => handleViewDetails(order)}
-            className="p-1.5 hover:bg-white hover:text-red-500 rounded-lg transition-all text-slate-600 shadow-sm ring-1 ring-slate-100">
+            className="p-1.5 hover:bg-white hover:text-green-600 rounded-lg transition-all text-slate-600 shadow-sm ring-1 ring-slate-100">
             <HiOutlineEye className="h-4 w-4" />
           </button>
           {order.status === "Pending" && (
@@ -368,7 +368,7 @@ const OrderRow = React.memo(({
                   setCancelReason("");
                   setIsCancelModalOpen(true);
                 }}
-                className="p-1.5 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-all text-slate-600 shadow-sm ring-1 ring-slate-100">
+                className="p-1.5 hover:bg-green-50 hover:text-green-600 rounded-lg transition-all text-slate-600 shadow-sm ring-1 ring-slate-100">
                 <HiOutlineXMark className="h-4 w-4" />
               </button>
             </>
@@ -678,9 +678,9 @@ const Orders = () => {
         label: "Total Orders",
         value: safeOrders.length,
         icon: HiOutlineArchiveBoxXMark,
-        iconColor: "text-rose-700",
-        iconBg: "bg-rose-100/80",
-        cardBg: "bg-[#FEF2F2] border-rose-200/60 hover:border-rose-300/80 shadow-xs",
+        iconColor: "text-green-700",
+        iconBg: "bg-green-100/80",
+        cardBg: "bg-[#FEF2F2] border-green-200/60 hover:border-green-300/80 shadow-xs",
         tab: "All",
       },
       {
@@ -899,7 +899,7 @@ const Orders = () => {
             Order Management
             <Badge
               variant="primary"
-              className="text-[10px] px-2 py-0.5 font-medium tracking-wide uppercase bg-red-100/80 text-red-700 border-red-200">
+              className="text-[10px] px-2 py-0.5 font-medium tracking-wide uppercase bg-green-100/80 text-green-700 border-green-200">
               Real-time
             </Badge>
           </h1>
@@ -916,8 +916,8 @@ const Orders = () => {
           </button>
           <button
             onClick={() => setIsQuickViewModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-600 bg-red-50/80 hover:bg-red-100 border border-red-200/80 shadow-xs transition-all cursor-pointer">
-            <HiOutlineEye className="h-4 w-4 text-red-600" />
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-green-600 bg-green-50/80 hover:bg-green-100 border border-green-200/80 shadow-xs transition-all cursor-pointer">
+            <HiOutlineEye className="h-4 w-4 text-green-600" />
             <span className="text-xs font-semibold">Quick View</span>
           </button>
         </div>
@@ -926,7 +926,7 @@ const Orders = () => {
       {/* Quick Stats Grid */}
       {loading ? (
         <div className="min-h-[200px] flex flex-col items-center justify-center bg-white rounded-xl border border-slate-200/80 shadow-xs">
-          <Loader2 className="h-7 w-7 text-red-500 animate-spin" />
+          <Loader2 className="h-7 w-7 text-green-600 animate-spin" />
           <p className="text-slate-500 font-medium mt-2 text-xs">
             Fetching Active Orders...
           </p>
@@ -965,14 +965,14 @@ const Orders = () => {
                     className={cn(
                       "relative py-2.5 px-3 text-xs font-medium whitespace-nowrap transition-all cursor-pointer",
                       activeTab === tab
-                        ? "text-red-600 font-semibold"
+                        ? "text-green-600 font-semibold"
                         : "text-slate-600 hover:text-slate-900",
                     )}>
                     {tab}
                     {activeTab === tab && (
                       <motion.div
                         layoutId="tab-underline"
-                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-600 rounded-full mx-2"
+                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-600 rounded-full mx-2"
                       />
                     )}
                   </button>
@@ -983,13 +983,13 @@ const Orders = () => {
             {/* Toolbox */}
             <div className="p-2.5 sm:p-3 border-b border-slate-200/60 flex flex-col lg:flex-row gap-2.5 items-stretch lg:items-center justify-between bg-slate-50/20">
               <div className="relative flex-1 group w-full">
-                <HiOutlineMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 group-focus-within:text-red-500 transition-all" />
+                <HiOutlineMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 group-focus-within:text-green-600 transition-all" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search by Order ID or Customer Name..."
-                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-normal text-slate-900 placeholder:text-slate-400 focus:border-red-500 focus:ring-1 focus:ring-red-500/20 transition-all outline-none"
+                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-normal text-slate-900 placeholder:text-slate-400 focus:border-green-600 focus:ring-1 focus:ring-green-600/20 transition-all outline-none"
                 />
               </div>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0 w-full lg:w-auto">
@@ -1070,7 +1070,7 @@ const Orders = () => {
                       setEndDate("");
                       setPage(1);
                     }}
-                    className="text-xs font-medium text-slate-500 hover:text-red-600 transition-colors self-end sm:self-center py-1">
+                    className="text-xs font-medium text-slate-500 hover:text-green-600 transition-colors self-end sm:self-center py-1">
                     Clear dates
                   </button>
                 )}
@@ -1243,7 +1243,7 @@ const Orders = () => {
                   className="w-full max-w-lg relative z-10 bg-white rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
                   <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-9 w-9 sm:h-10 sm:w-10 bg-red-500 text-white rounded-xl flex items-center justify-center shadow-lg shadow-red-500/20 shrink-0">
+                      <div className="h-9 w-9 sm:h-10 sm:w-10 bg-green-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-green-600/20 shrink-0">
                         <HiOutlineChartBar className="h-4 w-4 sm:h-5 sm:w-5" />
                       </div>
                       <div className="min-w-0">
@@ -1265,11 +1265,11 @@ const Orders = () => {
                   <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                     {/* Summary Grid */}
                     <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                      <div className="p-3 sm:p-4 rounded-2xl bg-red-50 border border-red-100">
-                        <p className="text-[10px] sm:text-xs font-bold text-red-400 uppercase tracking-widest mb-1">
+                      <div className="p-3 sm:p-4 rounded-2xl bg-green-50 border border-green-100">
+                        <p className="text-[10px] sm:text-xs font-bold text-green-500 uppercase tracking-widest mb-1">
                           Total Revenue
                         </p>
-                        <p className="text-base sm:text-xl font-black text-red-700 truncate">
+                        <p className="text-base sm:text-xl font-black text-green-700 truncate">
                           ₹
                           {safeOrders
                             .reduce((acc, o) => acc + o.total, 0)
@@ -1378,7 +1378,7 @@ const Orders = () => {
                         <div>
                           <div className="flex items-center justify-between gap-2 mb-2">
                             <h4 className="text-xs font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                              <HiOutlineMapPin className="h-3 w-3 text-red-500" />{" "}
+                              <HiOutlineMapPin className="h-3 w-3 text-green-600" />{" "}
                               Delivery Address
                             </h4>
                             {selectedOrder.location &&
@@ -1394,7 +1394,7 @@ const Orders = () => {
                                       "_blank",
                                     );
                                   }}
-                                  className="text-[10px] font-bold text-red-500 hover:underline">
+                                  className="text-[10px] font-bold text-green-600 hover:underline">
                                   View on map
                                 </button>
                               )}
@@ -1437,7 +1437,7 @@ const Orders = () => {
                         ) : null}
                         <div>
                           <h4 className="text-xs font-black text-slate-600 uppercase tracking-widest mb-2 flex items-center gap-2">
-                            <HiOutlineTruck className="h-3 w-3 text-red-500" />{" "}
+                            <HiOutlineTruck className="h-3 w-3 text-green-600" />{" "}
                             Driver Status
                           </h4>
                           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm">
@@ -1462,7 +1462,7 @@ const Orders = () => {
                                     {selectedOrder.deliveryPartner.phone && (
                                       <a
                                         href={`tel:${selectedOrder.deliveryPartner.phone}`}
-                                        className="text-xs text-red-500 hover:underline font-bold flex items-center gap-0.5 ml-1"
+                                        className="text-xs text-green-600 hover:underline font-bold flex items-center gap-0.5 ml-1"
                                       >
                                         Call Rider
                                       </a>
@@ -1489,8 +1489,8 @@ const Orders = () => {
                         </div>
                       </div>
                       <div className="space-y-3 sm:space-y-4">
-                        <div className="bg-red-500/5 p-3 sm:p-4 rounded-3xl border border-red-500/10">
-                          <h4 className="text-xs font-black text-red-500 uppercase tracking-widest mb-3">
+                        <div className="bg-green-600/5 p-3 sm:p-4 rounded-3xl border border-green-600/10">
+                          <h4 className="text-xs font-black text-green-600 uppercase tracking-widest mb-3">
                             Order Summary
                           </h4>
                           <div className="space-y-2">
@@ -1506,7 +1506,7 @@ const Orders = () => {
                               <span className="font-bold text-slate-600">
                                 Admin Commission
                               </span>
-                              <span className="font-black text-rose-600">
+                              <span className="font-black text-green-600">
                                 -{formatMoney(selectedOrder.pricing?.commission)}
                               </span>
                             </div>
@@ -1515,7 +1515,7 @@ const Orders = () => {
                                 <span className="font-bold text-slate-600">
                                   Seller Coupon Discount
                                 </span>
-                                <span className="font-black text-rose-600">
+                                <span className="font-black text-green-600">
                                   -{formatMoney(selectedOrder.pricing?.couponDiscount)}
                                 </span>
                               </div>
@@ -1527,7 +1527,7 @@ const Orders = () => {
                               <span className={cn(
                                 "font-black",
                                 Number(selectedOrder.pricing?.productEarnings ?? 0) < 0
-                                  ? "text-rose-600"
+                                  ? "text-green-600"
                                   : "text-emerald-700",
                               )}>
                                 {formatMoney(
@@ -1547,7 +1547,7 @@ const Orders = () => {
                                 +{formatMoney(selectedOrder.pricing?.packingFee)}
                               </span>
                             </div>
-                            <div className="h-px bg-red-500/10 my-2" />
+                            <div className="h-px bg-green-600/10 my-2" />
                             <div className="flex justify-between text-sm">
                               <span className="font-black text-slate-900">
                                 Total Seller Earnings
@@ -1555,8 +1555,8 @@ const Orders = () => {
                               <span className={cn(
                                 "font-black",
                                 Number(selectedOrder.pricing?.receivable || 0) < 0
-                                  ? "text-rose-600"
-                                  : "text-red-500",
+                                  ? "text-green-600"
+                                  : "text-green-600",
                               )}>
                                 {formatMoney(selectedOrder.pricing?.receivable)}
                               </span>
@@ -1595,7 +1595,7 @@ const Orders = () => {
                             ) : null}
                           </div>
                         </div>
-                        <div className="bg-slate-900 p-3 sm:p-4 rounded-3xl text-white shadow-xl shadow-red-500/20">
+                        <div className="bg-slate-900 p-3 sm:p-4 rounded-3xl text-white shadow-xl shadow-green-600/20">
                           <h4 className="text-xs font-black text-slate-600 uppercase tracking-widest mb-2">
                             Payment Status
                           </h4>
@@ -1826,7 +1826,7 @@ const Orders = () => {
                                 {item.name}
                               </p>
                               {item.variantName ? (
-                                <p className="text-[10px] font-semibold text-red-600 mt-0.5">
+                                <p className="text-[10px] font-semibold text-green-600 mt-0.5">
                                   {item.variantName}
                                 </p>
                               ) : null}
@@ -1875,7 +1875,7 @@ const Orders = () => {
                       {canResendDispatch(selectedOrder) && (
                         <button
                           onClick={() => handleResendDispatch(selectedOrder.id)}
-                          className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider text-red-700 bg-red-50 hover:bg-red-100 transition-all">
+                          className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider text-green-700 bg-green-50 hover:bg-green-100 transition-all">
                           Resend Rider
                         </button>
                       )}
@@ -1909,7 +1909,7 @@ const Orders = () => {
               className="w-full max-w-md relative z-10 bg-white rounded-3xl shadow-2xl p-6 overflow-hidden flex flex-col"
             >
               <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
+                <span className="p-1.5 bg-green-50 text-green-600 rounded-lg">
                   <HiOutlineXMark className="h-5 w-5" />
                 </span>
                 Cancel Order #{cancellingOrder.id}
@@ -1956,7 +1956,7 @@ const Orders = () => {
                     onChange={(e) => setCancelReason(e.target.value)}
                     placeholder="Describe your reason in detail..."
                     rows={3}
-                    className="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-semibold text-slate-700 placeholder:text-slate-500 focus:ring-2 focus:ring-red-500/5 outline-none transition-all resize-none"
+                    className="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-semibold text-slate-700 placeholder:text-slate-500 focus:ring-2 focus:ring-green-600/5 outline-none transition-all resize-none"
                   />
                 </div>
               )}
@@ -1991,7 +1991,7 @@ const Orders = () => {
                       showToast(error.response?.data?.message || "Failed to cancel order", "error");
                     }
                   }}
-                  className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider text-white bg-rose-600 hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/10 active:scale-95"
+                  className="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider text-white bg-green-600 hover:bg-green-700 transition-all shadow-lg shadow-green-600/10 active:scale-95"
                 >
                   CONFIRM CANCELLATION
                 </button>

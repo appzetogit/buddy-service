@@ -71,7 +71,7 @@ const profileToForm = (data = {}) => ({
 });
 
 const inputClass =
-  "w-full px-3 py-1.5 bg-slate-50/70 border border-slate-200 rounded-lg text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 focus:ring-1 focus:ring-red-500/20 transition-all disabled:opacity-70";
+  "w-full px-3 py-1.5 bg-slate-50/70 border border-slate-200 rounded-lg text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 focus:ring-1 focus:ring-green-600/20 transition-all disabled:opacity-70";
 
 const PAN_NUMBER_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GST_NUMBER_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
@@ -124,7 +124,7 @@ const ImageField = ({ label, url, pending, proposedUrl, editing, uploading, onSe
       </div>
     ) : null}
     {editing ? (
-      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-700 transition-colors">
+      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-green-700 transition-colors">
         {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
         {uploading ? "Uploading…" : "Replace"}
         <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={onSelect} />
@@ -503,9 +503,9 @@ const SellerProfile = () => {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200/80 bg-gradient-to-r from-rose-50/70 via-white to-amber-50/60 p-3 sm:p-4 shadow-xs flex items-center justify-between gap-3">
+      <div className="rounded-xl border border-slate-200/80 bg-gradient-to-r from-green-50/70 via-white to-amber-50/60 p-3 sm:p-4 shadow-xs flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-full overflow-hidden bg-rose-500 text-white font-semibold text-base sm:text-lg flex items-center justify-center shadow-xs border-2 border-white shrink-0">
+          <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-full overflow-hidden bg-green-600 text-white font-semibold text-base sm:text-lg flex items-center justify-center shadow-xs border-2 border-white shrink-0">
             {displayShopImage ? (
               <img src={displayShopImage} alt="Shop" className="h-full w-full object-cover" />
             ) : (
@@ -517,11 +517,11 @@ const SellerProfile = () => {
               <h2 className="text-sm sm:text-base font-semibold text-[#1c1c1e] tracking-tight truncate">
                 {profile?.shopName || profile?.name || "Merchant Store"}
               </h2>
-              <span className="px-1.5 py-0.5 bg-rose-100/80 text-rose-700 text-[10px] font-medium uppercase rounded border border-rose-200/60">
+              <span className="px-1.5 py-0.5 bg-green-100/80 text-green-700 text-[10px] font-medium uppercase rounded border border-green-200/60">
                 {formData.businessType || "Seller"}
               </span>
               {formData.zoneName ? (
-                <span className="px-1.5 py-0.5 bg-red-50 text-red-700 text-[10px] font-medium rounded border border-red-200/60 truncate max-w-[140px]">
+                <span className="px-1.5 py-0.5 bg-green-50 text-green-700 text-[10px] font-medium rounded border border-green-200/60 truncate max-w-[140px]">
                   {formData.zoneName}
                 </span>
               ) : null}
@@ -558,7 +558,7 @@ const SellerProfile = () => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={isSaving || Boolean(uploadingImageKey)}
-                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-xs disabled:opacity-70"
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-xs disabled:opacity-70"
               >
                 <Save className="h-3.5 w-3.5" />
                 {isSaving ? "Saving..." : "Save"}
@@ -719,7 +719,7 @@ const SellerProfile = () => {
                     type="button"
                     onClick={handleSaveOpeningHours}
                     disabled={isSavingHours}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-70"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-70"
                   >
                     {isSavingHours ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                     {isSavingHours ? "Saving…" : "Save hours"}
@@ -751,9 +751,9 @@ const SellerProfile = () => {
             </div>
 
             {selectedZone ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-red-600">Selected zone</p>
-                <p className="mt-0.5 text-xs font-semibold text-red-900">{selectedZone.label}</p>
+              <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-green-600">Selected zone</p>
+                <p className="mt-0.5 text-xs font-semibold text-green-900">{selectedZone.label}</p>
               </div>
             ) : null}
 
@@ -815,7 +815,7 @@ const SellerProfile = () => {
                   checked={formData.gstRegistered === true}
                   disabled={!isEditing}
                   onChange={(e) => updateField("gstRegistered", e.target.checked)}
-                  className="h-4 w-4 accent-red-600"
+                  className="h-4 w-4 accent-green-600"
                 />
                 GST registered
               </label>
@@ -948,7 +948,7 @@ const SellerProfile = () => {
             <button
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-semibold"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-xs font-semibold"
             >
               <Trash2 className="h-3.5 w-3.5" /> Delete account
             </button>
@@ -977,7 +977,7 @@ const SellerProfile = () => {
               </button>
               <button
                 type="button"
-                className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold disabled:opacity-70"
+                className="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold disabled:opacity-70"
                 onClick={handleDeleteAccount}
                 disabled={isDeleting}
               >

@@ -45,7 +45,7 @@ const typeStyles = (type) => {
     };
   }
   return {
-    wrap: "bg-red-50 text-red-600 border-red-200/70",
+    wrap: "bg-green-50 text-green-600 border-green-200/70",
     Icon: HiOutlineExclamationCircle,
   };
 };
@@ -123,7 +123,7 @@ const SellerNotifications = () => {
           <button
             type="button"
             onClick={markAllRead}
-            className="shrink-0 mt-0.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-red-600 bg-red-50 border border-red-100 hover:bg-red-100/80 active:scale-[0.98] transition-all"
+            className="shrink-0 mt-0.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold text-green-600 bg-green-50 border border-green-100 hover:bg-green-100/80 active:scale-[0.98] transition-all"
           >
             Mark all read
           </button>
@@ -156,7 +156,7 @@ const SellerNotifications = () => {
                   "w-full text-left rounded-2xl border bg-white p-3.5 shadow-xs transition-all active:scale-[0.995]",
                   notif.isRead
                     ? "border-slate-200/80"
-                    : "border-red-100 bg-red-50/30",
+                    : "border-green-100 bg-green-50/30",
                 )}
               >
                 <div className="flex items-start gap-3">
@@ -178,7 +178,7 @@ const SellerNotifications = () => {
                       >
                         {notif.title}
                         {!notif.isRead ? (
-                          <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" />
+                          <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-green-600 align-middle" />
                         ) : null}
                       </p>
                       <span className="shrink-0 text-[10px] font-medium text-slate-400 pt-0.5">

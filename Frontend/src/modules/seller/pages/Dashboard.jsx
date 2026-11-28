@@ -214,8 +214,8 @@ const Dashboard = () => {
       title: "Add Product",
       icon: Plus,
       path: "/seller/products/add",
-      iconBg: "bg-red-50",
-      iconColor: "text-[#E4313B]",
+      iconBg: "bg-green-50",
+      iconColor: "text-[#16A34A]",
     },
     {
       title: "View Orders",
@@ -383,12 +383,12 @@ const Dashboard = () => {
                     onClick={() => handleRangeSelect(opt.key, opt.key === "daily" ? opt.sublabel : opt.label)}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-all ${
                       dateRange === opt.key
-                        ? "bg-red-50 text-[#E4313B] font-semibold"
+                        ? "bg-green-50 text-[#16A34A] font-semibold"
                         : "text-slate-700 hover:bg-slate-50"
                     }`}
                   >
                     <span className="text-xs font-medium">{opt.label}</span>
-                    <span className={`text-[10px] ${dateRange === opt.key ? 'text-[#E4313B]/70' : 'text-slate-400'}`}>{opt.sublabel}</span>
+                    <span className={`text-[10px] ${dateRange === opt.key ? 'text-[#16A34A]/70' : 'text-slate-400'}`}>{opt.sublabel}</span>
                   </button>
                 ))}
               </div>
@@ -398,7 +398,7 @@ const Dashboard = () => {
                   type="date"
                   value={customDate}
                   onChange={(e) => handleCustomDateSelect(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-700 bg-slate-50/50 focus:outline-none focus:ring-1 focus:ring-[#E4313B]/30 focus:border-[#E4313B]/40 transition-all"
+                  className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-700 bg-slate-50/50 focus:outline-none focus:ring-1 focus:ring-[#16A34A]/30 focus:border-[#16A34A]/40 transition-all"
                 />
               </div>
             </div>
@@ -427,10 +427,10 @@ const Dashboard = () => {
         </div>
 
       {/* Grow your business Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-red-50/80 rounded-2xl p-3.5 sm:p-4 border border-red-100/90">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-green-50/80 rounded-2xl p-3.5 sm:p-4 border border-green-100/90">
         <div className="flex items-center gap-3 sm:gap-3.5">
-            <div className="flex bg-red-100 p-2 rounded-xl shrink-0">
-                <TrendingUp className="h-4.5 w-4.5 text-red-500" strokeWidth={2} />
+            <div className="flex bg-green-100 p-2 rounded-xl shrink-0">
+                <TrendingUp className="h-4.5 w-4.5 text-green-600" strokeWidth={2} />
             </div>
             <div>
                 <h3 className="text-xs sm:text-sm font-semibold text-[#1c1c1e] mb-0.5">Grow your business</h3>
@@ -439,7 +439,7 @@ const Dashboard = () => {
         </div>
         <button 
           onClick={() => navigate('/seller/products/add')}
-          className="bg-[#E4313B] text-white px-4 sm:px-4.5 py-2 sm:py-2.5 rounded-xl font-semibold text-xs hover:bg-[#D1252F] active:scale-[0.98] transition-all whitespace-nowrap flex items-center justify-center gap-1.5 shadow-xs w-full sm:w-auto"
+          className="bg-[#16A34A] text-white px-4 sm:px-4.5 py-2 sm:py-2.5 rounded-xl font-semibold text-xs hover:bg-[#15803D] active:scale-[0.98] transition-all whitespace-nowrap flex items-center justify-center gap-1.5 shadow-xs w-full sm:w-auto"
         >
             <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
             Add Product
@@ -457,8 +457,8 @@ const Dashboard = () => {
                 onClick={() => navigate(action.path)}
                 className="flex flex-row sm:flex-col items-center justify-start sm:justify-center gap-2.5 sm:gap-0 bg-white p-2.5 sm:p-3 rounded-xl sm:rounded-2xl shadow-xs border border-slate-100 hover:shadow-sm transition-all active:scale-[0.98] w-full"
               >
-                <div className={cn("p-2 sm:p-2.5 rounded-lg sm:rounded-xl sm:mb-2 shrink-0", action.iconBg || "bg-red-50")}>
-                  <action.icon className={cn("h-4 w-4 sm:h-4.5 sm:w-4.5", action.iconColor || "text-red-500")} strokeWidth={2} />
+                <div className={cn("p-2 sm:p-2.5 rounded-lg sm:rounded-xl sm:mb-2 shrink-0", action.iconBg || "bg-green-50")}>
+                  <action.icon className={cn("h-4 w-4 sm:h-4.5 sm:w-4.5", action.iconColor || "text-green-600")} strokeWidth={2} />
                 </div>
                 <span className="text-xs font-semibold text-slate-800 text-left sm:text-center leading-tight">
                   {action.title}
@@ -590,7 +590,7 @@ const Dashboard = () => {
         headerAction={
           <button
             onClick={() => navigate("/seller/orders")}
-            className="text-xs sm:text-sm font-semibold text-red-500 hover:text-red-600 flex items-center gap-1">
+            className="text-xs sm:text-sm font-semibold text-green-600 hover:text-green-600 flex items-center gap-1">
             View All
             <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </button>
@@ -632,7 +632,7 @@ const Dashboard = () => {
                       setSelectedOrder(normalizeOrderForModal(order));
                       setIsOrderModalOpen(true);
                     }}
-                    className="text-[11px] font-semibold text-red-500 hover:text-red-600 flex items-center gap-0.5"
+                    className="text-[11px] font-semibold text-green-600 hover:text-green-600 flex items-center gap-0.5"
                   >
                     View <Eye className="h-3 w-3" />
                   </button>
@@ -710,7 +710,7 @@ const Dashboard = () => {
                         setSelectedOrder(normalizeOrderForModal(order));
                         setIsOrderModalOpen(true);
                       }}
-                      className="text-slate-600 hover:text-red-500 transition-colors p-1">
+                      className="text-slate-600 hover:text-green-600 transition-colors p-1">
                       <Eye className="h-4 w-4" />
                     </button>
                   </td>
@@ -778,7 +778,7 @@ const Dashboard = () => {
                   <div className="space-y-3 sm:space-y-4">
                     <div>
                       <h4 className="text-xs font-black text-slate-600 uppercase tracking-widest mb-2 flex items-center gap-2">
-                        <HiOutlineMapPin className="h-3 w-3 text-red-500" />{" "}
+                        <HiOutlineMapPin className="h-3 w-3 text-green-600" />{" "}
                         Delivery Address
                       </h4>
                       <p className="text-xs font-bold text-slate-800 leading-relaxed bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-sm">
@@ -798,8 +798,8 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <div className="space-y-3 sm:space-y-4">
-                    <div className="bg-red-500/5 p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-red-500/10">
-                      <h4 className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-3">
+                    <div className="bg-green-600/5 p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-green-600/10">
+                      <h4 className="text-[10px] font-black text-green-600 uppercase tracking-widest mb-3">
                         Order Summary
                       </h4>
                       <div className="space-y-2">
@@ -815,7 +815,7 @@ const Dashboard = () => {
                           <span className="font-bold text-slate-600">
                             Commission
                           </span>
-                          <span className="font-black text-rose-600">
+                          <span className="font-black text-green-600">
                             -₹{(selectedOrder.pricing?.commission || 0).toFixed(2)}
                           </span>
                         </div>
@@ -824,7 +824,7 @@ const Dashboard = () => {
                             <span className="font-bold text-slate-600">
                               Seller Coupon
                             </span>
-                            <span className="font-black text-rose-600">
+                            <span className="font-black text-green-600">
                               -₹{(selectedOrder.pricing?.couponDiscount || 0).toFixed(2)}
                             </span>
                           </div>
@@ -839,7 +839,7 @@ const Dashboard = () => {
                             </span>
                           </div>
                         )}
-                        <div className="h-px bg-red-500/10 my-2" />
+                        <div className="h-px bg-green-600/10 my-2" />
                         <div className="flex justify-between text-sm">
                           <span className="font-black text-slate-900">
                             Receivable
@@ -847,15 +847,15 @@ const Dashboard = () => {
                           <span className={cn(
                             "font-black",
                             Number(selectedOrder.pricing?.receivable ?? selectedOrder.total ?? 0) < 0
-                              ? "text-rose-600"
-                              : "text-red-500",
+                              ? "text-green-600"
+                              : "text-green-600",
                           )}>
                             ₹{Number(selectedOrder.pricing?.receivable ?? selectedOrder.total ?? 0).toFixed(2)}
                           </span>
                         </div>
                       </div>
                     </div>
-                    <div className="bg-slate-900 p-3 sm:p-4 rounded-2xl sm:rounded-3xl text-white shadow-xl shadow-red-500/20">
+                    <div className="bg-slate-900 p-3 sm:p-4 rounded-2xl sm:rounded-3xl text-white shadow-xl shadow-green-600/20">
                       <h4 className="text-xs font-black text-slate-600 uppercase tracking-widest mb-2">
                         Payment Status
                       </h4>

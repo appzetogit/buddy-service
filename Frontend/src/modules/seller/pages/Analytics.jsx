@@ -115,8 +115,8 @@ const Analytics = () => {
       value: statsData?.overview?.totalOrders || "0",
       trend: statsData?.overview?.ordersTrend || "0%",
       icon: HiOutlineShoppingBag,
-      iconColor: "text-red-600",
-      iconBg: "bg-red-50 border-red-200/80",
+      iconColor: "text-green-600",
+      iconBg: "bg-green-50 border-green-200/80",
     },
     {
       label: "Avg Order Value",
@@ -259,7 +259,7 @@ const Analytics = () => {
             <button
               onClick={handleDownloadReport}
               disabled={isExporting}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-50">
+              className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-50">
               <HiOutlineArrowDownTray className="h-3.5 w-3.5 text-white" />
               <span>{isExporting ? "Downloading..." : "Export Report"}</span>
             </button>
@@ -296,7 +296,7 @@ const Analytics = () => {
                   "inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold",
                   String(stat.trend || "").startsWith("+")
                     ? "text-emerald-700 bg-emerald-50 border border-emerald-200/60"
-                    : "text-rose-700 bg-rose-50 border border-rose-200/60"
+                    : "text-green-700 bg-green-50 border border-green-200/60"
                 )}>
                   {String(stat.trend || "").startsWith("+") ? (
                     <HiOutlineArrowUpRight className="mr-0.5 h-3 w-3" />
@@ -343,7 +343,7 @@ const Analytics = () => {
                     className={cn(
                       "px-2 py-0.5 rounded-md text-[11px] font-medium transition-all cursor-pointer",
                       chartRange === range
-                        ? "bg-white text-red-600 shadow-2xs font-semibold"
+                        ? "bg-white text-green-600 shadow-2xs font-semibold"
                         : "text-slate-600 hover:text-slate-900",
                     )}>
                     {range}
@@ -358,8 +358,8 @@ const Analytics = () => {
                   margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#16A34A" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#16A34A" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -389,7 +389,7 @@ const Analytics = () => {
                   <Area
                     type="monotone"
                     dataKey="sales"
-                    stroke="#ef4444"
+                    stroke="#16A34A"
                     strokeWidth={2.5}
                     fillOpacity={1}
                     fill="url(#colorSales)"
@@ -417,7 +417,7 @@ const Analytics = () => {
                   <PolarGrid stroke="#e2e8f0" />
                   <PolarAngleAxis dataKey="subject" tick={{ fill: "#64748b", fontSize: 9 }} />
                   <PolarRadiusAxis angle={30} domain={[0, 150]} tick={false} axisLine={false} />
-                  <Radar name="Volume" dataKey="A" stroke="#ef4444" strokeWidth={2} fill="#ef4444" fillOpacity={0.15} />
+                  <Radar name="Volume" dataKey="A" stroke="#16A34A" strokeWidth={2} fill="#16A34A" fillOpacity={0.15} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
@@ -475,7 +475,7 @@ const Analytics = () => {
                     </p>
                     <div className={cn(
                       "flex items-center justify-end text-[10px] font-medium mt-0.5",
-                      product.trend > 0 ? "text-emerald-700" : "text-rose-700"
+                      product.trend > 0 ? "text-emerald-700" : "text-green-700"
                     )}>
                       {product.trend > 0 ? (
                         <HiOutlineArrowUpRight className="h-3 w-3 mr-0.5" />
@@ -491,7 +491,7 @@ const Analytics = () => {
             <div className="p-2.5 bg-slate-50/50 border-t border-slate-100 text-center">
               <button
                 onClick={() => navigate("/seller/products")}
-                className="text-[11px] font-semibold text-red-600 hover:underline cursor-pointer">
+                className="text-[11px] font-semibold text-green-600 hover:underline cursor-pointer">
                 View All Products Analytics
               </button>
             </div>
@@ -608,11 +608,11 @@ const Analytics = () => {
                   {selectedProduct.revenue}
                 </p>
               </div>
-              <div className="p-4 bg-red-50 rounded-2xl">
-                <p className="text-[10px] font-black text-red-700 uppercase tracking-widest">
+              <div className="p-4 bg-green-50 rounded-2xl">
+                <p className="text-[10px] font-black text-green-700 uppercase tracking-widest">
                   Units Sold
                 </p>
-                <p className="text-xl font-black text-red-900">
+                <p className="text-xl font-black text-green-900">
                   {selectedProduct.sales}
                 </p>
               </div>
@@ -623,7 +623,7 @@ const Analytics = () => {
                 Sales velocity
               </p>
               <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-red-500 w-[75%]" />
+                <div className="h-full bg-green-600 w-[75%]" />
               </div>
               <p className="text-[10px] text-slate-600 font-bold text-right pt-1">
                 +{selectedProduct.trend}% faster than last week
@@ -632,7 +632,7 @@ const Analytics = () => {
 
             <Button
               onClick={() => setIsProductModalOpen(false)}
-              className="w-full py-4 rounded-2xl font-black shadow-xl shadow-red-500/20">
+              className="w-full py-4 rounded-2xl font-black shadow-xl shadow-green-600/20">
               CLOSE DETAILS
             </Button>
           </div>

@@ -83,23 +83,23 @@ const BottomNav = ({ navItems }) => {
                                 className={({ isActive }) => cn(
                                     "flex-1 flex flex-col items-center justify-center gap-1 py-1.5 px-1 relative transition-all select-none",
                                     isActive
-                                        ? "text-red-600 dark:text-red-500 font-semibold"
+                                        ? "text-green-600 dark:text-green-600 font-semibold"
                                         : "text-slate-600 dark:text-slate-400 font-normal hover:text-slate-900"
                                 )}
                             >
                                 {({ isActive }) => (
                                     <>
                                         {isActive && (
-                                            <div className="absolute top-0 left-0 right-0 h-0.5 bg-red-600 dark:bg-red-500 rounded-b-full" />
+                                            <div className="absolute top-0 left-0 right-0 h-0.5 bg-green-600 dark:bg-green-600 rounded-b-full" />
                                         )}
                                         {isActive ? (
-                                            <ActiveIcon className="h-5 w-5 text-red-600 dark:text-red-500 fill-current" />
+                                            <ActiveIcon className="h-5 w-5 text-green-600 dark:text-green-600 fill-current" />
                                         ) : (
                                             <Icon className="h-5 w-5 text-slate-600 dark:text-slate-400" />
                                         )}
                                         <span className={cn(
                                             "text-xs leading-none",
-                                            isActive ? "font-semibold text-red-600 dark:text-red-500" : "font-normal text-slate-600 dark:text-slate-400"
+                                            isActive ? "font-semibold text-green-600 dark:text-green-600" : "font-normal text-slate-600 dark:text-slate-400"
                                         )}>
                                             {item.label}
                                         </span>

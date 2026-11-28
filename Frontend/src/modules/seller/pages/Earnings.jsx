@@ -128,7 +128,7 @@ const Earnings = () => {
             </button>
             <button
               onClick={() => navigate("/seller/withdrawals")}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-700 shadow-xs transition-all cursor-pointer">
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-green-600 hover:bg-green-700 shadow-xs transition-all cursor-pointer">
               <Banknote className="h-3.5 w-3.5 text-white" />
               <span>Withdraw Funds</span>
             </button>
@@ -145,7 +145,7 @@ const Earnings = () => {
                 <p className="text-xs font-medium text-emerald-800">Total Net Earnings</p>
                 <h3 className={cn(
                   "text-2xl sm:text-3xl font-semibold mt-1 tracking-tight text-emerald-950",
-                  Number(data?.balances?.totalNetEarnings ?? 0) < 0 && "text-rose-600",
+                  Number(data?.balances?.totalNetEarnings ?? 0) < 0 && "text-green-600",
                 )}>
                   ₹{Number(data?.balances?.totalNetEarnings ?? 0).toLocaleString()}
                 </h3>
@@ -176,11 +176,11 @@ const Earnings = () => {
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-500 font-medium">Admin Commission</span>
-                    <span className="text-rose-500 font-bold">- ₹{Number(data?.balances?.totalCommission ?? 0).toLocaleString()}</span>
+                    <span className="text-green-600 font-bold">- ₹{Number(data?.balances?.totalCommission ?? 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-500 font-medium">Seller Coupon Discount</span>
-                    <span className="text-rose-500 font-bold">- ₹{Number(data?.balances?.totalCouponDiscount ?? 0).toLocaleString()}</span>
+                    <span className="text-green-600 font-bold">- ₹{Number(data?.balances?.totalCouponDiscount ?? 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-500 font-medium">Packing Fees</span>
@@ -190,7 +190,7 @@ const Earnings = () => {
                     <span className="text-slate-900 font-black">Net Payout</span>
                     <span className={cn(
                       "font-black",
-                      Number(data?.balances?.totalNetEarnings ?? 0) < 0 ? "text-rose-600" : "text-emerald-600",
+                      Number(data?.balances?.totalNetEarnings ?? 0) < 0 ? "text-green-600" : "text-emerald-600",
                     )}>
                       ₹{Number(data?.balances?.totalNetEarnings ?? 0).toLocaleString()}
                     </span>
@@ -261,7 +261,7 @@ const Earnings = () => {
         <div className="p-3.5 sm:p-4 rounded-xl border border-slate-200/80 bg-white shadow-xs">
           <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-100">
             <h3 className="text-xs sm:text-sm font-semibold text-[#1c1c1e] flex items-center gap-1.5">
-              <BarChart3 className="h-4 w-4 text-red-500" />
+              <BarChart3 className="h-4 w-4 text-green-600" />
               Monthly Revenue Performance
             </h3>
           </div>

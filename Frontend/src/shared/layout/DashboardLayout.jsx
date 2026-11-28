@@ -553,8 +553,8 @@ const DashboardLayout = ({ children, navItems, title }) => {
     return (
         <div className="min-h-screen bg-slate-50 relative overflow-x-hidden seller-theme-scope">
             {/* Premium Ambient Background Glow */}
-            <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-red-500/15 rounded-full blur-[140px] -z-10 animate-pulse pointer-events-none" style={{ animationDuration: '8s' }}></div>
-            <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-rose-500/15 rounded-full blur-[140px] -z-10 animate-pulse pointer-events-none" style={{ animationDelay: '4s', animationDuration: '10s' }}></div>
+            <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-green-600/15 rounded-full blur-[140px] -z-10 animate-pulse pointer-events-none" style={{ animationDuration: '8s' }}></div>
+            <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-green-600/15 rounded-full blur-[140px] -z-10 animate-pulse pointer-events-none" style={{ animationDelay: '4s', animationDuration: '10s' }}></div>
 
             <Sidebar
                 items={navItems}
@@ -603,13 +603,13 @@ const DashboardLayout = ({ children, navItems, title }) => {
                             className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100"
                         >
                             <div className="flex flex-col items-center text-center">
-                                <div className="h-20 w-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6 animate-bounce">
-                                    <BellRing className="h-10 w-10 text-red-500" />
+                                <div className="h-20 w-20 bg-green-600/10 rounded-full flex items-center justify-center mb-6 animate-bounce">
+                                    <BellRing className="h-10 w-10 text-green-600" />
                                 </div>
 
                                 <h2 className="text-2xl font-black text-slate-900 mb-2">New Order Received!</h2>
                                 <p className="text-slate-600 font-medium mb-6">
-                                    You have a new order <span className="text-red-500 font-bold">#{newOrderAlert.orderId}</span> for <span className="text-slate-900 font-bold">Rs {resolveSellerReceivable(newOrderAlert).toFixed(2)}</span>
+                                    You have a new order <span className="text-green-600 font-bold">#{newOrderAlert.orderId}</span> for <span className="text-slate-900 font-bold">Rs {resolveSellerReceivable(newOrderAlert).toFixed(2)}</span>
                                 </p>
 
                                 {/* Timer Bar — width from real server deadline */}
@@ -617,7 +617,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                     <div
                                         className={cn(
                                             "h-full transition-[width] duration-1000 ease-linear",
-                                            timeLeft < 15 ? "bg-rose-500" : "bg-red-500",
+                                            timeLeft < 15 ? "bg-rose-500" : "bg-green-600",
                                         )}
                                         style={{
                                             width: `${acceptWindowTotalRef.current > 0 ? (timeLeft / acceptWindowTotalRef.current) * 100 : 0}%`,
@@ -644,7 +644,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                     <button
                                         type="button"
                                         onClick={() => handleAcceptOrder(newOrderAlert.orderId)}
-                                        className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-red-500 text-white font-bold hover:bg-red-500/90 shadow-xl shadow-red-500/20 transition-all active:scale-95"
+                                        className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-green-600 text-white font-bold hover:bg-green-600/90 shadow-xl shadow-green-600/20 transition-all active:scale-95"
                                     >
                                         <Check className="h-5 w-5" />
                                         Accept
@@ -702,7 +702,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                         onChange={(e) => setDeclineReasonOther(e.target.value)}
                                         placeholder="Describe your reason in detail..."
                                         rows={3}
-                                        className="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-semibold text-slate-700 placeholder:text-slate-500 focus:ring-2 focus:ring-red-500/5 outline-none transition-all resize-none"
+                                        className="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-semibold text-slate-700 placeholder:text-slate-500 focus:ring-2 focus:ring-green-600/5 outline-none transition-all resize-none"
                                     />
                                 </div>
                             )}
@@ -720,7 +720,7 @@ const DashboardLayout = ({ children, navItems, title }) => {
                                     type="button"
                                     onClick={handleDeclineOrder}
                                     disabled={isDeclining}
-                                    className="px-5 py-2.5 rounded-xl text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 transition-all disabled:opacity-60"
+                                    className="px-5 py-2.5 rounded-xl text-xs font-bold bg-green-600 text-white hover:bg-green-700 transition-all disabled:opacity-60"
                                 >
                                     {isDeclining ? 'Declining...' : 'Confirm Decline'}
                                 </button>

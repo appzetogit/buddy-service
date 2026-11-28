@@ -242,14 +242,19 @@ export const getAppLogo = (appType) => {
   const settings = getCachedSettings();
   if (!settings) return null;
 
-  switch (appType) {
-    case 'admin': return settings.adminLogo?.url;
-    case 'user': return settings.userLogo?.url;
-    case 'delivery': return settings.deliveryLogo?.url;
-    case 'restaurant': return settings.restaurantLogo?.url;
-    case 'seller': return settings.sellerLogo?.url;
-    default: return null;
-  }
+  // The app's own logo when the admin uploaded one, otherwise the common company logo
+  // (restaurant panel already shows the common one; the seller/admin/user apps showed nothing).
+  const own = (() => {
+    switch (appType) {
+      case 'admin': return settings.adminLogo?.url;
+      case 'user': return settings.userLogo?.url;
+      case 'delivery': return settings.deliveryLogo?.url;
+      case 'restaurant': return settings.restaurantLogo?.url;
+      case 'seller': return settings.sellerLogo?.url;
+      default: return null;
+    }
+  })();
+  return own || settings.logo?.url || null;
 };
 
 export const getLoginBanner = () => {

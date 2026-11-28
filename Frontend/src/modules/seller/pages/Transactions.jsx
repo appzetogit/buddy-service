@@ -164,7 +164,7 @@ const Transactions = () => {
           <div>
             <h1 className="text-lg sm:text-xl font-semibold text-[#1c1c1e] tracking-tight flex items-center gap-2">
               Transaction Ledger
-              <span className="text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider rounded-md bg-red-100 text-red-700 border border-red-200">
+              <span className="text-[10px] px-2 py-0.5 font-medium uppercase tracking-wider rounded-md bg-green-100 text-green-700 border border-green-200">
                 Audit Trail
               </span>
             </h1>
@@ -206,7 +206,7 @@ const Transactions = () => {
               }
             }}
             disabled={isDownloading || filteredTransactions.length === 0}
-            className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-50">
+            className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-50">
             <HiOutlineDocumentText className="h-3.5 w-3.5 text-white" />
             <span>{isDownloading ? "Downloading..." : "Export Statement"}</span>
           </button>
@@ -265,7 +265,7 @@ const Transactions = () => {
               <HiOutlineMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input
                 placeholder="Search transaction..."
-                className="w-full bg-slate-50/70 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all placeholder:text-slate-400"
+                className="w-full bg-slate-50/70 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs font-normal text-slate-900 outline-none focus:bg-white focus:border-green-600 transition-all placeholder:text-slate-400"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -320,7 +320,7 @@ const Transactions = () => {
                               "h-7 w-7 rounded-md flex items-center justify-center font-semibold text-xs transition-transform group-hover:scale-105 shrink-0",
                               Number(txn.amount ?? 0) > 0
                                 ? "bg-emerald-100 text-emerald-700"
-                                : "bg-rose-100 text-rose-700",
+                                : "bg-green-100 text-green-700",
                             )}>
                             {Number(txn.amount ?? 0) > 0 ? (
                               <HiOutlineArrowDownLeft className="h-3.5 w-3.5" />
@@ -329,7 +329,7 @@ const Transactions = () => {
                             )}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-semibold text-[#1c1c1e] group-hover:text-red-600 transition-colors truncate">
+                            <p className="text-xs font-semibold text-[#1c1c1e] group-hover:text-green-600 transition-colors truncate">
                               {txn.id ?? txn.ref ?? "—"}
                             </p>
                             <p className="text-[10px] font-normal text-slate-500 uppercase tracking-wider">
@@ -357,7 +357,7 @@ const Transactions = () => {
                             "text-xs font-semibold tracking-tight tabular-nums",
                             Number(txn.amount ?? 0) > 0
                               ? "text-emerald-700"
-                              : "text-rose-700",
+                              : "text-green-700",
                           )}>
                           {Number(txn.amount ?? 0) > 0 ? "+" : ""}₹
                           {Math.abs(Number(txn.amount ?? 0)).toLocaleString()}
@@ -431,7 +431,7 @@ const Transactions = () => {
               <h2
                 className={cn(
                   "text-4xl font-black tracking-tight",
-                  Number(selectedTxn.amount ?? 0) > 0 ? "text-emerald-600" : "text-rose-600",
+                  Number(selectedTxn.amount ?? 0) > 0 ? "text-emerald-600" : "text-green-600",
                 )}>
                 {Number(selectedTxn.amount ?? 0) > 0 ? "+" : ""}₹
                 {Math.abs(Number(selectedTxn.amount ?? 0)).toLocaleString()}
@@ -498,7 +498,7 @@ const Transactions = () => {
               </Button>
               <Button
                 onClick={() => setIsDetailModalOpen(false)}
-                className="rounded-lg py-4 font-black shadow-xl shadow-red-500/20">
+                className="rounded-lg py-4 font-black shadow-xl shadow-green-600/20">
                 CLOSE
               </Button>
             </div>

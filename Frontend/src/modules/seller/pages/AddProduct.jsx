@@ -175,7 +175,7 @@ const AddProduct = () => {
           type="button"
           onClick={isLast ? handleSave : goToNextTab}
           disabled={isLast && isSaving}
-          className="w-full h-11 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-60 active:scale-[0.99] text-white text-sm font-semibold shadow-sm transition-all"
+          className="w-full h-11 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 active:scale-[0.99] text-white text-sm font-semibold shadow-sm transition-all"
         >
           {isLast
             ? isSaving
@@ -580,7 +580,7 @@ const AddProduct = () => {
         <div className="flex items-center justify-between">
           <Button
             variant="ghost"
-            className="pl-0 hover:bg-transparent hover:text-red-600"
+            className="pl-0 hover:bg-transparent hover:text-green-600"
             onClick={leaveAddProduct}>
             <HiOutlineArrowLeft className="mr-2 h-5 w-5" />
             Back to Products
@@ -600,14 +600,14 @@ const AddProduct = () => {
             onClick={() => selectAddMethod("single")}
             className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-all cursor-pointer group flex flex-col items-center text-center space-y-2"
           >
-            <div className="h-9 w-9 rounded-lg bg-red-50 border border-red-200/60 text-red-600 flex items-center justify-center shrink-0 shadow-2xs group-hover:bg-red-600 group-hover:text-white transition-colors">
+            <div className="h-9 w-9 rounded-lg bg-green-50 border border-green-200/60 text-green-600 flex items-center justify-center shrink-0 shadow-2xs group-hover:bg-green-600 group-hover:text-white transition-colors">
               <HiOutlineCube className="h-5 w-5" />
             </div>
             <h3 className="text-sm font-semibold text-[#1c1c1e]">Single Product</h3>
             <p className="text-xs text-slate-500 font-normal leading-relaxed">
               Add a single product manually with custom photos, descriptions, and variant configurations.
             </p>
-            <span className="text-[11px] font-semibold text-red-600 group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1 pt-1">
+            <span className="text-[11px] font-semibold text-green-600 group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1 pt-1">
               PROCEED <HiOutlineArrowLeft className="h-3 w-3 rotate-180" />
             </span>
           </div>
@@ -617,14 +617,14 @@ const AddProduct = () => {
             onClick={() => selectAddMethod("bulk")}
             className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200/80 shadow-2xs hover:border-slate-300 transition-all cursor-pointer group flex flex-col items-center text-center space-y-2"
           >
-            <div className="h-9 w-9 rounded-lg bg-red-50 border border-red-200/60 text-red-600 flex items-center justify-center shrink-0 shadow-2xs group-hover:bg-red-600 group-hover:text-white transition-colors">
+            <div className="h-9 w-9 rounded-lg bg-green-50 border border-green-200/60 text-green-600 flex items-center justify-center shrink-0 shadow-2xs group-hover:bg-green-600 group-hover:text-white transition-colors">
               <HiOutlineSquaresPlus className="h-5 w-5" />
             </div>
             <h3 className="text-sm font-semibold text-[#1c1c1e]">Bulk Excel Upload</h3>
             <p className="text-xs text-slate-500 font-normal leading-relaxed">
               Upload an excel plus an images folder. Ideal for importing dozens or hundreds of items at once.
             </p>
-            <span className="text-[11px] font-semibold text-red-600 group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1 pt-1">
+            <span className="text-[11px] font-semibold text-green-600 group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1 pt-1">
               PROCEED <HiOutlineArrowLeft className="h-3 w-3 rotate-180" />
             </span>
           </div>
@@ -664,7 +664,7 @@ const AddProduct = () => {
               type="button"
               onClick={downloadTemplate}
               disabled={downloadingTemplate}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
             >
               {downloadingTemplate ? (
                 <HiOutlineArrowPath className="h-4 w-4 animate-spin" />
@@ -735,7 +735,7 @@ const AddProduct = () => {
               <button
                 type="submit"
                 disabled={!excelFile || isUploading}
-                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-all shadow-xs cursor-pointer"
               >
                 {isUploading ? "Importing..." : "Upload & Import"}
               </button>
@@ -747,8 +747,8 @@ const AddProduct = () => {
                 <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center space-y-6 shadow-2xl border border-slate-100 scale-in duration-200">
                   <div className="flex justify-center">
                     <div className="relative flex items-center justify-center animate-bounce">
-                      <div className="w-16 h-16 border-4 border-red-500/20 border-t-orange-500 rounded-full animate-spin"></div>
-                      <HiOutlineArrowPath className="absolute h-6 w-6 text-red-500 animate-spin" />
+                      <div className="w-16 h-16 border-4 border-green-600/20 border-t-orange-500 rounded-full animate-spin"></div>
+                      <HiOutlineArrowPath className="absolute h-6 w-6 text-green-600 animate-spin" />
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -757,10 +757,10 @@ const AddProduct = () => {
                       Please wait while we validate your excel data, process categories, upload images, and create your products in bulk.
                     </p>
                   </div>
-                  <div className="bg-red-50/50 rounded-xl py-2 px-4 inline-flex items-center gap-2 text-xs font-bold text-red-600">
+                  <div className="bg-green-50/50 rounded-xl py-2 px-4 inline-flex items-center gap-2 text-xs font-bold text-green-600">
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-600"></span>
                     </span>
                     Do not close this page
                   </div>
@@ -779,7 +779,7 @@ const AddProduct = () => {
       <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2.5 pb-1">
         <Button
           variant="ghost"
-          className="pl-0 text-xs sm:text-sm font-medium hover:bg-transparent hover:text-red-600 justify-start h-8 min-h-0"
+          className="pl-0 text-xs sm:text-sm font-medium hover:bg-transparent hover:text-green-600 justify-start h-8 min-h-0"
           onClick={leaveAddProduct}>
           <HiOutlineArrowLeft className="mr-1.5 h-4 w-4" />
           Back to Products
@@ -805,10 +805,10 @@ const AddProduct = () => {
               className={cn(
                 "flex items-center space-x-2 px-3 py-2 rounded-lg text-xs font-medium transition-all text-left whitespace-nowrap shrink-0 md:w-full min-h-0",
                 modalTab === tab.id
-                  ? "bg-white text-red-600 shadow-xs border border-slate-200/80 font-semibold"
+                  ? "bg-white text-green-600 shadow-xs border border-slate-200/80 font-semibold"
                   : "text-slate-600 hover:bg-slate-100/70",
               )}>
-              <tab.icon className={cn("h-4 w-4 shrink-0", modalTab === tab.id ? "text-red-600" : "text-slate-400")} />
+              <tab.icon className={cn("h-4 w-4 shrink-0", modalTab === tab.id ? "text-green-600" : "text-slate-400")} />
               <span>{tab.label}</span>
             </button>
           ))}
@@ -844,7 +844,7 @@ const AddProduct = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm font-normal text-slate-900 outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20 transition-all placeholder:text-slate-400"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm font-normal text-slate-900 outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600/20 transition-all placeholder:text-slate-400"
                   placeholder="e.g. Premium Basmati Rice"
                 />
               </div>
@@ -859,7 +859,7 @@ const AddProduct = () => {
                   }
                   onWheel={(e) => e.stopPropagation()}
                   onTouchMove={(e) => e.stopPropagation()}
-                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm font-normal text-slate-900 min-h-[120px] max-h-[220px] outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20 resize-none overflow-y-auto custom-scrollbar placeholder:text-slate-400"
+                  className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm font-normal text-slate-900 min-h-[120px] max-h-[220px] outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600/20 resize-none overflow-y-auto custom-scrollbar placeholder:text-slate-400"
                   placeholder="Describe the item here..."
                 />
               </div>
@@ -873,7 +873,7 @@ const AddProduct = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, brand: e.target.value })
                     }
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm font-normal text-slate-900 outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20 transition-all placeholder:text-slate-400"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm font-normal text-slate-900 outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600/20 transition-all placeholder:text-slate-400"
                     placeholder="e.g. Amul"
                   />
                 </div>
@@ -907,7 +907,7 @@ const AddProduct = () => {
                     value={formData.packingFee}
                     onChange={(e) => setFormData({ ...formData, packingFee: e.target.value })}
                     placeholder="e.g. 10"
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm sm:text-base font-semibold outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm sm:text-base font-semibold outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600/20"
                   />
                   <p className="text-[10px] text-slate-500 font-medium ml-1">
                     One packing fee for the whole product (applies to all variants).
@@ -922,7 +922,7 @@ const AddProduct = () => {
                     min="1"
                     value={formData.lowStockAlert}
                     onChange={(e) => setFormData({ ...formData, lowStockAlert: e.target.value })}
-                    className="w-full px-3 py-2 bg-rose-50/40 border border-rose-200 rounded-lg text-xs sm:text-sm font-medium text-rose-700 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400/20"
+                    className="w-full px-3 py-2 bg-green-50/40 border border-green-200 rounded-lg text-xs sm:text-sm font-medium text-green-700 outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20"
                   />
                 </div>
               </div>
@@ -960,7 +960,7 @@ const AddProduct = () => {
                     });
                   }}
                   disabled={(formData.variants || []).length >= MAX_PRODUCT_VARIANTS}
-                  className="inline-flex items-center justify-center gap-2 shrink-0 self-start sm:self-auto px-3.5 py-2 bg-red-500/10 text-red-600 rounded-lg text-[10px] font-bold uppercase tracking-wide hover:bg-red-500/20 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed">
+                  className="inline-flex items-center justify-center gap-2 shrink-0 self-start sm:self-auto px-3.5 py-2 bg-green-600/10 text-green-600 rounded-lg text-[10px] font-bold uppercase tracking-wide hover:bg-green-600/20 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed">
                   <HiOutlineSquaresPlus className="h-4 w-4 shrink-0" />
                   <span>Add Variant</span>
                 </button>
@@ -983,7 +983,7 @@ const AddProduct = () => {
                             setFormData({ ...formData, variants: newVariants });
                           }}
                           placeholder="e.g. 1kg Bag"
-                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-red-500/10"
+                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-green-600/10"
                         />
                       </div>
                       <div className="col-span-6 md:col-span-2 space-y-1">
@@ -999,7 +999,7 @@ const AddProduct = () => {
                             setFormData({ ...formData, variants: newVariants });
                           }}
                           placeholder="500"
-                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-red-500/10"
+                          className="w-full px-3 py-2 bg-white ring-1 ring-slate-200 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-green-600/10"
                         />
                       </div>
                       <div className="col-span-6 md:col-span-2 space-y-1">
@@ -1016,10 +1016,10 @@ const AddProduct = () => {
                             setFormData({ ...formData, variants: newVariants });
                           }}
                           placeholder="450"
-                          className={`w-full px-3 py-2 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ${variant.salePrice && Number(variant.salePrice) < 1 ? "bg-red-50 ring-1 ring-red-300 text-red-600 focus:ring-red-300" : "bg-emerald-50 ring-1 ring-emerald-100 text-emerald-700 focus:ring-emerald-200"}`}
+                          className={`w-full px-3 py-2 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ${variant.salePrice && Number(variant.salePrice) < 1 ? "bg-green-50 ring-1 ring-green-300 text-green-600 focus:ring-green-300" : "bg-emerald-50 ring-1 ring-emerald-100 text-emerald-700 focus:ring-emerald-200"}`}
                         />
                         {variant.salePrice && Number(variant.salePrice) < 1 && (
-                          <p className="text-[9px] font-semibold text-red-500 ml-1">Min value is 1</p>
+                          <p className="text-[9px] font-semibold text-green-600 ml-1">Min value is 1</p>
                         )}
                       </div>
                       <div className="col-span-6 md:col-span-2 space-y-1">
@@ -1036,10 +1036,10 @@ const AddProduct = () => {
                             setFormData({ ...formData, variants: newVariants });
                           }}
                           placeholder="10"
-                          className={`w-full px-3 py-2 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ${variant.stock && Number(variant.stock) < 1 ? "bg-red-50 ring-1 ring-red-300 text-red-600 focus:ring-red-300" : "bg-white ring-1 ring-slate-200 focus:ring-red-500/10"}`}
+                          className={`w-full px-3 py-2 border-none rounded-xl text-xs font-bold outline-none focus:ring-2 ${variant.stock && Number(variant.stock) < 1 ? "bg-green-50 ring-1 ring-green-300 text-green-600 focus:ring-green-300" : "bg-white ring-1 ring-slate-200 focus:ring-green-600/10"}`}
                         />
                         {variant.stock && Number(variant.stock) < 1 && (
-                          <p className="text-[9px] font-semibold text-red-500 ml-1">Min value is 1</p>
+                          <p className="text-[9px] font-semibold text-green-600 ml-1">Min value is 1</p>
                         )}
                       </div>
                       <div className="col-span-5 md:col-span-2 space-y-1">
@@ -1096,7 +1096,7 @@ const AddProduct = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 min-w-0 max-w-full">
                 <div className="space-y-1 flex flex-col min-w-0 max-w-full">
                   <label className="text-xs font-medium text-slate-700">
-                    Main Group <span className="text-rose-500">*</span>
+                    Main Group <span className="text-green-600">*</span>
                   </label>
                   <select
                     value={formData.header}
@@ -1115,7 +1115,7 @@ const AddProduct = () => {
                         subcategory: getCategoryNodeId(firstSub),
                       });
                     }}
-                    className="w-full max-w-full truncate px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm font-medium text-slate-900 outline-none cursor-pointer focus:border-red-500 focus:ring-1 focus:ring-red-500/20 transition-all">
+                    className="w-full max-w-full truncate px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm font-medium text-slate-900 outline-none cursor-pointer focus:border-green-600 focus:ring-1 focus:ring-green-600/20 transition-all">
                     {categories.map((h) => (
                       <option key={h._id || h.id} value={h._id || h.id} className="truncate">
                         {h.name}
@@ -1125,7 +1125,7 @@ const AddProduct = () => {
                 </div>
                 <div className="space-y-1 flex flex-col min-w-0 max-w-full">
                   <label className="text-xs font-medium text-slate-700">
-                    Specific Category <span className="text-rose-500">*</span>
+                    Specific Category <span className="text-green-600">*</span>
                   </label>
                   <select
                     value={formData.category}
@@ -1145,7 +1145,7 @@ const AddProduct = () => {
                       });
                     }}
                     disabled={!formData.header}
-                    className="w-full max-w-full truncate px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm font-medium text-slate-900 outline-none cursor-pointer focus:border-red-500 focus:ring-1 focus:ring-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    className="w-full max-w-full truncate px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm font-medium text-slate-900 outline-none cursor-pointer focus:border-green-600 focus:ring-1 focus:ring-green-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                     {categories
                       .find((h) => getCategoryNodeId(h) === String(formData.header || ""))
                       ?.children?.map((c) => (
@@ -1159,7 +1159,7 @@ const AddProduct = () => {
               <div className="grid grid-cols-1 gap-3 sm:gap-4 min-w-0 max-w-full">
                 <div className="space-y-1 flex flex-col min-w-0 max-w-full">
                   <label className="text-xs font-medium text-slate-700">
-                    Sub-Category <span className="text-rose-500">*</span>
+                    Sub-Category <span className="text-green-600">*</span>
                   </label>
                   <select
                     value={formData.subcategory}
@@ -1167,7 +1167,7 @@ const AddProduct = () => {
                       setFormData({ ...formData, subcategory: e.target.value })
                     }
                     disabled={!formData.category}
-                    className="w-full max-w-full truncate px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm font-medium text-slate-900 outline-none cursor-pointer focus:border-red-500 focus:ring-1 focus:ring-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    className="w-full max-w-full truncate px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs sm:text-sm font-medium text-slate-900 outline-none cursor-pointer focus:border-green-600 focus:ring-1 focus:ring-green-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                     {categories
                       .find((h) => getCategoryNodeId(h) === String(formData.header || ""))
                       ?.children?.find((c) => getCategoryNodeId(c) === String(formData.category || ""))
