@@ -29,6 +29,10 @@ import {
 } from "@common/utils/businessSettings"
 import loginBg from "@food/assets/loginbanner.png";
 import AuthCircleLogo from "@shared/components/AuthCircleLogo";
+import SellerLoginArt from "../components/SellerLoginArt";
+
+// The login side panel is the green illustration; set true to bring the old photo slider back.
+const USE_PHOTO_SLIDER = false;
 import SupportInfoView, { normalizeSupportPayload } from "@food/components/shared/SupportInfoView";
 import banner1 from "@/assets/seller_banners/banner1.png";
 import banner2 from "@/assets/seller_banners/banner2.png";
@@ -424,8 +428,10 @@ export default function SellerAuth() {
     <div className="min-h-screen bg-white flex flex-col lg:flex-row pt-0 sm:pt-0 font-sans">
       {/* Top Banner section with Image Slider and Curve */}
       <div className="w-full lg:w-1/2 relative h-[350px] md:h-[450px] lg:h-screen flex flex-col items-center justify-center text-center text-white lg:shadow-2xl z-10">
+        {/* Brand-green illustrated background (photo slider below is kept, switched off) */}
+        {!USE_PHOTO_SLIDER && <SellerLoginArt className="absolute inset-0 h-full w-full" />}
         {/* Background Image Slider */}
-        {sliderImages.map((img, idx) => (
+        {USE_PHOTO_SLIDER && sliderImages.map((img, idx) => (
           <div
             key={idx}
             className="absolute inset-0 w-full h-full bg-cover bg-center transition-opacity duration-1000"
@@ -435,7 +441,7 @@ export default function SellerAuth() {
             }}
           />
         ))}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-transparent" />
+        <div className={USE_PHOTO_SLIDER ? "absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-transparent" : "absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-transparent"} />
 
         {/* Back Button (if otp step) */}
         {step === "otp" && (
@@ -454,7 +460,7 @@ export default function SellerAuth() {
             transition={{ duration: 0.8, ease: "easeInOut" }}
             className="mb-4"
           >
-            <AuthCircleLogo src={logoUrl} alt={companyName} fallbackText={companyName} />
+            <AuthCircleLogo src={logoUrl} alt={companyName} fallbackText={companyName} accentClassName="bg-white" className="h-24 w-24 ring-4 ring-white/40" />
           </motion.div>
           <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2 drop-shadow-lg text-white">
             {companyName}
