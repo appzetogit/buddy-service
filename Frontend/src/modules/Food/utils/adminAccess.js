@@ -29,10 +29,11 @@ const normalize = (p) => {
 const collect = (items = [], group, parentLabel = "") => {
   const rows = []
   for (const item of items) {
+    if (item.hidden) continue
     if (item.type === "section" && item.items) {
       rows.push(...collect(item.items, item.label || group))
     } else if ((item.type === "expandable" || item.subItems) && item.subItems) {
-      rows.push(...collect(item.subItems.map((s) => ({ ...s, type: "link" })), group, item.label))
+      rows.push(...collect(item.subItems.filter((s) => !s.hidden).map((s) => ({ ...s, type: "link" })), group, item.label))
     } else if (item.path) {
       rows.push({ group: group || "General", label: parentLabel ? `${parentLabel} › ${item.label}` : item.label, path: normalize(item.path) })
     }

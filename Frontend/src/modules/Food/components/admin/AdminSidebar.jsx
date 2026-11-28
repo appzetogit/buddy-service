@@ -157,8 +157,31 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   const isAccess = location.pathname.startsWith("/admin/access")
   const employee = isEmployeeAdmin()
   const baseMenu = isAccess ? accessAdminSidebarMenu : isTaxi ? taxiAdminSidebarMenu : isQuickCommerce ? quickAdminSidebarMenu : adminSidebarMenu
+  const filterHiddenItems = (menuList = []) => {
+    return menuList
+      .filter((item) => !item.hidden)
+      .map((item) => {
+        if (item.items) {
+          return { ...item, items: filterHiddenItems(item.items) }
+        }
+        if (item.subItems) {
+          return { ...item, subItems: item.subItems.filter((sub) => !sub.hidden) }
+        }
+        return item
+      })
+      .filter((item) => {
+        if (item.type === "section" && item.items) {
+          return item.items.length > 0
+        }
+        if (item.type === "expandable" && item.subItems) {
+          return item.subItems.length > 0
+        }
+        return true
+      })
+  }
+
   // Employees only see the pages their role grants (the main admin sees everything).
-  const activeMenu = useMemo(() => filterMenuByAccess(baseMenu), [baseMenu, location.pathname])
+  const activeMenu = useMemo(() => filterHiddenItems(filterMenuByAccess(baseMenu)), [baseMenu, location.pathname])
   const [searchQuery, setSearchQuery] = useState("")
   const [badges, setBadges] = useState({})
 
